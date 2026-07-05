@@ -1,8 +1,0 @@
-git clone https://github.com/brandonpapasan-coder/LionsForge-ai.git
-cd LionsForge-ai
-
-# Copy the project files into this directory
-
-git add .
-git commit -m "Initial LionsForge AI project"
-git push origin main
