@@ -1,5 +1,8 @@
 from app.db.session import Base, engine
-from app.models import User  # noqa: F401
+from app.models.user import User
+from app.models.watchlist import Watchlist
+
+_models = (User, Watchlist)
 
 
 def init_db() -> None:
