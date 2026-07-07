@@ -18,3 +18,4 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     watchlists = relationship("Watchlist", back_populates="owner", cascade="all, delete-orphan")
+    portfolios = relationship("Portfolio", cascade="all, delete-orphan")
