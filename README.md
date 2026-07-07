@@ -33,14 +33,17 @@ GET  /ready
 GET  /platform
 POST /api/v1/auth/register
 POST /api/v1/auth/login
+GET  /api/v1/auth/me
 POST /api/v1/research/analyze
 GET  /api/v1/news/market
-GET  /api/v1/watchlists?owner_id=1
-POST /api/v1/watchlists?owner_id=1
-GET  /api/v1/portfolios?owner_id=1
-POST /api/v1/portfolios?owner_id=1
-POST /api/v1/portfolios/{portfolio_id}/holdings?owner_id=1
+GET  /api/v1/watchlists
+POST /api/v1/watchlists
+GET  /api/v1/portfolios
+POST /api/v1/portfolios
+POST /api/v1/portfolios/{portfolio_id}/holdings
 ```
+
+Watchlist and portfolio routes require a bearer token from `/api/v1/auth/login`.
 
 ## Backend foundation added
 
@@ -50,7 +53,10 @@ POST /api/v1/portfolios/{portfolio_id}/holdings?owner_id=1
 - SQLite default for local development
 - User account model
 - Account registration and login routes
-- JWT access-token helper
+- Authenticated profile endpoint
+- JWT bearer-token dependency
+- Protected watchlist routes
+- Protected portfolio routes
 - Persistent watchlist model and endpoints
 - Persistent portfolio models and endpoints
 - Mock research and market news API contracts
