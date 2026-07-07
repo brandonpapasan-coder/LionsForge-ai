@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     allow_mock_data: bool = True
 
+    database_url: str = "sqlite:///./lionsforge.db"
+    jwt_secret_key: str = "change-this-secret-before-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
