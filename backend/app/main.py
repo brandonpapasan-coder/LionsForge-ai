@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from app.api.router import api_router
+from app.core.config import get_settings
+
+settings = get_settings()
+
 
 class PlatformInfo(BaseModel):
     name: str
@@ -10,20 +15,23 @@ class PlatformInfo(BaseModel):
 
 
 app = FastAPI(
-    title="LionsForge AI",
+    title=settings.app_name,
     version="0.1.0",
     description="AI-powered investment research and trading platform.",
 )
+app.include_router(api_router, prefix=settings.api_prefix)
 
 
 @app.get("/")
 def root():
     return {
-        "name": "LionsForge AI",
+        "name": settings.app_name,
+        "environment": settings.environment,
         "status": "development",
         "docs": "/docs",
         "health": "/health",
         "ready": "/ready",
+        "api": settings.api_prefix,
     }
 
 
@@ -40,7 +48,7 @@ def ready():
 @app.get("/platform", response_model=PlatformInfo)
 def platform_info():
     return PlatformInfo(
-        name="LionsForge AI",
+        name=settings.app_name,
         version="0.1.0",
         mission="Deliver AI-assisted investment research, market intelligence, education, and trading workflow tools.",
         modules=[
