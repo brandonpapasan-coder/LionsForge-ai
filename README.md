@@ -35,8 +35,8 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 POST /api/v1/research/analyze
 GET  /api/v1/news/market
-GET  /api/v1/watchlists
-POST /api/v1/watchlists
+GET  /api/v1/watchlists?owner_id=1
+POST /api/v1/watchlists?owner_id=1
 ```
 
 ## Backend foundation added
@@ -48,7 +48,9 @@ POST /api/v1/watchlists
 - User database model
 - Account registration and login routes
 - Secret hashing and JWT access-token helper
-- Mock research, news, and watchlist API contracts
+- Persistent watchlist model linked to users
+- Database-backed watchlist create/list endpoints
+- Mock research and market news API contracts
 
 ## MVP roadmap
 
