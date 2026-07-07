@@ -1,8 +1,9 @@
 from app.db.session import Base, engine
+from app.models.portfolio import Portfolio, PortfolioHolding
 from app.models.user import User
 from app.models.watchlist import Watchlist
 
-_models = (User, Watchlist)
+_models = (User, Watchlist, Portfolio, PortfolioHolding)
 
 
 def init_db() -> None:
