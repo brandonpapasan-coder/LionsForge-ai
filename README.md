@@ -4,7 +4,7 @@ AI-powered investment research and trading platform.
 
 ## Current status
 
-LionsForge AI is in early MVP development. The backend uses FastAPI with versioned APIs for research, market data, news, watchlists, portfolios, education, and future trading workflows.
+LionsForge AI is in early MVP development. The backend uses FastAPI with versioned APIs for research, market data, news, watchlists, portfolios, alerts, education, and future trading workflows.
 
 ## Backend quick start
 
@@ -43,6 +43,9 @@ POST /api/v1/watchlists
 GET  /api/v1/portfolios
 POST /api/v1/portfolios
 POST /api/v1/portfolios/{portfolio_id}/holdings
+GET  /api/v1/alerts
+POST /api/v1/alerts
+GET  /api/v1/alerts/evaluate
 ```
 
 Authenticated routes use bearer tokens from `/api/v1/auth/login`.
@@ -57,10 +60,12 @@ Authenticated routes use bearer tokens from `/api/v1/auth/login`.
 - Authenticated profile endpoint
 - Protected watchlist routes
 - Protected portfolio routes
+- Protected alert routes
 - Mock market quote service and endpoints
 - Research response with quote context
 - Persistent watchlist model and endpoints
 - Persistent portfolio models and endpoints
+- Persistent alert model and evaluation endpoint
 - Mock news API contract
 
 ## MVP roadmap
