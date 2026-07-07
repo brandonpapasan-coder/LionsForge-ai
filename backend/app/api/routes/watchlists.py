@@ -1,30 +1,25 @@
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.schemas.watchlists import SavedListCreate, SavedListRead
+from app.services.saved_list_service import create_saved_list, list_saved_lists
 
 router = APIRouter()
 
 
-class WatchlistCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=80)
-    tickers: list[str] = Field(default_factory=list)
+@router.post("", response_model=SavedListRead)
+def create_watchlist(
+    payload: SavedListCreate,
+    owner_id: int = Query(default=1, ge=1, description="Temporary owner id until auth dependency is added."),
+    db: Session = Depends(get_db),
+) -> SavedListRead:
+    return create_saved_list(db, owner_id=owner_id, payload=payload)
 
 
-@router.post("")
-def create_watchlist(payload: WatchlistCreate):
-    return {
-        "status": "mock",
-        "watchlist": {
-            "name": payload.name,
-            "tickers": [ticker.upper() for ticker in payload.tickers],
-        },
-        "message": "Watchlist API contract initialized. Persistence will be added with the database layer.",
-    }
-
-
-@router.get("")
-def list_watchlists():
-    return {
-        "status": "mock",
-        "watchlists": [],
-        "message": "No persisted watchlists yet. Database models are the next backend milestone.",
-    }
+@router.get("", response_model=list[SavedListRead])
+def list_watchlists(
+    owner_id: int = Query(default=1, ge=1, description="Temporary owner id until auth dependency is added."),
+    db: Session = Depends(get_db),
+) -> list[SavedListRead]:
+    return list_saved_lists(db, owner_id=owner_id)
