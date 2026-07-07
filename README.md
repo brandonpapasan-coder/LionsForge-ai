@@ -4,7 +4,7 @@ AI-powered investment research and trading platform.
 
 ## Current status
 
-LionsForge AI is in early MVP development. The backend is being built as a FastAPI service with versioned APIs for research, market news, watchlists, portfolios, finance education, and future trading workflows.
+LionsForge AI is in early MVP development. The backend uses FastAPI with versioned APIs for research, market data, news, watchlists, portfolios, education, and future trading workflows.
 
 ## Backend quick start
 
@@ -35,6 +35,8 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 GET  /api/v1/auth/me
 POST /api/v1/research/analyze
+GET  /api/v1/market/quotes/{symbol}
+POST /api/v1/market/quotes
 GET  /api/v1/news/market
 GET  /api/v1/watchlists
 POST /api/v1/watchlists
@@ -43,23 +45,23 @@ POST /api/v1/portfolios
 POST /api/v1/portfolios/{portfolio_id}/holdings
 ```
 
-Watchlist and portfolio routes require a bearer token from `/api/v1/auth/login`.
+Authenticated routes use bearer tokens from `/api/v1/auth/login`.
 
 ## Backend foundation added
 
 - FastAPI application with versioned routing
 - Environment-driven settings
 - SQLAlchemy database session setup
-- SQLite default for local development
-- User account model
-- Account registration and login routes
+- SQLite local database default
+- User account model and auth routes
 - Authenticated profile endpoint
-- JWT bearer-token dependency
 - Protected watchlist routes
 - Protected portfolio routes
+- Mock market quote service and endpoints
+- Research response with quote context
 - Persistent watchlist model and endpoints
 - Persistent portfolio models and endpoints
-- Mock research and market news API contracts
+- Mock news API contract
 
 ## MVP roadmap
 
