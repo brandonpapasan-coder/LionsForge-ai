@@ -1,0 +1,43 @@
+import os
+
+os.environ["DATABASE_URL"] = "sqlite:///./test_lionsforge.db"
+os.environ["JWT_SECRET_KEY"] = "test-secret-key"
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.db.session import Base, engine
+from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def reset_database():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+def register_user(client: TestClient, email: str = "tester@example.com", secret: str = "strongsecret123"):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "secret": secret, "full_name": "Test User"},
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def auth_headers(client: TestClient, email: str = "tester@example.com", secret: str = "strongsecret123"):
+    register_user(client, email=email, secret=secret)
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "secret": secret, "full_name": "Test User"},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
