@@ -13,6 +13,8 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env
+python -m app.db.init_db
 uvicorn app.main:app --reload
 ```
 
@@ -29,11 +31,24 @@ GET  /
 GET  /health
 GET  /ready
 GET  /platform
+POST /api/v1/auth/register
+POST /api/v1/auth/login
 POST /api/v1/research/analyze
 GET  /api/v1/news/market
 GET  /api/v1/watchlists
 POST /api/v1/watchlists
 ```
+
+## Backend foundation added
+
+- FastAPI application with versioned routing
+- Environment-driven settings
+- SQLAlchemy database session setup
+- SQLite default for local development
+- User database model
+- Account registration and login routes
+- Secret hashing and JWT access-token helper
+- Mock research, news, and watchlist API contracts
 
 ## MVP roadmap
 
