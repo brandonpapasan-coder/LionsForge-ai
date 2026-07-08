@@ -35,6 +35,7 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 GET  /api/v1/auth/me
 POST /api/v1/research/analyze
+GET  /api/v1/research/context/{ticker}
 GET  /api/v1/market/quotes/{symbol}
 POST /api/v1/market/quotes
 GET  /api/v1/news/market
@@ -43,6 +44,10 @@ POST /api/v1/watchlists
 GET  /api/v1/portfolios
 POST /api/v1/portfolios
 POST /api/v1/portfolios/{portfolio_id}/holdings
+GET  /api/v1/portfolios/{portfolio_id}/value
+GET  /api/v1/portfolios/{portfolio_id}/performance
+GET  /api/v1/portfolios/{portfolio_id}/holdings/value
+GET  /api/v1/portfolios/{portfolio_id}/holdings/allocation
 GET  /api/v1/alerts
 POST /api/v1/alerts
 GET  /api/v1/alerts/evaluate
@@ -61,10 +66,10 @@ Authenticated routes use bearer tokens from `/api/v1/auth/login`.
 - Protected watchlist routes
 - Protected portfolio routes
 - Protected alert routes
-- Mock market quote service and endpoints
-- Research response with quote context
+- Market provider abstraction, quote cache, and quote endpoints
+- Research context endpoint with quote context
 - Persistent watchlist model and endpoints
-- Persistent portfolio models and endpoints
+- Persistent portfolio models and analytics endpoints
 - Persistent alert model and evaluation endpoint
 - Mock news API contract
 
