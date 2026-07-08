@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class EvidenceItem(BaseModel):
+    evidence_id: str
     symbol: str
     category: str
     source: str
