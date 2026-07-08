@@ -78,7 +78,14 @@ jobs:
           DATABASE_URL: sqlite:///./ci_lionsforge.db
           JWT_SECRET_KEY: ci-test-secret
           ENVIRONMENT: test
-        run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_alerts.py
+        run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_alerts.py --tb=short -s > product-api-test.log 2>&1
+
+      - name: Upload product API failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-api-test-log
+          path: backend/product-api-test.log
 
       - name: Test research APIs
         env:
