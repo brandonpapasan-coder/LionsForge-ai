@@ -9,3 +9,4 @@ def test_research_context_endpoint(client):
     assert payload["ticker"] == "AAPL"
     assert payload["quote"]["symbol"] == "AAPL"
     assert payload["quote"]["source"] == "mock-market-data"
+    assert payload["news"][0]["source"] == "mock-news"
