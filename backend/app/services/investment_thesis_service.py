@@ -8,6 +8,7 @@ def build_investment_thesis(symbol: str) -> InvestmentThesis:
     evidence = collect_symbol_evidence(normalized)
     confidence = calculate_research_confidence(normalized)
     categories = {item.category for item in evidence.items}
+    evidence_ids = [item.evidence_id for item in evidence.items]
 
     bull_case = []
     bear_case = []
@@ -32,4 +33,5 @@ def build_investment_thesis(symbol: str) -> InvestmentThesis:
         catalysts=catalysts,
         confidence=confidence.confidence,
         evidence_count=len(evidence.items),
+        supporting_evidence_ids=evidence_ids,
     )
