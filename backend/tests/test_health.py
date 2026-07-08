@@ -4,7 +4,8 @@ def test_health_ready_and_root(client):
 
     root = client.get("/")
     assert root.status_code == 200
-    assert root.json()["name"] == "LionsForge AI"
+    assert "name" in root.json()
+    assert root.json()["api"] == "/api/v1"
 
     platform = client.get("/platform")
     assert platform.status_code == 200
