@@ -20,15 +20,11 @@ Provider selection lives in `app/services/provider_selector.py`.
 Current behavior:
 
 - `mock` returns the mock market data provider.
+- `alpaca`, `polygon`, `finnhub`, and `twelve_data` are recognized live-provider names.
+- Live-provider names require `MARKET_DATA_API_KEY`.
+- Live providers currently use a scaffold until provider-specific HTTP clients are implemented.
 - Unsupported provider names raise a configuration error.
 
 ## Next provider work
 
-A live provider can be added by implementing the provider interface in `app/services/market_providers.py` and registering it in `app/services/provider_selector.py`.
-
-Planned live provider options:
-
-- Alpaca
-- Polygon
-- Finnhub
-- Twelve Data
+A live provider can be completed by implementing the provider interface in `app/services/market_providers.py` and registering provider-specific HTTP behavior in the selector.
