@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     market_data_provider: str = "mock"
     market_data_api_key: str | None = None
+    news_provider: str = "mock"
+    news_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
