@@ -12,3 +12,4 @@ class InvestmentThesis(BaseModel):
     catalysts: list[str]
     confidence: Decimal
     evidence_count: int
+    supporting_evidence_ids: list[str]
