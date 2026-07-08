@@ -12,7 +12,7 @@ from app.db.session import Base, engine
 from app.main import app
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def reset_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -21,7 +21,7 @@ def reset_database():
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
+def client(reset_database) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
 
