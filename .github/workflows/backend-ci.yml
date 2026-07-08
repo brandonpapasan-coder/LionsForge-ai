@@ -50,6 +50,12 @@ jobs:
           python -m pip install --quiet --upgrade pip
           pip install --quiet -r requirements.txt
 
+      - name: Dependency security audit
+        run: pip-audit -r requirements.txt
+
+      - name: Static security scan
+        run: bandit -q -r app
+
       - name: Run smoke check
         run: python scripts/smoke_backend.py
 
