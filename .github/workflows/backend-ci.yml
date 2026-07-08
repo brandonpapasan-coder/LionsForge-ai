@@ -51,7 +51,14 @@ jobs:
           pip install --quiet -r requirements.txt
 
       - name: Dependency security audit
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt > dependency-audit.log 2>&1
+
+      - name: Upload dependency audit failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-log
+          path: backend/dependency-audit.log
 
       - name: Static security scan
         run: bandit -q -r app
