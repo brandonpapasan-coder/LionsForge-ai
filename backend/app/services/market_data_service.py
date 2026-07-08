@@ -1,4 +1,5 @@
 from app.schemas.market import QuoteRead
+from app.services.market_providers import normalize_symbol
 from app.services.provider_selector import get_configured_market_provider
 from app.services.quote_cache import quote_cache
 
@@ -12,4 +13,5 @@ def get_quote(symbol: str) -> QuoteRead:
 
 
 def get_quotes(symbols: list[str]) -> list[QuoteRead]:
-    return [get_quote(symbol) for symbol in symbols]
+    unique_symbols = sorted({normalize_symbol(symbol) for symbol in symbols if normalize_symbol(symbol)})
+    return [get_quote(symbol) for symbol in unique_symbols]
