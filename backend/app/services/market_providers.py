@@ -20,6 +20,15 @@ def normalize_symbol(symbol: str) -> str:
     return symbol.strip().upper()
 
 
+class LiveMarketDataProvider(MarketDataProvider):
+    def __init__(self, name: str, api_key: str | None = None) -> None:
+        self.name = name
+        self.api_key = api_key
+
+    def get_quote(self, symbol: str) -> QuoteRead:
+        raise NotImplementedError(f"Live provider '{self.name}' is not implemented yet")
+
+
 class MockMarketDataProvider(MarketDataProvider):
     name = "mock-market-data"
 
