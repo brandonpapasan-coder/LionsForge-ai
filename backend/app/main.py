@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -6,6 +9,13 @@ from app.core.config import get_settings
 from app.db.init_db import init_db
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    if settings.environment in {"development", "test"}:
+        init_db()
+    yield
 
 
 class PlatformInfo(BaseModel):
@@ -19,14 +29,9 @@ app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="AI-powered investment research and trading platform.",
+    lifespan=lifespan,
 )
 app.include_router(api_router, prefix=settings.api_prefix)
-
-
-@app.on_event("startup")
-def startup() -> None:
-    if settings.environment in {"development", "test"}:
-        init_db()
 
 
 @app.get("/")
