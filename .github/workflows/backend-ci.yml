@@ -43,7 +43,14 @@ jobs:
           DATABASE_URL: sqlite:///./ci_lionsforge.db
           JWT_SECRET_KEY: ci-test-secret
           ENVIRONMENT: test
-        run: pytest -q tests/test_health.py
+        run: pytest -q tests/test_health.py --tb=short -s > health-test.log 2>&1
+
+      - name: Upload health failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-test-log
+          path: backend/health-test.log
 
       - name: Test auth
         env:
