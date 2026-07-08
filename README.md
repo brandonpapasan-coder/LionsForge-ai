@@ -37,6 +37,7 @@ GET  /api/v1/auth/me
 POST /api/v1/research/analyze
 GET  /api/v1/research/context/{ticker}
 GET  /api/v1/research/evidence/{ticker}
+GET  /api/v1/research/confidence/{ticker}
 GET  /api/v1/market/quotes/{symbol}
 POST /api/v1/market/quotes
 GET  /api/v1/news/market
@@ -70,6 +71,7 @@ Authenticated routes use bearer tokens from `/api/v1/auth/login`.
 - Protected alert routes
 - Market provider abstraction, quote cache, and quote endpoints
 - Evidence-driven research context with quote and news evidence
+- Evidence-backed research confidence scoring
 - Persistent watchlist model and endpoints
 - Persistent portfolio models and analytics endpoints
 - Persistent alert model and evaluation endpoint
