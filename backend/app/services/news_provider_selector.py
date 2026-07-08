@@ -1,12 +1,12 @@
 from app.core.config import get_settings
-from app.services.news_providers import MockNewsProvider, NewsProvider
+from app.services.news_providers import LiveNewsProvider, MockNewsProvider, NewsProvider
 
 
 class NewsProviderConfigurationError(ValueError):
     pass
 
 
-SUPPORTED_NEWS_PROVIDERS = {"mock"}
+LIVE_NEWS_PROVIDER_NAMES = {"newsapi", "finnhub", "polygon", "alpha_vantage"}
 
 
 def get_configured_news_provider() -> NewsProvider:
@@ -15,5 +15,10 @@ def get_configured_news_provider() -> NewsProvider:
 
     if provider_name == "mock":
         return MockNewsProvider()
+
+    if provider_name in LIVE_NEWS_PROVIDER_NAMES:
+        if not settings.news_api_key:
+            raise NewsProviderConfigurationError(f"{provider_name} requires NEWS_API_KEY")
+        return LiveNewsProvider(name=provider_name, api_key=settings.news_api_key)
 
     raise NewsProviderConfigurationError(f"Unsupported news provider: {provider_name}")
