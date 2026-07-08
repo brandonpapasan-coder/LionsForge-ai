@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class SavedListCreate(BaseModel):
@@ -10,6 +10,11 @@ class SavedListRead(BaseModel):
     id: int
     owner_id: int
     name: str
-    symbols: list[str]
+    tickers: list[str] = Field(default_factory=list, exclude=True)
+
+    @computed_field
+    @property
+    def symbols(self) -> list[str]:
+        return self.tickers
 
     model_config = {"from_attributes": True}
