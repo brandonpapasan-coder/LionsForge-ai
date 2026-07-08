@@ -121,4 +121,11 @@ jobs:
           docker stop lionsforge-backend-ci
 
       - name: Performance smoke
-        run: python scripts/performance_smoke.py
+        run: python scripts/performance_smoke.py > performance-smoke.log 2>&1
+
+      - name: Upload performance smoke failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-smoke-log
+          path: backend/performance-smoke.log
