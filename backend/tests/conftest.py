@@ -1,7 +1,9 @@
 import os
+from collections.abc import Generator
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_lionsforge.db"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key"
+os.environ["ENVIRONMENT"] = "test"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,8 +21,9 @@ def reset_database():
 
 
 @pytest.fixture
-def client():
-    return TestClient(app)
+def client() -> Generator[TestClient, None, None]:
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def register_user(client: TestClient, email: str = "tester@example.com", secret: str = "strongsecret123"):
