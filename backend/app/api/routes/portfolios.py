@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.holding_allocation import HoldingAllocation
 from app.schemas.holding_value import HoldingValue
 from app.schemas.portfolio import HoldingCreate, HoldingRead, PortfolioCreate, PortfolioRead
 from app.schemas.portfolio_value import PortfolioValue
 from app.services.portfolio_analytics_service import (
+    calculate_allocation_percent,
     calculate_holding_cost_basis,
     calculate_holding_gain_loss,
     calculate_holding_market_value,
@@ -68,6 +70,25 @@ def holding_values_endpoint(
             market_value=calculate_holding_market_value(holding),
             cost_basis=calculate_holding_cost_basis(holding),
             unrealized_gain_loss=calculate_holding_gain_loss(holding),
+        )
+        for holding in portfolio.holdings
+    ]
+
+
+@router.get("/{portfolio_id}/holdings/allocation", response_model=list[HoldingAllocation])
+def holding_allocations_endpoint(
+    portfolio_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[HoldingAllocation]:
+    portfolio = get_portfolio(db, owner_id=current_user.id, portfolio_id=portfolio_id)
+    if portfolio is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return [
+        HoldingAllocation(
+            symbol=holding.symbol,
+            market_value=calculate_holding_market_value(holding),
+            allocation_percent=calculate_allocation_percent(holding, portfolio),
         )
         for holding in portfolio.holdings
     ]
