@@ -7,12 +7,15 @@ from app.models.user import User
 from app.schemas.holding_allocation import HoldingAllocation
 from app.schemas.holding_value import HoldingValue
 from app.schemas.portfolio import HoldingCreate, HoldingRead, PortfolioCreate, PortfolioRead
+from app.schemas.portfolio_performance import PortfolioPerformance
 from app.schemas.portfolio_value import PortfolioValue
 from app.services.portfolio_analytics_service import (
     calculate_allocation_percent,
     calculate_holding_cost_basis,
     calculate_holding_gain_loss,
     calculate_holding_market_value,
+    calculate_total_cost_basis,
+    calculate_total_gain_loss,
     calculate_total_market_value,
 )
 from app.services.portfolio_service import add_holding, create_portfolio, get_portfolio, list_portfolios
@@ -51,6 +54,23 @@ def portfolio_value_endpoint(
         name=portfolio.name,
         base_currency=portfolio.base_currency,
         total_market_value=calculate_total_market_value(portfolio),
+    )
+
+
+@router.get("/{portfolio_id}/performance", response_model=PortfolioPerformance)
+def portfolio_performance_endpoint(
+    portfolio_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PortfolioPerformance:
+    portfolio = get_portfolio(db, owner_id=current_user.id, portfolio_id=portfolio_id)
+    if portfolio is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    return PortfolioPerformance(
+        portfolio_id=portfolio.id,
+        total_market_value=calculate_total_market_value(portfolio),
+        total_cost_basis=calculate_total_cost_basis(portfolio),
+        total_unrealized_gain_loss=calculate_total_gain_loss(portfolio),
     )
 
 
