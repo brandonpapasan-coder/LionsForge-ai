@@ -12,6 +12,15 @@ class NewsProvider(ABC):
         raise NotImplementedError
 
 
+class LiveNewsProvider(NewsProvider):
+    def __init__(self, name: str, api_key: str | None = None) -> None:
+        self.name = name
+        self.api_key = api_key
+
+    def get_company_news(self, symbol: str) -> list[CompanyNewsArticle]:
+        raise NotImplementedError(f"Live news provider '{self.name}' is not implemented yet")
+
+
 class MockNewsProvider(NewsProvider):
     name = "mock-news"
 
