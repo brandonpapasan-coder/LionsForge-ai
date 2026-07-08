@@ -8,5 +8,7 @@ def test_research_evidence_endpoint(client):
     payload = response.json()
     assert payload["symbol"] == "AAPL"
     categories = {item["category"] for item in payload["items"]}
+    evidence_ids = {item["evidence_id"] for item in payload["items"]}
     assert "market_quote" in categories
     assert "company_news" in categories
+    assert "AAPL:market_quote:latest" in evidence_ids
