@@ -38,9 +38,37 @@ jobs:
           ENVIRONMENT: test
         run: python scripts/smoke_backend.py
 
-      - name: Run tests
+      - name: Test health
         env:
           DATABASE_URL: sqlite:///./ci_lionsforge.db
           JWT_SECRET_KEY: ci-test-secret
           ENVIRONMENT: test
-        run: pytest -q -x
+        run: pytest -q tests/test_health.py
+
+      - name: Test auth
+        env:
+          DATABASE_URL: sqlite:///./ci_lionsforge.db
+          JWT_SECRET_KEY: ci-test-secret
+          ENVIRONMENT: test
+        run: pytest -q tests/test_auth.py
+
+      - name: Test market
+        env:
+          DATABASE_URL: sqlite:///./ci_lionsforge.db
+          JWT_SECRET_KEY: ci-test-secret
+          ENVIRONMENT: test
+        run: pytest -q tests/test_market.py tests/test_market_provider_selector.py tests/test_quote_cache.py
+
+      - name: Test product APIs
+        env:
+          DATABASE_URL: sqlite:///./ci_lionsforge.db
+          JWT_SECRET_KEY: ci-test-secret
+          ENVIRONMENT: test
+        run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_alerts.py
+
+      - name: Test research APIs
+        env:
+          DATABASE_URL: sqlite:///./ci_lionsforge.db
+          JWT_SECRET_KEY: ci-test-secret
+          ENVIRONMENT: test
+        run: pytest -q tests/test_company_news.py tests/test_research_context.py tests/test_research_evidence.py tests/test_research_confidence.py tests/test_investment_thesis.py
