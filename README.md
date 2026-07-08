@@ -15,7 +15,16 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 python -m app.db.init_db
+python scripts/smoke_backend.py
 uvicorn app.main:app --reload
+```
+
+If local SQLite state is stale, reset it:
+
+```bash
+rm -f lionsforge.db test_lionsforge.db ci_lionsforge.db
+python -m app.db.init_db
+python scripts/smoke_backend.py
 ```
 
 API docs:
