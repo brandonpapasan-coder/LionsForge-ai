@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.db.init_db import init_db
 
 settings = get_settings()
 
@@ -20,6 +21,12 @@ app = FastAPI(
     description="AI-powered investment research and trading platform.",
 )
 app.include_router(api_router, prefix=settings.api_prefix)
+
+
+@app.on_event("startup")
+def startup() -> None:
+    if settings.environment in {"development", "test"}:
+        init_db()
 
 
 @app.get("/")
