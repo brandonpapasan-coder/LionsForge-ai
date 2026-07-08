@@ -1,4 +1,4 @@
-.PHONY: install run init-db test clean
+.PHONY: install run init-db smoke test clean
 
 install:
 	python -m pip install --upgrade pip
@@ -9,6 +9,9 @@ init-db:
 
 run:
 	uvicorn app.main:app --reload
+
+smoke:
+	python scripts/smoke_backend.py
 
 test:
 	pytest
