@@ -27,3 +27,10 @@ def calculate_total_market_value(portfolio: Portfolio) -> Decimal:
     for holding in portfolio.holdings:
         total += calculate_holding_market_value(holding)
     return total
+
+
+def calculate_allocation_percent(holding: PortfolioHolding, portfolio: Portfolio) -> Decimal:
+    total = calculate_total_market_value(portfolio)
+    if total <= 0:
+        return Decimal("0")
+    return (calculate_holding_market_value(holding) / total) * Decimal("100")
