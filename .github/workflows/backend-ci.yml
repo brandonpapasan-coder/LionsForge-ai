@@ -13,9 +13,28 @@ jobs:
   backend-tests:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: lionsforge_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -d lionsforge_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres@localhost:5432/lionsforge_ci
+      JWT_SECRET_KEY: ci-test-secret
+      ENVIRONMENT: test
 
     steps:
       - name: Checkout repository
@@ -32,17 +51,9 @@ jobs:
           pip install --quiet -r requirements.txt
 
       - name: Run smoke check
-        env:
-          DATABASE_URL: sqlite:///./ci_lionsforge.db
-          JWT_SECRET_KEY: ci-test-secret
-          ENVIRONMENT: test
         run: python scripts/smoke_backend.py
 
       - name: Test health
-        env:
-          DATABASE_URL: sqlite:///./ci_lionsforge.db
-          JWT_SECRET_KEY: ci-test-secret
-          ENVIRONMENT: test
         run: pytest -q tests/test_health.py --tb=short -s > health-test.log 2>&1
 
       - name: Upload health failure log
@@ -53,10 +64,6 @@ jobs:
           path: backend/health-test.log
 
       - name: Test auth
-        env:
-          DATABASE_URL: sqlite:///./ci_lionsforge.db
-          JWT_SECRET_KEY: ci-test-secret
-          ENVIRONMENT: test
         run: pytest -q tests/test_auth.py --tb=short -s > auth-test.log 2>&1
 
       - name: Upload auth failure log
@@ -67,17 +74,9 @@ jobs:
           path: backend/auth-test.log
 
       - name: Test market
-        env:
-          DATABASE_URL: sqlite:///./ci_lionsforge.db
-          JWT_SECRET_KEY: ci-test-secret
-          ENVIRONMENT: test
         run: pytest -q tests/test_market.py tests/test_market_provider_selector.py tests/test_quote_cache.py
 
       - name: Test product APIs
-        env:
-          DATABASE_URL: sqlite:///./ci_lionsforge.db
-          JWT_SECRET_KEY: ci-test-secret
-          ENVIRONMENT: test
         run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_alerts.py --tb=short -s > product-api-test.log 2>&1
 
       - name: Upload product API failure log
@@ -88,8 +87,4 @@ jobs:
           path: backend/product-api-test.log
 
       - name: Test research APIs
-        env:
-          DATABASE_URL: sqlite:///./ci_lionsforge.db
-          JWT_SECRET_KEY: ci-test-secret
-          ENVIRONMENT: test
         run: pytest -q tests/test_company_news.py tests/test_research_context.py tests/test_research_evidence.py tests/test_research_confidence.py tests/test_investment_thesis.py
