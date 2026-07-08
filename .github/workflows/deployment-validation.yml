@@ -1,0 +1,38 @@
+name: Deployment Validation
+
+on:
+  push:
+    branches:
+      - main
+      - dev/**
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-kubernetes:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Build staging manifests
+        run: kubectl kustomize infra/k8s/overlays/staging > staging-rendered.yaml
+
+      - name: Build production manifests
+        run: kubectl kustomize infra/k8s/overlays/production > production-rendered.yaml
+
+      - name: Validate rendered manifests are non-empty
+        run: |
+          test -s staging-rendered.yaml
+          test -s production-rendered.yaml
+          grep -q "kind: Deployment" staging-rendered.yaml
+          grep -q "kind: Deployment" production-rendered.yaml
+          grep -q "kind: Service" staging-rendered.yaml
+          grep -q "kind: Service" production-rendered.yaml
