@@ -1,12 +1,10 @@
 from app.schemas.market import QuoteRead
-from app.services.market_providers import MockMarketDataProvider
-
-provider = MockMarketDataProvider()
+from app.services.provider_selector import get_configured_market_provider
 
 
 def get_quote(symbol: str) -> QuoteRead:
-    return provider.get_quote(symbol)
+    return get_configured_market_provider().get_quote(symbol)
 
 
 def get_quotes(symbols: list[str]) -> list[QuoteRead]:
-    return provider.get_quotes(symbols)
+    return get_configured_market_provider().get_quotes(symbols)
