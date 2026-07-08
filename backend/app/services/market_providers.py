@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
+from datetime import timedelta
 from decimal import Decimal
 
-from app.schemas.market import QuoteRead, utc_now
+from app.schemas.market import HistoricalPriceRead, QuoteRead, utc_now
 
 
 class MarketDataProvider(ABC):
@@ -9,6 +10,10 @@ class MarketDataProvider(ABC):
 
     @abstractmethod
     def get_quote(self, symbol: str) -> QuoteRead:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_historical_prices(self, symbol: str, limit: int = 30) -> list[HistoricalPriceRead]:
         raise NotImplementedError
 
     def get_quotes(self, symbols: list[str]) -> list[QuoteRead]:
@@ -26,6 +31,9 @@ class LiveMarketDataProvider(MarketDataProvider):
         self.api_key = api_key
 
     def get_quote(self, symbol: str) -> QuoteRead:
+        raise NotImplementedError(f"Live provider '{self.name}' is not implemented yet")
+
+    def get_historical_prices(self, symbol: str, limit: int = 30) -> list[HistoricalPriceRead]:
         raise NotImplementedError(f"Live provider '{self.name}' is not implemented yet")
 
 
@@ -51,3 +59,27 @@ class MockMarketDataProvider(MarketDataProvider):
             as_of=utc_now(),
             is_delayed=True,
         )
+
+    def get_historical_prices(self, symbol: str, limit: int = 30) -> list[HistoricalPriceRead]:
+        normalized = normalize_symbol(symbol)
+        close_price = self.prices.get(normalized, Decimal("100.00"))
+        today = utc_now().date()
+        prices: list[HistoricalPriceRead] = []
+        for offset in range(limit):
+            day = today - timedelta(days=limit - offset - 1)
+            drift = Decimal(offset) / Decimal("10")
+            close = close_price + drift
+            prices.append(
+                HistoricalPriceRead(
+                    symbol=normalized,
+                    date=day,
+                    open=close - Decimal("1.00"),
+                    high=close + Decimal("2.00"),
+                    low=close - Decimal("2.00"),
+                    close=close,
+                    volume=1_000_000 + offset,
+                    source=self.name,
+                    is_adjusted=True,
+                )
+            )
+        return prices
