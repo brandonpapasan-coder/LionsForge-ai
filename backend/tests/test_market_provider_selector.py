@@ -20,3 +20,24 @@ def test_unsupported_provider_raises(monkeypatch):
         get_configured_market_provider()
     monkeypatch.delenv("MARKET_DATA_PROVIDER")
     get_settings.cache_clear()
+
+
+def test_live_provider_requires_api_key(monkeypatch):
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "alpaca")
+    monkeypatch.delenv("MARKET_DATA_API_KEY", raising=False)
+    get_settings.cache_clear()
+    with pytest.raises(MarketProviderConfigurationError):
+        get_configured_market_provider()
+    monkeypatch.delenv("MARKET_DATA_PROVIDER")
+    get_settings.cache_clear()
+
+
+def test_live_provider_can_be_selected_with_key(monkeypatch):
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "polygon")
+    monkeypatch.setenv("MARKET_DATA_API_KEY", "test-key")
+    get_settings.cache_clear()
+    provider = get_configured_market_provider()
+    assert provider.name == "polygon"
+    monkeypatch.delenv("MARKET_DATA_PROVIDER")
+    monkeypatch.delenv("MARKET_DATA_API_KEY")
+    get_settings.cache_clear()
