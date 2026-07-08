@@ -11,6 +11,7 @@ def collect_symbol_evidence(symbol: str) -> EvidenceCollection:
     news = get_company_news(normalized)
     items: list[EvidenceItem] = [
         EvidenceItem(
+            evidence_id=f"{normalized}:market_quote:latest",
             symbol=normalized,
             category="market_quote",
             source=quote.source,
@@ -21,9 +22,10 @@ def collect_symbol_evidence(symbol: str) -> EvidenceCollection:
             metadata={"price": str(quote.price), "currency": quote.currency},
         )
     ]
-    for article in news.articles:
+    for index, article in enumerate(news.articles, start=1):
         items.append(
             EvidenceItem(
+                evidence_id=f"{normalized}:company_news:{index}",
                 symbol=normalized,
                 category="company_news",
                 source=article.source,
