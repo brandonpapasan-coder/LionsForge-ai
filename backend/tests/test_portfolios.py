@@ -49,7 +49,7 @@ def test_create_portfolio_and_add_holding(client):
     assert allocation_response.status_code == 200
     allocation = allocation_response.json()[0]
     assert allocation["symbol"] == "NVDA"
-    assert allocation["allocation_percent"] == "100"
+    assert allocation["allocation_percent"] == "100.000000"
 
     list_response = client.get("/api/v1/portfolios", headers=headers)
     assert list_response.status_code == 200
