@@ -10,3 +10,4 @@ def test_investment_thesis_endpoint(client):
     assert payload["evidence_count"] >= 2
     assert payload["bull_case"]
     assert payload["bear_case"]
+    assert "AAPL:market_quote:latest" in payload["supporting_evidence_ids"]
