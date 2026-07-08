@@ -37,7 +37,7 @@ If routes fail with missing table or missing column errors, reset the local SQLi
 
 ### Production Postgres driver
 
-The production example uses a `postgresql+psycopg://` database URL. Production deployments need the matching psycopg driver installed in the runtime image.
+The production example uses a portable `postgresql://` database URL. Production deployments still need a compatible Postgres driver installed in the runtime image.
 
 ### Provider configuration
 
