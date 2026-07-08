@@ -24,6 +24,15 @@ def test_create_portfolio_and_add_holding(client):
     assert value_response.status_code == 200
     assert value_response.json()["total_market_value"] == "250.000000"
 
+    holdings_value_response = client.get(
+        f"/api/v1/portfolios/{portfolio['id']}/holdings/value",
+        headers=headers,
+    )
+    assert holdings_value_response.status_code == 200
+    holding_value = holdings_value_response.json()[0]
+    assert holding_value["symbol"] == "NVDA"
+    assert holding_value["market_value"] == "250.000000"
+
     list_response = client.get("/api/v1/portfolios", headers=headers)
     assert list_response.status_code == 200
     assert len(list_response.json()) == 1
