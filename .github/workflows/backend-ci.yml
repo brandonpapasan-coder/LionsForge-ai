@@ -57,7 +57,14 @@ jobs:
           DATABASE_URL: sqlite:///./ci_lionsforge.db
           JWT_SECRET_KEY: ci-test-secret
           ENVIRONMENT: test
-        run: pytest -q tests/test_auth.py
+        run: pytest -q tests/test_auth.py --tb=short -s > auth-test.log 2>&1
+
+      - name: Upload auth failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-test-log
+          path: backend/auth-test.log
 
       - name: Test market
         env:
