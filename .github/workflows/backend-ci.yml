@@ -119,3 +119,6 @@ jobs:
           curl --fail http://127.0.0.1:8000/health
           docker logs lionsforge-backend-ci
           docker stop lionsforge-backend-ci
+
+      - name: Performance smoke
+        run: python scripts/performance_smoke.py
