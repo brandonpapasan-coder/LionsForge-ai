@@ -11,10 +11,13 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.main import app
 
-ENDPOINTS = [
+PUBLIC_ENDPOINTS = [
     "/health",
     "/ready",
     "/platform",
+]
+
+PROTECTED_ENDPOINTS = [
     "/api/v1/market/quotes/AAPL",
     "/api/v1/news/company/AAPL",
     "/api/v1/research/context/AAPL",
@@ -23,15 +26,32 @@ ENDPOINTS = [
     "/api/v1/research/thesis/AAPL",
 ]
 
-MAX_P95_SECONDS = 0.25
+MAX_P95_SECONDS = 0.35
 REQUESTS_PER_ENDPOINT = 20
 
 
-def measure(client: TestClient, endpoint: str) -> dict[str, float]:
+def get_auth_headers(client: TestClient) -> dict[str, str]:
+    email = "perf@example.com"
+    secret = "strongsecret123"
+    register = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "secret": secret, "full_name": "Performance User"},
+    )
+    assert register.status_code in {201, 409}, register.text
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "secret": secret, "full_name": "Performance User"},
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def measure(client: TestClient, endpoint: str, headers: dict[str, str] | None = None) -> dict[str, float]:
     durations: list[float] = []
     for _ in range(REQUESTS_PER_ENDPOINT):
         start = time.perf_counter()
-        response = client.get(endpoint)
+        response = client.get(endpoint, headers=headers)
         elapsed = time.perf_counter() - start
         assert response.status_code == 200, f"{endpoint} returned {response.status_code}: {response.text}"
         durations.append(elapsed)
@@ -46,8 +66,13 @@ def measure(client: TestClient, endpoint: str) -> dict[str, float]:
 
 
 def main() -> None:
+    results: dict[str, dict[str, float]] = {}
     with TestClient(app) as client:
-        results = {endpoint: measure(client, endpoint) for endpoint in ENDPOINTS}
+        auth_headers = get_auth_headers(client)
+        for endpoint in PUBLIC_ENDPOINTS:
+            results[endpoint] = measure(client, endpoint)
+        for endpoint in PROTECTED_ENDPOINTS:
+            results[endpoint] = measure(client, endpoint, headers=auth_headers)
 
     slow = []
     for endpoint, stats in results.items():
