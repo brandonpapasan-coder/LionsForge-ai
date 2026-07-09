@@ -18,6 +18,7 @@ class Portfolio(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     holdings = relationship("PortfolioHolding", back_populates="portfolio", cascade="all, delete-orphan")
+    transactions = relationship("PortfolioTransaction", back_populates="portfolio", cascade="all, delete-orphan")
 
 
 class PortfolioHolding(Base):
@@ -32,3 +33,19 @@ class PortfolioHolding(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     portfolio = relationship("Portfolio", back_populates="holdings")
+
+
+class PortfolioTransaction(Base):
+    __tablename__ = "portfolio_transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id"), index=True, nullable=False)
+    transaction_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    symbol: Mapped[str | None] = mapped_column(String(12), index=True, nullable=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"), nullable=False)
+    cash_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0"), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    portfolio = relationship("Portfolio", back_populates="transactions")
