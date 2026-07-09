@@ -19,6 +19,7 @@ from app.schemas.portfolio import (
     WatchlistSyncResult,
 )
 from app.schemas.portfolio_performance import PortfolioPerformance
+from app.schemas.portfolio_risk import PortfolioRiskReport, SectorExposure
 from app.schemas.portfolio_value import PortfolioValue
 from app.services.portfolio_analytics_service import (
     build_portfolio_analytics,
@@ -31,6 +32,7 @@ from app.services.portfolio_analytics_service import (
     calculate_total_market_value,
 )
 from app.services.portfolio_insights_service import build_portfolio_insights
+from app.services.portfolio_risk_service import build_portfolio_risk_report
 from app.services.portfolio_service import (
     add_holding,
     create_portfolio,
@@ -115,6 +117,46 @@ def portfolio_analytics_endpoint(
 ) -> PortfolioAnalytics:
     portfolio = _owned_portfolio_or_404(db, current_user.id, portfolio_id)
     return build_portfolio_analytics(portfolio)
+
+
+@router.get("/{portfolio_id}/risk", response_model=PortfolioRiskReport)
+def portfolio_risk_endpoint(
+    portfolio_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PortfolioRiskReport:
+    portfolio = _owned_portfolio_or_404(db, current_user.id, portfolio_id)
+    return build_portfolio_risk_report(portfolio)
+
+
+@router.get("/{portfolio_id}/health", response_model=PortfolioRiskReport)
+def portfolio_health_endpoint(
+    portfolio_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PortfolioRiskReport:
+    portfolio = _owned_portfolio_or_404(db, current_user.id, portfolio_id)
+    return build_portfolio_risk_report(portfolio)
+
+
+@router.get("/{portfolio_id}/allocation", response_model=list[SectorExposure])
+def portfolio_sector_allocation_endpoint(
+    portfolio_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SectorExposure]:
+    portfolio = _owned_portfolio_or_404(db, current_user.id, portfolio_id)
+    return build_portfolio_risk_report(portfolio).sector_exposure
+
+
+@router.get("/{portfolio_id}/diversification", response_model=PortfolioRiskReport)
+def portfolio_diversification_endpoint(
+    portfolio_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PortfolioRiskReport:
+    portfolio = _owned_portfolio_or_404(db, current_user.id, portfolio_id)
+    return build_portfolio_risk_report(portfolio)
 
 
 @router.get("/{portfolio_id}/insights", response_model=PortfolioInsights)
