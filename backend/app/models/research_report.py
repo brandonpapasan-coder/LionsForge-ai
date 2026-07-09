@@ -13,10 +13,10 @@ class ResearchReport(Base):
         Index("ix_research_reports_user_symbol", "user_id", "symbol"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    report_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    symbol: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="complete")
