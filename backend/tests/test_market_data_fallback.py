@@ -1,7 +1,8 @@
 from decimal import Decimal
 
 from app.schemas.market import HistoricalPriceRead, QuoteRead, utc_now
-from app.services.market_data_service import get_historical_prices, get_quote, get_quotes
+from app.services.market_data_service import get_historical_prices, get_provider_health, get_quote, get_quotes
+from app.services.market_provider_health import provider_health_registry
 from app.services.quote_cache import quote_cache
 
 
@@ -47,9 +48,10 @@ class SuccessfulMarketProvider:
 
 def test_quote_falls_back_when_provider_fails(monkeypatch):
     quote_cache.clear()
+    provider_health_registry.reset()
     monkeypatch.setattr(
-        "app.services.market_data_service.get_configured_market_provider",
-        lambda: FailingMarketProvider(),
+        "app.services.market_data_service.get_configured_market_providers",
+        lambda: [FailingMarketProvider()],
     )
 
     quote = get_quote("AAPL")
@@ -59,9 +61,10 @@ def test_quote_falls_back_when_provider_fails(monkeypatch):
 
 
 def test_historical_prices_fall_back_when_provider_fails(monkeypatch):
+    provider_health_registry.reset()
     monkeypatch.setattr(
-        "app.services.market_data_service.get_configured_market_provider",
-        lambda: FailingMarketProvider(),
+        "app.services.market_data_service.get_configured_market_providers",
+        lambda: [FailingMarketProvider()],
     )
 
     prices = get_historical_prices("AAPL", limit=3)
@@ -73,9 +76,10 @@ def test_historical_prices_fall_back_when_provider_fails(monkeypatch):
 
 def test_quote_uses_configured_provider_and_cache(monkeypatch):
     quote_cache.clear()
+    provider_health_registry.reset()
     monkeypatch.setattr(
-        "app.services.market_data_service.get_configured_market_provider",
-        lambda: SuccessfulMarketProvider(),
+        "app.services.market_data_service.get_configured_market_providers",
+        lambda: [SuccessfulMarketProvider()],
     )
 
     quote = get_quote("msft")
@@ -88,9 +92,10 @@ def test_quote_uses_configured_provider_and_cache(monkeypatch):
 
 def test_get_quotes_deduplicates_and_normalizes_symbols(monkeypatch):
     quote_cache.clear()
+    provider_health_registry.reset()
     monkeypatch.setattr(
-        "app.services.market_data_service.get_configured_market_provider",
-        lambda: SuccessfulMarketProvider(),
+        "app.services.market_data_service.get_configured_market_providers",
+        lambda: [SuccessfulMarketProvider()],
     )
 
     quotes = get_quotes(["aapl", "MSFT", "aapl", ""])
@@ -99,9 +104,10 @@ def test_get_quotes_deduplicates_and_normalizes_symbols(monkeypatch):
 
 
 def test_historical_prices_use_configured_provider(monkeypatch):
+    provider_health_registry.reset()
     monkeypatch.setattr(
-        "app.services.market_data_service.get_configured_market_provider",
-        lambda: SuccessfulMarketProvider(),
+        "app.services.market_data_service.get_configured_market_providers",
+        lambda: [SuccessfulMarketProvider()],
     )
 
     prices = get_historical_prices("tsla", limit=2)
@@ -109,3 +115,18 @@ def test_historical_prices_use_configured_provider(monkeypatch):
     assert len(prices) == 2
     assert prices[0].symbol == "TSLA"
     assert prices[0].source == "successful-provider"
+
+
+def test_provider_health_snapshot_records_success(monkeypatch):
+    quote_cache.clear()
+    provider_health_registry.reset()
+    monkeypatch.setattr(
+        "app.services.market_data_service.get_configured_market_providers",
+        lambda: [SuccessfulMarketProvider()],
+    )
+
+    get_quote("AAPL")
+    health = get_provider_health()
+
+    assert health["successful-provider"]["success_count"] == 1
+    assert health["successful-provider"]["failure_count"] == 0
