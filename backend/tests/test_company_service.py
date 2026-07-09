@@ -1,3 +1,6 @@
+import pytest
+
+from app.db.session import SessionLocal
 from app.models.company import Company
 from app.schemas.company import CompanyCreate, CompanyUpdate
 from app.services.company_service import (
@@ -8,6 +11,15 @@ from app.services.company_service import (
     normalize_ticker,
     update_company,
 )
+
+
+@pytest.fixture
+def db_session(reset_database):
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 def test_normalize_ticker():
