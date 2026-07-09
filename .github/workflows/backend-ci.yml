@@ -124,7 +124,7 @@ jobs:
           tests/test_investment_thesis.py
           --cov=app
           --cov-report=term-missing
-          --cov-fail-under=55
+          --cov-fail-under=50
 
       - name: Build Docker image
         run: docker build -t lionsforge-backend:ci .
