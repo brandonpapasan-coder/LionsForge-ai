@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lionsforge-backend-config
+data:
+  APP_NAME: "LionsForge AI"
+  ENVIRONMENT: "staging"
+  API_PREFIX: "/api/v1"
+  ALLOW_MOCK_DATA: "false"
+  MARKET_DATA_PROVIDER: "mock"
+  NEWS_PROVIDER: "mock"

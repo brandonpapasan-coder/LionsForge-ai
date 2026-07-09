@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lionsforge-backend
+spec:
+  rules:
+    - host: api.lionsforge.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lionsforge-backend
+                port:
+                  number: 80
