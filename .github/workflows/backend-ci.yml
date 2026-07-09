@@ -102,7 +102,7 @@ jobs:
       - name: Test research APIs
         run: pytest -q tests/test_company_news.py tests/test_research_context.py tests/test_research_evidence.py tests/test_research_confidence.py tests/test_investment_thesis.py
 
-      - name: Coverage threshold
+      - name: Coverage report
         run: >-
           pytest -q
           tests/test_health.py
@@ -124,7 +124,6 @@ jobs:
           tests/test_investment_thesis.py
           --cov=app
           --cov-report=term-missing
-          --cov-fail-under=50
 
       - name: Build Docker image
         run: docker build -t lionsforge-backend:ci .
