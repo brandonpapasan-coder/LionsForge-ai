@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -33,7 +34,7 @@ def test_twelve_data_quote_mapping(monkeypatch):
     quote = provider.get_quote("aapl")
 
     assert quote.symbol == "AAPL"
-    assert quote.price == 123.45
+    assert quote.price == Decimal("123.45")
     assert quote.source == "twelve_data"
     assert quote.is_delayed is True
 
@@ -71,7 +72,7 @@ def test_twelve_data_historical_mapping(monkeypatch):
     assert len(prices) == 2
     assert prices[0].symbol == "AAPL"
     assert prices[0].date == date(2026, 7, 7)
-    assert prices[0].close == 100.00
+    assert prices[0].close == Decimal("100.00")
     assert prices[1].date == date(2026, 7, 8)
     assert prices[1].source == "twelve_data"
 
