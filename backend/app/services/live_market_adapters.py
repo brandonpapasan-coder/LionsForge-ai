@@ -16,25 +16,32 @@ class TwelveDataMarketProvider(MarketDataProvider):
     name = "twelve_data"
     base_url = "https://api.twelvedata.com"
 
-    def __init__(self, api_key: str, timeout_seconds: float = 10.0) -> None:
+    def __init__(self, api_key: str, timeout_seconds: float = 10.0, max_retries: int = 1) -> None:
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max(0, max_retries)
 
     def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         request_params = {**params, "apikey": self.api_key}
-        try:
-            response = httpx.get(
-                f"{self.base_url}{path}", params=request_params, timeout=self.timeout_seconds
-            )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise MarketDataProviderError(f"Twelve Data request failed: {exc}") from exc
-
-        payload = response.json()
-        if isinstance(payload, dict) and payload.get("status") == "error":
-            message = payload.get("message", "unknown provider error")
-            raise MarketDataProviderError(f"Twelve Data error: {message}")
-        return payload
+        last_error: httpx.HTTPError | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = httpx.get(
+                    f"{self.base_url}{path}", params=request_params, timeout=self.timeout_seconds
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict) and payload.get("status") == "error":
+                    message = payload.get("message", "unknown provider error")
+                    raise MarketDataProviderError(f"Twelve Data error: {message}")
+                return payload
+            except MarketDataProviderError:
+                raise
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if attempt >= self.max_retries:
+                    raise MarketDataProviderError(f"Twelve Data request failed: {last_error}") from exc
+        raise MarketDataProviderError("Twelve Data request failed")
 
     def get_quote(self, symbol: str) -> QuoteRead:
         normalized = normalize_symbol(symbol)
