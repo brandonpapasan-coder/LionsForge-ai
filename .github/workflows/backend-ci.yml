@@ -97,7 +97,7 @@ jobs:
         run: pytest -q tests/test_market.py tests/test_market_provider_selector.py tests/test_quote_cache.py tests/test_market_data_fallback.py tests/test_live_market_adapters.py
 
       - name: Test product APIs
-        run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_alerts.py tests/test_alert_intelligence.py tests/test_company_service.py --tb=short -s > product-api-test.log 2>&1
+        run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_portfolio_risk.py tests/test_alerts.py tests/test_alert_intelligence.py tests/test_company_service.py --tb=short -s > product-api-test.log 2>&1
 
       - name: Upload product API failure log
         if: failure()
@@ -128,6 +128,7 @@ jobs:
           tests/test_live_market_adapters.py
           tests/test_watchlists.py
           tests/test_portfolios.py
+          tests/test_portfolio_risk.py
           tests/test_alerts.py
           tests/test_alert_intelligence.py
           tests/test_companies.py
