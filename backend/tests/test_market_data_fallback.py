@@ -46,7 +46,7 @@ class SuccessfulMarketProvider:
 
 
 def test_quote_falls_back_when_provider_fails(monkeypatch):
-    quote_cache._quotes.clear()
+    quote_cache.clear()
     monkeypatch.setattr(
         "app.services.market_data_service.get_configured_market_provider",
         lambda: FailingMarketProvider(),
@@ -72,7 +72,7 @@ def test_historical_prices_fall_back_when_provider_fails(monkeypatch):
 
 
 def test_quote_uses_configured_provider_and_cache(monkeypatch):
-    quote_cache._quotes.clear()
+    quote_cache.clear()
     monkeypatch.setattr(
         "app.services.market_data_service.get_configured_market_provider",
         lambda: SuccessfulMarketProvider(),
@@ -87,7 +87,7 @@ def test_quote_uses_configured_provider_and_cache(monkeypatch):
 
 
 def test_get_quotes_deduplicates_and_normalizes_symbols(monkeypatch):
-    quote_cache._quotes.clear()
+    quote_cache.clear()
     monkeypatch.setattr(
         "app.services.market_data_service.get_configured_market_provider",
         lambda: SuccessfulMarketProvider(),
