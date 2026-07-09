@@ -1,13 +1,29 @@
+from app.core.security import get_secret_hash
 from app.db.session import SessionLocal
+from app.models.user import User
 from app.services.research_report_service import build_research_report, list_research_reports
 from tests.conftest import auth_headers
 
 
-def test_research_report_service_generates_and_persists(reset_database, test_user):
+def create_test_user(db, email: str = "research@example.com") -> User:
+    user = User(
+        email=email,
+        full_name="Research Test User",
+        hashed_password=get_secret_hash("strongsecret123"),
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def test_research_report_service_generates_and_persists(reset_database):
     db = SessionLocal()
     try:
-        report = build_research_report("aapl", user=test_user, db=db, persist=True)
-        saved = list_research_reports(db=db, user=test_user, symbol="AAPL")
+        user = create_test_user(db)
+        report = build_research_report("aapl", user=user, db=db, persist=True)
+        saved = list_research_reports(db=db, user=user, symbol="AAPL")
     finally:
         db.close()
 
@@ -20,11 +36,12 @@ def test_research_report_service_generates_and_persists(reset_database, test_use
     assert saved[0].symbol == "AAPL"
 
 
-def test_research_report_versioning(reset_database, test_user):
+def test_research_report_versioning(reset_database):
     db = SessionLocal()
     try:
-        first = build_research_report("MSFT", user=test_user, db=db, persist=True)
-        second = build_research_report("MSFT", user=test_user, db=db, persist=True)
+        user = create_test_user(db, email="versioning@example.com")
+        first = build_research_report("MSFT", user=user, db=db, persist=True)
+        second = build_research_report("MSFT", user=user, db=db, persist=True)
     finally:
         db.close()
 
