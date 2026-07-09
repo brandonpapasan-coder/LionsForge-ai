@@ -52,6 +52,41 @@ def test_twelve_data_quote_uses_price_when_close_missing(monkeypatch):
     assert quote.price == Decimal("124.56")
 
 
+def test_twelve_data_retries_transient_http_error(monkeypatch):
+    attempts = {"count": 0}
+
+    def fake_get(url, params, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            return FakeResponse({"message": "temporary error"}, status_code=500)
+        return FakeResponse({"close": "200.00"})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    provider = TwelveDataMarketProvider(api_key="test-key", max_retries=1)
+
+    quote = provider.get_quote("spy")
+
+    assert attempts["count"] == 2
+    assert quote.symbol == "SPY"
+    assert quote.price == Decimal("200.00")
+
+
+def test_twelve_data_retry_exhaustion_raises(monkeypatch):
+    attempts = {"count": 0}
+
+    def fake_get(url, params, timeout):
+        attempts["count"] += 1
+        return FakeResponse({"message": "server error"}, status_code=500)
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    provider = TwelveDataMarketProvider(api_key="test-key", max_retries=2)
+
+    with pytest.raises(MarketDataProviderError):
+        provider.get_quote("QQQ")
+
+    assert attempts["count"] == 3
+
+
 def test_twelve_data_historical_mapping(monkeypatch):
     def fake_get(url, params, timeout):
         return FakeResponse(
@@ -131,7 +166,7 @@ def test_twelve_data_http_error_raises_provider_error(monkeypatch):
         return FakeResponse({"message": "server error"}, status_code=500)
 
     monkeypatch.setattr(httpx, "get", fake_get)
-    provider = TwelveDataMarketProvider(api_key="test-key")
+    provider = TwelveDataMarketProvider(api_key="test-key", max_retries=0)
 
     with pytest.raises(MarketDataProviderError):
         provider.get_quote("AAPL")
