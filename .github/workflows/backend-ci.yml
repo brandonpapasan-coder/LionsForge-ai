@@ -64,7 +64,14 @@ jobs:
         run: bandit -q -r app
 
       - name: Run smoke check
-        run: python scripts/smoke_backend.py
+        run: python scripts/smoke_backend.py > smoke-backend.log 2>&1
+
+      - name: Upload smoke failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-backend-log
+          path: backend/smoke-backend.log
 
       - name: Test health
         run: pytest -q tests/test_health.py --tb=short -s > health-test.log 2>&1
