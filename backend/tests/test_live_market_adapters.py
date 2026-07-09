@@ -39,6 +39,19 @@ def test_twelve_data_quote_mapping(monkeypatch):
     assert quote.is_delayed is True
 
 
+def test_twelve_data_quote_uses_price_when_close_missing(monkeypatch):
+    def fake_get(url, params, timeout):
+        return FakeResponse({"price": "124.56"})
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    provider = TwelveDataMarketProvider(api_key="test-key")
+
+    quote = provider.get_quote("msft")
+
+    assert quote.symbol == "MSFT"
+    assert quote.price == Decimal("124.56")
+
+
 def test_twelve_data_historical_mapping(monkeypatch):
     def fake_get(url, params, timeout):
         return FakeResponse(
@@ -77,6 +90,31 @@ def test_twelve_data_historical_mapping(monkeypatch):
     assert prices[1].source == "twelve_data"
 
 
+def test_twelve_data_historical_defaults_missing_volume(monkeypatch):
+    def fake_get(url, params, timeout):
+        return FakeResponse(
+            {
+                "values": [
+                    {
+                        "datetime": "2026-07-08",
+                        "open": "100.00",
+                        "high": "110.00",
+                        "low": "95.00",
+                        "close": "105.00",
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    provider = TwelveDataMarketProvider(api_key="test-key")
+
+    prices = provider.get_historical_prices("nvda", limit=1)
+
+    assert prices[0].symbol == "NVDA"
+    assert prices[0].volume == 0
+
+
 def test_twelve_data_provider_error_response(monkeypatch):
     def fake_get(url, params, timeout):
         return FakeResponse({"status": "error", "message": "bad symbol"})
@@ -86,6 +124,17 @@ def test_twelve_data_provider_error_response(monkeypatch):
 
     with pytest.raises(MarketDataProviderError):
         provider.get_quote("BAD")
+
+
+def test_twelve_data_http_error_raises_provider_error(monkeypatch):
+    def fake_get(url, params, timeout):
+        return FakeResponse({"message": "server error"}, status_code=500)
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    provider = TwelveDataMarketProvider(api_key="test-key")
+
+    with pytest.raises(MarketDataProviderError):
+        provider.get_quote("AAPL")
 
 
 def test_twelve_data_missing_quote_price_raises(monkeypatch):
