@@ -3,13 +3,15 @@ from pathlib import Path
 
 from app.main import app
 
-
 OUTPUT_PATH = Path("openapi.json")
 
 
 def main() -> None:
     schema = app.openapi()
-    OUTPUT_PATH.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    OUTPUT_PATH.write_text(
+        json.dumps(schema, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     print(f"Wrote {OUTPUT_PATH}")
 
 
