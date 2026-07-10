@@ -22,7 +22,8 @@ body {
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-button { font: inherit; }
+a { color: inherit; }
+button, input { font: inherit; }
 main { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: 2rem 0 4rem; }
 .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; }
 .topbar h1 { max-width: 760px; margin: .35rem 0 0; font-size: clamp(2rem, 5vw, 4.6rem); line-height: .98; letter-spacing: -.055em; }
@@ -31,12 +32,12 @@ main { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: 2rem 0 4r
 .status span { width: .65rem; height: .65rem; border-radius: 50%; background: var(--danger); box-shadow: 0 0 1rem currentColor; }
 .status.online span { background: var(--success); }
 .hero { display: grid; grid-template-columns: 1.5fr .85fr; gap: 1.5rem; margin-top: 5rem; align-items: stretch; }
-.hero > div, .readiness-card, .module-grid article { border: 1px solid var(--border); border-radius: 1.4rem; background: rgba(13,27,45,.78); backdrop-filter: blur(18px); }
+.hero > div, .readiness-card, .module-grid article, .auth-card { border: 1px solid var(--border); border-radius: 1.4rem; background: rgba(13,27,45,.78); backdrop-filter: blur(18px); }
 .hero > div { padding: clamp(2rem, 5vw, 4rem); }
 .hero h2 { margin: .8rem 0 1rem; font-size: clamp(2rem, 4vw, 3.5rem); letter-spacing: -.04em; }
 .lede { max-width: 680px; color: var(--muted); font-size: 1.08rem; line-height: 1.75; }
 .actions { display: flex; gap: .8rem; margin-top: 2rem; flex-wrap: wrap; }
-.actions button { border: 0; border-radius: .8rem; padding: .9rem 1.2rem; background: var(--accent); color: #04111f; font-weight: 800; cursor: pointer; }
+.actions a { text-decoration: none; border: 0; border-radius: .8rem; padding: .9rem 1.2rem; background: var(--accent); color: #04111f; font-weight: 800; }
 .actions .secondary { border: 1px solid var(--border); background: transparent; color: var(--text); }
 .readiness-card { padding: 2rem; }
 dl { margin: 1.5rem 0 0; }
@@ -48,6 +49,20 @@ dd { margin: 0; font-weight: 800; text-transform: capitalize; }
 .module-grid span { color: var(--accent); font-weight: 800; }
 .module-grid h3 { margin: 2.4rem 0 .7rem; font-size: 1.2rem; }
 .module-grid p { margin: 0; color: var(--muted); line-height: 1.55; }
+.auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
+.auth-card { width: min(100%, 460px); padding: clamp(1.5rem, 5vw, 3rem); }
+.auth-card h1 { margin: .7rem 0; font-size: clamp(2rem, 8vw, 3.2rem); letter-spacing: -.045em; }
+.auth-copy, .auth-switch { color: var(--muted); line-height: 1.6; }
+.auth-card form { display: grid; gap: 1rem; margin-top: 2rem; }
+.auth-card label { display: grid; gap: .45rem; color: var(--muted); font-size: .92rem; }
+.auth-card input { width: 100%; border: 1px solid var(--border); border-radius: .75rem; padding: .85rem 1rem; background: rgba(255,255,255,.04); color: var(--text); outline: none; }
+.auth-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(78,161,255,.13); }
+.auth-card button { margin-top: .4rem; border: 0; border-radius: .8rem; padding: .9rem 1rem; background: var(--accent); color: #04111f; font-weight: 800; cursor: pointer; }
+.auth-card button:disabled { opacity: .65; cursor: wait; }
+.auth-switch a { color: var(--accent); font-weight: 700; }
+.form-message { margin: 1rem 0 0; color: var(--muted); }
+.dashboard-header { margin-bottom: 4rem; }
+.dashboard-grid { margin-top: 0; }
 @media (max-width: 900px) {
   .topbar, .hero { grid-template-columns: 1fr; display: grid; }
   .module-grid { grid-template-columns: repeat(2, 1fr); }
