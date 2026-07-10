@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from tests.conftest import auth_headers
 
 
@@ -44,12 +46,14 @@ def test_autonomous_portfolio_intelligence_ranks_holdings_and_builds_heatmap(
     assert payload["portfolio_id"] == portfolio["id"]
     assert len(payload["holdings_ranked"]) == 3
     assert len(payload["risk_heatmap"]) == 3
+
     opportunities = [
-        item["opportunity_score"] for item in payload["holdings_ranked"]
+        Decimal(item["opportunity_score"]) for item in payload["holdings_ranked"]
     ]
     assert opportunities == sorted(opportunities, reverse=True)
+
     weighted_risks = [
-        item["weighted_risk_score"] for item in payload["risk_heatmap"]
+        Decimal(item["weighted_risk_score"]) for item in payload["risk_heatmap"]
     ]
     assert weighted_risks == sorted(weighted_risks, reverse=True)
     assert payload["recommendations"]
