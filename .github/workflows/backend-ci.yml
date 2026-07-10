@@ -77,17 +77,29 @@ jobs:
           tests/test_error_observability.py
           tests/test_autonomous_portfolio_intelligence.py
 
-      - name: Ruff format check
-        run: >-
-          ruff format --check
-          app/main.py
-          app/core/dependency_health.py
-          app/core/metrics.py
-          app/core/observability.py
-          app/core/rate_limit.py
-          app/schemas/system_readiness.py
-          scripts/export_openapi.py
-          scripts/validate_openapi.py
+      - name: Ruff format app main
+        run: ruff format --check app/main.py
+
+      - name: Ruff format dependency health
+        run: ruff format --check app/core/dependency_health.py
+
+      - name: Ruff format metrics
+        run: ruff format --check app/core/metrics.py
+
+      - name: Ruff format observability
+        run: ruff format --check app/core/observability.py
+
+      - name: Ruff format rate limit
+        run: ruff format --check app/core/rate_limit.py
+
+      - name: Ruff format system readiness schema
+        run: ruff format --check app/schemas/system_readiness.py
+
+      - name: Ruff format OpenAPI exporter
+        run: ruff format --check scripts/export_openapi.py
+
+      - name: Ruff format OpenAPI validator
+        run: ruff format --check scripts/validate_openapi.py
 
       - name: Type check
         run: >-
