@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ResearchReportForm } from "@/components/research-report-form";
@@ -70,15 +71,17 @@ export default async function DashboardPage() {
         <div className="report-grid">
           {session.reports.reports.length ? (
             session.reports.reports.map((report) => (
-              <article key={report.report_id}>
-                <div className="report-meta">
-                  <span>{report.symbol}</span>
-                  <span>{report.confidence_level} confidence</span>
-                </div>
-                <h3>{report.title}</h3>
-                <p>{report.executive_summary}</p>
-                <small>{new Date(report.created_at).toLocaleString()}</small>
-              </article>
+              <Link className="report-card-link" href={`/reports/${report.report_id}`} key={report.report_id}>
+                <article>
+                  <div className="report-meta">
+                    <span>{report.symbol}</span>
+                    <span>{report.confidence_level} confidence</span>
+                  </div>
+                  <h3>{report.title}</h3>
+                  <p>{report.executive_summary}</p>
+                  <small>{new Date(report.created_at).toLocaleString()}</small>
+                </article>
+              </Link>
             ))
           ) : (
             <p className="empty-state">No saved reports yet. Generate your first report above.</p>
