@@ -19,7 +19,12 @@ class RateLimiter:
         self._buckets: dict[str, RateLimitBucket] = {}
         self._lock = Lock()
 
-    def allow(self, key: str, limit: int, window_seconds: int) -> tuple[bool, int]:
+    def allow(
+        self,
+        key: str,
+        limit: int,
+        window_seconds: int,
+    ) -> tuple[bool, int]:
         now = monotonic()
         with self._lock:
             bucket = self._buckets.get(key)
