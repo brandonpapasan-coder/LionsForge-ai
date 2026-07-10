@@ -1,0 +1,67 @@
+groups:
+  - name: lionsforge-backend
+    interval: 30s
+    rules:
+      - alert: LionsForgeBackendDown
+        expr: up{job="lionsforge-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: lionsforge-backend
+        annotations:
+          summary: LionsForge backend is unavailable
+          description: Prometheus has been unable to scrape the LionsForge backend for at least two minutes.
+
+      - alert: LionsForgeHighHttpErrorRate
+        expr: |
+          increase(lionsforge_http_errors_total[5m])
+          /
+          clamp_min(increase(lionsforge_http_requests_total[5m]), 1)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: lionsforge-backend
+        annotations:
+          summary: LionsForge HTTP error rate is elevated
+          description: More than 5% of requests have returned HTTP 5xx responses during the last five minutes.
+
+      - alert: LionsForgeHighAverageLatency
+        expr: lionsforge_http_request_duration_ms_average > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: lionsforge-backend
+        annotations:
+          summary: LionsForge request latency is elevated
+          description: Average backend request duration has exceeded one second for ten minutes.
+
+      - alert: LionsForgePrimaryProviderUnavailable
+        expr: lionsforge_market_provider_available{provider="mock"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: market-data
+        annotations:
+          summary: Primary market-data provider is unavailable
+          description: The configured primary market-data provider has remained unavailable for two minutes.
+
+      - alert: LionsForgeProviderErrorRateHigh
+        expr: lionsforge_market_provider_error_rate > 0.20
+        for: 5m
+        labels:
+          severity: warning
+          service: market-data
+        annotations:
+          summary: Market-data provider error rate is high
+          description: A market-data provider error rate has exceeded 20% for five minutes.
+
+      - alert: LionsForgeUnhandledExceptions
+        expr: increase(lionsforge_application_exceptions_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: lionsforge-backend
+        annotations:
+          summary: LionsForge recorded unhandled exceptions
+          description: One or more unhandled application exceptions occurred during the last ten minutes.
