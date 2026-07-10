@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-
 SCHEMA_PATH = Path("openapi.json")
 REQUIRED_PATHS = {
     "/health",
@@ -18,10 +17,15 @@ def main() -> None:
         raise SystemExit("OpenAPI schema version is missing or unsupported")
     if not schema.get("info", {}).get("title"):
         raise SystemExit("OpenAPI info.title is required")
+
     paths = set(schema.get("paths", {}))
     missing = sorted(REQUIRED_PATHS - paths)
     if missing:
-        raise SystemExit(f"OpenAPI schema is missing required paths: {', '.join(missing)}")
+        missing_paths = ", ".join(missing)
+        raise SystemExit(
+            f"OpenAPI schema is missing required paths: {missing_paths}"
+        )
+
     print(f"Validated OpenAPI contract with {len(paths)} paths")
 
 
