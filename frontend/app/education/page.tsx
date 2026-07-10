@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { ModuleCompletionButton } from "@/components/module-completion-button";
 import type { LearningDashboard } from "@/lib/education";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -56,11 +55,9 @@ export default async function EducationPage() {
                     <p>{module.summary}</p>
                     <small>{module.estimated_minutes} min</small>
                   </div>
-                  <ModuleCompletionButton
-                    courseId={course.course_id}
-                    moduleId={module.module_id}
-                    completed={module.completed}
-                  />
+                  <Link className="open-lesson-link" href={`/education/${course.course_id}/${module.module_id}`}>
+                    {module.completed ? "Review lesson" : "Open lesson"}
+                  </Link>
                 </div>
               ))}
             </div>
