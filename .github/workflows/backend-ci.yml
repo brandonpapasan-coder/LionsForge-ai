@@ -88,9 +88,6 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
-          tests/test_health.py
-          tests/test_rate_limit.py
-          tests/test_error_observability.py
 
       - name: Type check
         run: >-
