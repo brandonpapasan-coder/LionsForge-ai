@@ -1,3 +1,5 @@
+from uuid import UUID, uuid4
+
 from fastapi.testclient import TestClient
 
 from app.db.session import get_db
@@ -32,3 +34,28 @@ def test_ready_returns_503_when_database_is_unavailable():
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Database dependency is unavailable."}
+
+
+def test_request_id_is_preserved_when_valid_uuid_is_supplied():
+    request_id = str(uuid4())
+
+    with TestClient(app) as client:
+        response = client.get("/health", headers={"x-request-id": request_id})
+
+    assert response.status_code == 200
+    assert response.headers["x-request-id"] == request_id
+
+
+def test_request_id_is_generated_for_missing_or_invalid_header():
+    with TestClient(app) as client:
+        missing_header_response = client.get("/health")
+        invalid_header_response = client.get(
+            "/health",
+            headers={"x-request-id": "not-a-uuid"},
+        )
+
+    generated_id = missing_header_response.headers["x-request-id"]
+    replacement_id = invalid_header_response.headers["x-request-id"]
+    assert str(UUID(generated_id)) == generated_id
+    assert str(UUID(replacement_id)) == replacement_id
+    assert replacement_id != "not-a-uuid"
