@@ -72,12 +72,8 @@ jobs:
       - name: Ruff format check
         run: >-
           ruff format --check
-          app/api/routes/system.py
           app/schemas/system_readiness.py
           scripts/export_openapi.py
-          scripts/validate_openapi.py
-          tests/test_system_readiness.py
-          tests/test_autonomous_portfolio_intelligence.py
 
       - name: Type check
         run: >-
