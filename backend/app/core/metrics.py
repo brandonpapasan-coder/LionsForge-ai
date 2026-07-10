@@ -36,9 +36,7 @@ def render_prometheus_metrics() -> str:
     exception_types = dict(error_metrics["by_exception_type"])
     for exception_type, count in sorted(exception_types.items()):
         label = f'exception_type="{exception_type}"'
-        lines.append(
-            f"lionsforge_application_exceptions_by_type_total{{{label}}} {count}"
-        )
+        lines.append(f"lionsforge_application_exceptions_by_type_total{{{label}}} {count}")
 
     lines.extend(
         [
@@ -50,8 +48,6 @@ def render_prometheus_metrics() -> str:
         label = f'provider="{name}"'
         available = 1 if provider_health_registry.is_available(name) else 0
         lines.append(f"lionsforge_market_provider_available{{{label}}} {available}")
-        lines.append(
-            f"lionsforge_market_provider_error_rate{{{label}}} {health.error_rate}"
-        )
+        lines.append(f"lionsforge_market_provider_error_rate{{{label}}} {health.error_rate}")
 
     return "\n".join(lines) + "\n"
