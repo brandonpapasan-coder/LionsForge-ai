@@ -45,7 +45,9 @@ def main() -> None:
         if missing_methods:
             method_failures.append(f"{path}: {', '.join(missing_methods)}")
     if method_failures:
-        raise SystemExit("OpenAPI schema is missing required methods: " + "; ".join(method_failures))
+        raise SystemExit(
+            "OpenAPI schema is missing required methods: " + "; ".join(method_failures)
+        )
 
     print(
         f"Validated OpenAPI contract with {len(paths)} paths and "
