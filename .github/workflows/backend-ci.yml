@@ -106,6 +106,16 @@ jobs:
           name: product-api-test-log
           path: backend/product-api-test.log
 
+      - name: Test factor APIs
+        run: pytest -q tests/test_factors.py --tb=short -s > factor-api-test.log 2>&1
+
+      - name: Upload factor API failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factor-api-test-log
+          path: backend/factor-api-test.log
+
       - name: Test research APIs
         run: pytest -q tests/test_company_news.py tests/test_research_context.py tests/test_research_evidence.py tests/test_research_confidence.py tests/test_investment_thesis.py tests/test_research_reports.py --tb=short -s > research-api-test.log 2>&1
 
@@ -131,6 +141,7 @@ jobs:
           tests/test_portfolio_risk.py
           tests/test_alerts.py
           tests/test_alert_intelligence.py
+          tests/test_factors.py
           tests/test_companies.py
           tests/test_company_service.py
           tests/test_company_news.py
