@@ -44,6 +44,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -51,110 +53,46 @@ jobs:
           pip install --quiet -r requirements.txt
 
       - name: Dependency security audit
-        run: pip-audit -r requirements.txt > dependency-audit.log 2>&1
-
-      - name: Upload dependency audit failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-audit-log
-          path: backend/dependency-audit.log
+        run: pip-audit -r requirements.txt
 
       - name: Static security scan
         run: bandit -q -r app
 
-      - name: Run smoke check
-        run: python scripts/smoke_backend.py > smoke-backend.log 2>&1
+      - name: Ruff lint
+        run: ruff check app tests scripts
 
-      - name: Upload smoke failure log
-        if: failure()
+      - name: Ruff format check
+        run: ruff format --check app tests scripts
+
+      - name: Type check
+        run: mypy app
+
+      - name: Validate Alembic migrations on PostgreSQL
+        run: |
+          alembic upgrade head
+          alembic current
+
+      - name: Run backend smoke check
+        run: python scripts/smoke_backend.py
+
+      - name: Run full test suite with enforced coverage
+        run: pytest -q --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=75
+
+      - name: Export OpenAPI schema
+        run: python scripts/export_openapi.py
+
+      - name: Validate OpenAPI contract
+        run: python scripts/validate_openapi.py
+
+      - name: Upload coverage and OpenAPI artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-backend-log
-          path: backend/smoke-backend.log
-
-      - name: Test health
-        run: pytest -q tests/test_health.py --tb=short -s > health-test.log 2>&1
-
-      - name: Upload health failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: health-test-log
-          path: backend/health-test.log
-
-      - name: Test auth
-        run: pytest -q tests/test_auth.py --tb=short -s > auth-test.log 2>&1
-
-      - name: Upload auth failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: auth-test-log
-          path: backend/auth-test.log
-
-      - name: Test market
-        run: pytest -q tests/test_market.py tests/test_market_provider_selector.py tests/test_quote_cache.py tests/test_market_data_fallback.py tests/test_live_market_adapters.py
-
-      - name: Test product APIs
-        run: pytest -q tests/test_watchlists.py tests/test_portfolios.py tests/test_portfolio_risk.py tests/test_alerts.py tests/test_alert_intelligence.py tests/test_company_service.py --tb=short -s > product-api-test.log 2>&1
-
-      - name: Upload product API failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: product-api-test-log
-          path: backend/product-api-test.log
-
-      - name: Test intelligence APIs
-        run: pytest -q tests/test_factors.py tests/test_research_agent.py tests/test_event_intelligence.py tests/test_decision_intelligence.py --tb=short -s > intelligence-api-test.log 2>&1
-
-      - name: Upload intelligence API failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: intelligence-api-test-log
-          path: backend/intelligence-api-test.log
-
-      - name: Test research APIs
-        run: pytest -q tests/test_company_news.py tests/test_research_context.py tests/test_research_evidence.py tests/test_research_confidence.py tests/test_investment_thesis.py tests/test_research_reports.py --tb=short -s > research-api-test.log 2>&1
-
-      - name: Upload research API failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: research-api-test-log
-          path: backend/research-api-test.log
-
-      - name: Coverage report
-        run: >-
-          pytest -q
-          tests/test_health.py
-          tests/test_auth.py
-          tests/test_market.py
-          tests/test_market_provider_selector.py
-          tests/test_quote_cache.py
-          tests/test_market_data_fallback.py
-          tests/test_live_market_adapters.py
-          tests/test_watchlists.py
-          tests/test_portfolios.py
-          tests/test_portfolio_risk.py
-          tests/test_alerts.py
-          tests/test_alert_intelligence.py
-          tests/test_factors.py
-          tests/test_research_agent.py
-          tests/test_event_intelligence.py
-          tests/test_decision_intelligence.py
-          tests/test_companies.py
-          tests/test_company_service.py
-          tests/test_company_news.py
-          tests/test_research_context.py
-          tests/test_research_evidence.py
-          tests/test_research_confidence.py
-          tests/test_investment_thesis.py
-          tests/test_research_reports.py
-          --cov=app
-          --cov-report=term-missing || true
+          name: backend-quality-artifacts
+          path: |
+            backend/coverage.xml
+            backend/openapi.json
+          if-no-files-found: warn
 
       - name: Build Docker image
         run: docker build -t lionsforge-backend:ci .
@@ -166,17 +104,14 @@ jobs:
             -e JWT_SECRET_KEY=ci-test-secret \
             -e ENVIRONMENT=test \
             lionsforge-backend:ci
-          sleep 8
-          curl --fail http://127.0.0.1:8000/health
-          docker logs lionsforge-backend-ci
-          docker stop lionsforge-backend-ci
+          trap 'docker logs lionsforge-backend-ci; docker rm -f lionsforge-backend-ci' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8000/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
 
       - name: Performance smoke
-        run: python scripts/performance_smoke.py > performance-smoke.log 2>&1
-
-      - name: Upload performance smoke failure log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: performance-smoke-log
-          path: backend/performance-smoke.log
+        run: python scripts/performance_smoke.py
