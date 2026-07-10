@@ -30,6 +30,36 @@ class ModuleCompletionRead(BaseModel):
     completed_at: datetime
 
 
+class LessonAssessment(BaseModel):
+    question: str
+    options: list[str]
+    passing_score: int = Field(default=80, ge=0, le=100)
+
+
+class LessonDetail(BaseModel):
+    course_id: str
+    module_id: str
+    course_title: str
+    title: str
+    summary: str
+    estimated_minutes: int
+    objectives: list[str]
+    key_points: list[str]
+    assessment: LessonAssessment
+    completed: bool = False
+
+
+class AssessmentSubmission(BaseModel):
+    selected_option: int = Field(ge=0)
+
+
+class AssessmentResult(BaseModel):
+    score: int = Field(ge=0, le=100)
+    passed: bool
+    explanation: str
+    completed_at: datetime | None = None
+
+
 class LearningDashboard(BaseModel):
     learner_email: str
     recommended_course_id: str
