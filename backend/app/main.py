@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.observability import configure_request_observability
 from app.db.init_db import init_db
 from app.db.session import get_db
 
@@ -34,6 +35,7 @@ app = FastAPI(
     description="AI-powered investment research and trading platform.",
     lifespan=lifespan,
 )
+configure_request_observability(app)
 app.include_router(api_router, prefix=settings.api_prefix)
 
 
