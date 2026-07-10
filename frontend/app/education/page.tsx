@@ -10,7 +10,6 @@ async function getLearningDashboard(): Promise<LearningDashboard> {
   const cookieStore = await cookies();
   const token = cookieStore.get("lionsforge_session")?.value;
   if (!token) redirect("/login");
-
   const response = await fetch(`${backendUrl}/api/v1/education/dashboard`, {
     headers: { authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -32,9 +31,9 @@ export default async function EducationPage() {
           <h1>Build mastery through structured, evidence-based learning.</h1>
           <p className="lede">Recommended next: {recommended?.title ?? "Finance Foundations"}</p>
         </div>
-        <aside className="learning-progress">
-          <span>{dashboard.completed_modules}</span>
-          <p>of {dashboard.total_modules} modules completed</p>
+        <aside className="learning-progress mastery-panel">
+          <div><span>{dashboard.completed_modules}</span><p>of {dashboard.total_modules} modules completed</p></div>
+          <div><span>{dashboard.mastery_average ?? "—"}{dashboard.mastery_average !== null ? "%" : ""}</span><p>average best assessment score</p></div>
         </aside>
       </header>
 
@@ -53,7 +52,10 @@ export default async function EducationPage() {
                   <div>
                     <h3>{module.title}</h3>
                     <p>{module.summary}</p>
-                    <small>{module.estimated_minutes} min</small>
+                    <small>
+                      {module.estimated_minutes} min · {module.attempt_count} attempt{module.attempt_count === 1 ? "" : "s"}
+                      {module.best_score !== null ? ` · Best ${module.best_score}%` : ""}
+                    </small>
                   </div>
                   <Link className="open-lesson-link" href={`/education/${course.course_id}/${module.module_id}`}>
                     {module.completed ? "Review lesson" : "Open lesson"}
