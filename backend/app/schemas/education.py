@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -6,6 +8,7 @@ class LearningModule(BaseModel):
     title: str
     summary: str
     estimated_minutes: int = Field(ge=1)
+    completed: bool = False
 
 
 class CourseCatalogItem(BaseModel):
@@ -14,6 +17,17 @@ class CourseCatalogItem(BaseModel):
     level: str
     description: str
     modules: list[LearningModule]
+
+
+class ModuleCompletionCreate(BaseModel):
+    course_id: str
+    module_id: str
+
+
+class ModuleCompletionRead(BaseModel):
+    course_id: str
+    module_id: str
+    completed_at: datetime
 
 
 class LearningDashboard(BaseModel):
