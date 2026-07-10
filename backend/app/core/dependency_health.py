@@ -30,9 +30,7 @@ def evaluate_market_dependencies(
 ) -> MarketDependencyReadiness:
     provider_names = configured_provider_names(settings)
     primary_provider = provider_names[0]
-    unavailable = tuple(
-        name for name in provider_names if not health_registry.is_available(name)
-    )
+    unavailable = tuple(name for name in provider_names if not health_registry.is_available(name))
 
     if primary_provider in unavailable:
         status = "unavailable"
