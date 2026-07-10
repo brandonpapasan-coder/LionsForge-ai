@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { ModuleCompletionButton } from "@/components/module-completion-button";
 import type { LearningDashboard } from "@/lib/education";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -43,18 +44,23 @@ export default async function EducationPage() {
           <article key={course.course_id}>
             <div className="report-meta">
               <span>{course.level}</span>
-              <span>{course.modules.length} modules</span>
+              <span>{course.modules.filter((module) => module.completed).length}/{course.modules.length} complete</span>
             </div>
             <h2>{course.title}</h2>
             <p>{course.description}</p>
             <div className="module-list">
               {course.modules.map((module) => (
-                <div key={module.module_id}>
+                <div key={module.module_id} className={module.completed ? "module-completed" : ""}>
                   <div>
                     <h3>{module.title}</h3>
                     <p>{module.summary}</p>
+                    <small>{module.estimated_minutes} min</small>
                   </div>
-                  <span>{module.estimated_minutes} min</span>
+                  <ModuleCompletionButton
+                    courseId={course.course_id}
+                    moduleId={module.module_id}
+                    completed={module.completed}
+                  />
                 </div>
               ))}
             </div>
