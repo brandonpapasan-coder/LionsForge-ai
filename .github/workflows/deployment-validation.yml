@@ -47,16 +47,88 @@ jobs:
           docker build -t lionsforge-backend:staging backend
           kind load docker-image lionsforge-backend:staging --name lionsforge-ci
 
-      - name: Deploy staging manifests
+      - name: Create staging namespace and PostgreSQL
         run: |
           kubectl create namespace lionsforge-staging --dry-run=client -o yaml | kubectl apply -f -
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgres
+            namespace: lionsforge-staging
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: postgres
+            template:
+              metadata:
+                labels:
+                  app: postgres
+              spec:
+                containers:
+                  - name: postgres
+                    image: postgres:16
+                    env:
+                      - name: POSTGRES_DB
+                        value: lionsforge_staging
+                      - name: POSTGRES_USER
+                        value: lionsforge
+                      - name: POSTGRES_PASSWORD
+                        value: staging-password
+                    ports:
+                      - containerPort: 5432
+                    readinessProbe:
+                      exec:
+                        command:
+                          - pg_isready
+                          - -U
+                          - lionsforge
+                          - -d
+                          - lionsforge_staging
+                      initialDelaySeconds: 3
+                      periodSeconds: 2
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgres
+            namespace: lionsforge-staging
+          spec:
+            selector:
+              app: postgres
+            ports:
+              - port: 5432
+                targetPort: 5432
+          EOF
+          kubectl -n lionsforge-staging rollout status deployment/postgres --timeout=180s
+
+      - name: Configure staging secrets
+        run: |
           kubectl -n lionsforge-staging create secret generic lionsforge-backend-secrets \
-            --from-literal=DATABASE_URL='sqlite:///./staging_smoke.db' \
+            --from-literal=DATABASE_URL='postgresql+psycopg://lionsforge:staging-password@postgres:5432/lionsforge_staging' \
             --from-literal=JWT_SECRET_KEY='staging-smoke-secret' \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Run database migrations in cluster
+        run: |
+          kubectl -n lionsforge-staging delete job lionsforge-migrate --ignore-not-found
+          kubectl -n lionsforge-staging create job lionsforge-migrate \
+            --image=lionsforge-backend:staging \
+            -- alembic upgrade head
+          kubectl -n lionsforge-staging set env job/lionsforge-migrate \
+            DATABASE_URL='postgresql+psycopg://lionsforge:staging-password@postgres:5432/lionsforge_staging' \
+            JWT_SECRET_KEY='staging-smoke-secret' \
+            ENVIRONMENT=staging
+          kubectl -n lionsforge-staging wait \
+            --for=condition=complete job/lionsforge-migrate \
+            --timeout=180s
+
+      - name: Deploy staging manifests
+        run: |
           kubectl apply -f staging-rendered.yaml
           kubectl -n lionsforge-staging set image deployment/lionsforge-backend backend=lionsforge-backend:staging
-          kubectl -n lionsforge-staging set env deployment/lionsforge-backend ENVIRONMENT=test
+          kubectl -n lionsforge-staging set env deployment/lionsforge-backend ENVIRONMENT=staging
           kubectl -n lionsforge-staging scale deployment/lionsforge-backend --replicas=1
           kubectl -n lionsforge-staging rollout status deployment/lionsforge-backend --timeout=180s
 
@@ -64,7 +136,7 @@ jobs:
         run: |
           kubectl -n lionsforge-staging port-forward service/lionsforge-backend 18000:80 > port-forward.log 2>&1 &
           PORT_FORWARD_PID=$!
-          trap 'kill ${PORT_FORWARD_PID} 2>/dev/null || true; cat port-forward.log || true; kubectl -n lionsforge-staging get all; kubectl -n lionsforge-staging logs deployment/lionsforge-backend --all-containers=true || true' EXIT
+          trap 'kill ${PORT_FORWARD_PID} 2>/dev/null || true; cat port-forward.log || true; kubectl -n lionsforge-staging get all; kubectl -n lionsforge-staging logs deployment/lionsforge-backend --all-containers=true || true; kubectl -n lionsforge-staging logs job/lionsforge-migrate || true' EXIT
 
           ready=false
           for attempt in {1..30}; do
@@ -80,6 +152,7 @@ jobs:
           done
 
           test "${ready}" = "true"
-          curl --fail --silent http://127.0.0.1:18000/ready > /dev/null
+          curl --fail --silent http://127.0.0.1:18000/ready \
+            | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload == {"status": "ready", "database": "available"}, payload'
           curl --fail --silent http://127.0.0.1:18000/api/v1/system/readiness \
             | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload["status"] == "ready", payload'
