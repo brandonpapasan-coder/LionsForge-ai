@@ -7,9 +7,13 @@ from app.db.session import get_db
 from app.models.learning_progress import LearningProgress
 from app.models.user import User
 from app.schemas.education import (
+    AssessmentResult,
+    AssessmentSubmission,
     CourseCatalogItem,
     LearningDashboard,
     LearningModule,
+    LessonAssessment,
+    LessonDetail,
     ModuleCompletionCreate,
     ModuleCompletionRead,
 )
@@ -55,22 +59,35 @@ def _catalog() -> list[CourseCatalogItem]:
     ]
 
 
-def _valid_module(course_id: str, module_id: str) -> bool:
-    return any(
-        course.course_id == course_id and any(module.module_id == module_id for module in course.modules)
-        for course in _catalog()
+def _find_module(course_id: str, module_id: str) -> tuple[CourseCatalogItem, LearningModule] | None:
+    for course in _catalog():
+        if course.course_id != course_id:
+            continue
+        for module in course.modules:
+            if module.module_id == module_id:
+                return course, module
+    return None
+
+
+def _completion(db: Session, user_id: int, course_id: str, module_id: str) -> LearningProgress:
+    existing = db.scalar(
+        select(LearningProgress).where(
+            LearningProgress.user_id == user_id,
+            LearningProgress.module_id == module_id,
+        )
     )
+    if existing is None:
+        existing = LearningProgress(user_id=user_id, course_id=course_id, module_id=module_id)
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+    return existing
 
 
 @router.get("/dashboard", response_model=LearningDashboard)
-def learning_dashboard(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> LearningDashboard:
+def learning_dashboard(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> LearningDashboard:
     courses = _catalog()
-    completed_ids = set(
-        db.scalars(select(LearningProgress.module_id).where(LearningProgress.user_id == current_user.id)).all()
-    )
+    completed_ids = set(db.scalars(select(LearningProgress.module_id).where(LearningProgress.user_id == current_user.id)).all())
     for course in courses:
         for module in course.modules:
             module.completed = module.module_id in completed_ids
@@ -83,33 +100,83 @@ def learning_dashboard(
     )
 
 
+@router.get("/courses/{course_id}/modules/{module_id}", response_model=LessonDetail)
+def lesson_detail(
+    course_id: str,
+    module_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LessonDetail:
+    match = _find_module(course_id, module_id)
+    if match is None:
+        raise HTTPException(status_code=404, detail="Learning module not found")
+    course, module = match
+    completed = db.scalar(
+        select(LearningProgress.id).where(
+            LearningProgress.user_id == current_user.id,
+            LearningProgress.module_id == module_id,
+        )
+    ) is not None
+    return LessonDetail(
+        course_id=course.course_id,
+        module_id=module.module_id,
+        course_title=course.title,
+        title=module.title,
+        summary=module.summary,
+        estimated_minutes=module.estimated_minutes,
+        objectives=[
+            f"Explain the central concepts in {module.title}.",
+            "Connect the lesson to evidence-based financial decisions.",
+            "Identify one practical application and one limitation.",
+        ],
+        key_points=[
+            module.summary,
+            "Reliable decisions separate observable evidence from assumptions.",
+            "Uncertainty should be measured, communicated, and revisited as evidence changes.",
+        ],
+        assessment=LessonAssessment(
+            question=f"Which statement best summarizes the core objective of {module.title}?",
+            options=[
+                module.summary,
+                "Ignore uncertainty and rely only on recent price movement.",
+                "Replace evidence with intuition whenever conclusions are difficult.",
+            ],
+        ),
+        completed=completed,
+    )
+
+
+@router.post("/courses/{course_id}/modules/{module_id}/assessment", response_model=AssessmentResult)
+def submit_assessment(
+    course_id: str,
+    module_id: str,
+    payload: AssessmentSubmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AssessmentResult:
+    if _find_module(course_id, module_id) is None:
+        raise HTTPException(status_code=404, detail="Learning module not found")
+    passed = payload.selected_option == 0
+    completion = _completion(db, current_user.id, course_id, module_id) if passed else None
+    return AssessmentResult(
+        score=100 if passed else 0,
+        passed=passed,
+        explanation=(
+            "Correct. The selected answer reflects the lesson's stated learning objective."
+            if passed
+            else "Review the lesson summary and choose the option grounded in its stated objective."
+        ),
+        completed_at=completion.completed_at if completion else None,
+    )
+
+
 @router.post("/completions", response_model=ModuleCompletionRead, status_code=status.HTTP_201_CREATED)
 def complete_module(
     payload: ModuleCompletionCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ModuleCompletionRead:
-    if not _valid_module(payload.course_id, payload.module_id):
+    if _find_module(payload.course_id, payload.module_id) is None:
         raise HTTPException(status_code=404, detail="Learning module not found")
-
-    existing = db.scalar(
-        select(LearningProgress).where(
-            LearningProgress.user_id == current_user.id,
-            LearningProgress.module_id == payload.module_id,
-        )
-    )
-    if existing is None:
-        existing = LearningProgress(
-            user_id=current_user.id,
-            course_id=payload.course_id,
-            module_id=payload.module_id,
-        )
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
-
-    return ModuleCompletionRead(
-        course_id=existing.course_id,
-        module_id=existing.module_id,
-        completed_at=existing.completed_at,
-    )
+    existing = _completion(db, current_user.id, payload.course_id, payload.module_id)
+    return ModuleCompletionRead(course_id=existing.course_id, module_id=existing.module_id, completed_at=existing.completed_at)
