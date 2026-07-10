@@ -1,30 +1,39 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { ResearchReportForm } from "@/components/research-report-form";
 import type { AuthUser } from "@/lib/auth";
+import type { ResearchReportList } from "@/lib/research";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
-async function getCurrentUser(): Promise<AuthUser | null> {
+async function getSessionData(): Promise<{ user: AuthUser; reports: ResearchReportList } | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("lionsforge_session")?.value;
   if (!token) {
     return null;
   }
 
-  const response = await fetch(`${backendUrl}/api/v1/auth/me`, {
-    headers: { authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!response.ok) {
+  const headers = { authorization: `Bearer ${token}` };
+  const [userResponse, reportsResponse] = await Promise.all([
+    fetch(`${backendUrl}/api/v1/auth/me`, { headers, cache: "no-store" }),
+    fetch(`${backendUrl}/api/v1/research/reports`, { headers, cache: "no-store" }),
+  ]);
+  if (!userResponse.ok) {
     return null;
   }
-  return (await response.json()) as AuthUser;
+
+  return {
+    user: (await userResponse.json()) as AuthUser,
+    reports: reportsResponse.ok
+      ? ((await reportsResponse.json()) as ResearchReportList)
+      : { symbol: null, reports: [] },
+  };
 }
 
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
-  if (!user) {
+  const session = await getSessionData();
+  if (!session) {
     redirect("/login");
   }
 
@@ -33,7 +42,7 @@ export default async function DashboardPage() {
       <header className="topbar dashboard-header">
         <div>
           <p className="eyebrow">LIONSFORGE AI WORKSPACE</p>
-          <h1>Welcome, {user.full_name ?? user.email}.</h1>
+          <h1>Welcome, {session.user.full_name ?? session.user.email}.</h1>
         </div>
         <div className="status online">
           <span aria-hidden="true" />
@@ -41,27 +50,40 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      <section className="module-grid dashboard-grid" aria-label="Workspace modules">
-        <article>
-          <span>01</span>
-          <h3>New research project</h3>
-          <p>Begin an evidence-backed investigation and save it to your workspace.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <h3>Validation center</h3>
-          <p>Review sources, confidence, contradictions, and research assumptions.</p>
-        </article>
-        <article>
-          <span>03</span>
-          <h3>Education hub</h3>
-          <p>Continue your personalized finance and research learning path.</p>
-        </article>
-        <article>
-          <span>04</span>
-          <h3>Saved reports</h3>
-          <p>Reopen prior work and prepare professional report exports.</p>
-        </article>
+      <section className="workspace-panel">
+        <div>
+          <p className="eyebrow">NEW RESEARCH</p>
+          <h2>Generate and save an evidence-backed company report.</h2>
+        </div>
+        <ResearchReportForm />
+      </section>
+
+      <section className="saved-reports">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">RESEARCH MEMORY</p>
+            <h2>Saved reports</h2>
+          </div>
+          <span>{session.reports.reports.length} total</span>
+        </div>
+
+        <div className="report-grid">
+          {session.reports.reports.length ? (
+            session.reports.reports.map((report) => (
+              <article key={report.report_id}>
+                <div className="report-meta">
+                  <span>{report.symbol}</span>
+                  <span>{report.confidence_level} confidence</span>
+                </div>
+                <h3>{report.title}</h3>
+                <p>{report.executive_summary}</p>
+                <small>{new Date(report.created_at).toLocaleString()}</small>
+              </article>
+            ))
+          ) : (
+            <p className="empty-state">No saved reports yet. Generate your first report above.</p>
+          )}
+        </div>
       </section>
     </main>
   );
