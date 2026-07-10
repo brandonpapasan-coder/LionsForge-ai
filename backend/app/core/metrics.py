@@ -12,13 +12,19 @@ def render_prometheus_metrics() -> str:
         "# HELP lionsforge_http_errors_total Total HTTP 5xx responses.",
         "# TYPE lionsforge_http_errors_total counter",
         f"lionsforge_http_errors_total {request_metrics['error_count']}",
-        "# HELP lionsforge_http_request_duration_ms_average Average HTTP request duration in milliseconds.",
+        (
+            "# HELP lionsforge_http_request_duration_ms_average "
+            "Average HTTP request duration in milliseconds."
+        ),
         "# TYPE lionsforge_http_request_duration_ms_average gauge",
         (
             "lionsforge_http_request_duration_ms_average "
             f"{request_metrics['average_duration_ms']}"
         ),
-        "# HELP lionsforge_application_exceptions_total Unhandled application exceptions.",
+        (
+            "# HELP lionsforge_application_exceptions_total "
+            "Unhandled application exceptions."
+        ),
         "# TYPE lionsforge_application_exceptions_total counter",
         f"lionsforge_application_exceptions_total {error_metrics['total_count']}",
     ]
@@ -40,7 +46,10 @@ def render_prometheus_metrics() -> str:
     exception_types = dict(error_metrics["by_exception_type"])
     lines.extend(
         [
-            "# HELP lionsforge_application_exceptions_by_type_total Unhandled exceptions by type.",
+            (
+                "# HELP lionsforge_application_exceptions_by_type_total "
+                "Unhandled exceptions by type."
+            ),
             "# TYPE lionsforge_application_exceptions_by_type_total counter",
         ]
     )
@@ -53,7 +62,10 @@ def render_prometheus_metrics() -> str:
 
     lines.extend(
         [
-            "# HELP lionsforge_market_provider_available Market provider availability (1 available, 0 unavailable).",
+            (
+                "# HELP lionsforge_market_provider_available "
+                "Market provider availability (1 available, 0 unavailable)."
+            ),
             "# TYPE lionsforge_market_provider_available gauge",
         ]
     )
