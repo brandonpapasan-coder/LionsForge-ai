@@ -113,16 +113,49 @@ jobs:
       - name: Run database migrations in cluster
         run: |
           kubectl -n lionsforge-staging delete job lionsforge-migrate --ignore-not-found
-          kubectl -n lionsforge-staging create job lionsforge-migrate \
-            --image=lionsforge-backend:staging \
-            -- alembic upgrade head
-          kubectl -n lionsforge-staging set env job/lionsforge-migrate \
-            DATABASE_URL='postgresql+psycopg://lionsforge:staging-password@postgres:5432/lionsforge_staging' \
-            JWT_SECRET_KEY='staging-smoke-secret' \
-            ENVIRONMENT=staging
-          kubectl -n lionsforge-staging wait \
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: lionsforge-migrate
+            namespace: lionsforge-staging
+          spec:
+            backoffLimit: 1
+            template:
+              metadata:
+                labels:
+                  app: lionsforge-migrate
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: migrate
+                    image: lionsforge-backend:staging
+                    imagePullPolicy: Never
+                    command:
+                      - alembic
+                      - upgrade
+                      - head
+                    env:
+                      - name: DATABASE_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: lionsforge-backend-secrets
+                            key: DATABASE_URL
+                      - name: JWT_SECRET_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: lionsforge-backend-secrets
+                            key: JWT_SECRET_KEY
+                      - name: ENVIRONMENT
+                        value: staging
+          EOF
+          if ! kubectl -n lionsforge-staging wait \
             --for=condition=complete job/lionsforge-migrate \
-            --timeout=180s
+            --timeout=180s; then
+            kubectl -n lionsforge-staging describe job/lionsforge-migrate
+            kubectl -n lionsforge-staging logs job/lionsforge-migrate --all-containers=true || true
+            exit 1
+          fi
 
       - name: Deploy staging manifests
         run: |
