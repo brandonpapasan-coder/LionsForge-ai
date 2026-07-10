@@ -1,3 +1,4 @@
+from app.core.observability import request_metrics_registry
 from app.services.market_provider_health import provider_health_registry
 
 
@@ -46,3 +47,22 @@ def test_provider_health_report_exposes_available_and_unavailable_providers(clie
     assert providers["backup"]["last_error"] == "provider timeout"
 
     provider_health_registry.reset()
+
+
+def test_request_metrics_report_tracks_requests_and_status_codes(client):
+    request_metrics_registry.reset()
+
+    assert client.get("/health").status_code == 200
+    assert client.get("/missing-route").status_code == 404
+
+    response = client.get("/api/v1/system/metrics")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["request_count"] == 2
+    assert payload["error_count"] == 0
+    assert payload["average_duration_ms"] >= 0
+    assert payload["status_codes"] == {"200": 1, "404": 1}
+    assert payload["checked_at"]
+
+    request_metrics_registry.reset()
