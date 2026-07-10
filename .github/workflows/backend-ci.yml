@@ -102,8 +102,12 @@ jobs:
       - name: Ruff format OpenAPI exporter
         run: ruff format --check scripts/export_openapi.py
 
-      - name: Ruff format OpenAPI validator
-        run: ruff format --check scripts/validate_openapi.py
+      - name: Capture Ruff OpenAPI validator diff
+        run: |
+          cp scripts/validate_openapi.py validate-openapi.before.py
+          ruff format scripts/validate_openapi.py
+          diff -u validate-openapi.before.py scripts/validate_openapi.py | tee ruff-validate-openapi.diff
+          test ! -s ruff-validate-openapi.diff
 
       - name: Type check
         run: >-
@@ -149,6 +153,7 @@ jobs:
             backend/openapi.json
             backend/pytest.log
             backend/ruff-observability.diff
+            backend/ruff-validate-openapi.diff
           if-no-files-found: warn
 
       - name: Build Docker image
