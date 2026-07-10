@@ -37,7 +37,12 @@ export default async function ReportPage({ params }: { params: Promise<{ reportI
 
   return (
     <main>
-      <Link href="/dashboard" className="back-link">← Back to dashboard</Link>
+      <div className="report-toolbar">
+        <Link href="/dashboard" className="back-link">← Back to dashboard</Link>
+        <a className="export-link" href={`/api/research/reports/${report.report_id}/export`}>
+          Download Markdown
+        </a>
+      </div>
       <header className="report-header">
         <div>
           <p className="eyebrow">{report.symbol} · SAVED RESEARCH</p>
