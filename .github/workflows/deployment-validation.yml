@@ -57,21 +57,29 @@ jobs:
           kubectl apply -f staging-rendered.yaml
           kubectl -n lionsforge-staging set image deployment/lionsforge-backend backend=lionsforge-backend:staging
           kubectl -n lionsforge-staging set env deployment/lionsforge-backend ENVIRONMENT=test
+          kubectl -n lionsforge-staging scale deployment/lionsforge-backend --replicas=1
           kubectl -n lionsforge-staging rollout status deployment/lionsforge-backend --timeout=180s
 
       - name: Smoke staging deployment
         run: |
           kubectl -n lionsforge-staging port-forward service/lionsforge-backend 18000:8000 > port-forward.log 2>&1 &
           PORT_FORWARD_PID=$!
-          trap 'kill ${PORT_FORWARD_PID} || true; kubectl -n lionsforge-staging get all; kubectl -n lionsforge-staging logs deployment/lionsforge-backend --all-containers=true || true' EXIT
+          trap 'kill ${PORT_FORWARD_PID} 2>/dev/null || true; cat port-forward.log || true; kubectl -n lionsforge-staging get all; kubectl -n lionsforge-staging logs deployment/lionsforge-backend --all-containers=true || true' EXIT
+
           ready=false
           for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:18000/health; then
+            if ! kill -0 "${PORT_FORWARD_PID}" 2>/dev/null; then
+              echo "kubectl port-forward exited before the service became reachable"
+              exit 1
+            fi
+            if curl --fail --silent http://127.0.0.1:18000/health > /dev/null; then
               ready=true
               break
             fi
             sleep 2
           done
+
           test "${ready}" = "true"
-          curl --fail http://127.0.0.1:18000/ready
-          curl --fail http://127.0.0.1:18000/api/v1/system/readiness
+          curl --fail --silent http://127.0.0.1:18000/ready > /dev/null
+          curl --fail --silent http://127.0.0.1:18000/api/v1/system/readiness \
+            | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload["status"] == "ready", payload'
