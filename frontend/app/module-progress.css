@@ -1,0 +1,49 @@
+.module-list > div {
+  align-items: center;
+}
+
+.module-list small {
+  display: inline-block;
+  margin-top: .45rem;
+  color: var(--accent);
+}
+
+.module-complete-button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .65rem .9rem;
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.module-complete-button:hover:not(:disabled) {
+  border-color: rgba(78,161,255,.55);
+}
+
+.module-complete-button.completed {
+  border-color: rgba(77,214,164,.45);
+  color: var(--success);
+}
+
+.module-complete-button:disabled {
+  cursor: default;
+  opacity: .8;
+}
+
+.module-completed h3 {
+  color: var(--success);
+}
+
+@media (max-width: 560px) {
+  .module-list > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .module-complete-button {
+    width: 100%;
+  }
+}
