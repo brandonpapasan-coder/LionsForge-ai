@@ -12,19 +12,10 @@ def render_prometheus_metrics() -> str:
         "# HELP lionsforge_http_errors_total Total HTTP 5xx responses.",
         "# TYPE lionsforge_http_errors_total counter",
         f"lionsforge_http_errors_total {request_metrics['error_count']}",
-        (
-            "# HELP lionsforge_http_request_duration_ms_average "
-            "Average HTTP request duration in milliseconds."
-        ),
+        ("# HELP lionsforge_http_request_duration_ms_average Average HTTP request duration in milliseconds."),
         "# TYPE lionsforge_http_request_duration_ms_average gauge",
-        (
-            "lionsforge_http_request_duration_ms_average "
-            f"{request_metrics['average_duration_ms']}"
-        ),
-        (
-            "# HELP lionsforge_application_exceptions_total "
-            "Unhandled application exceptions."
-        ),
+        (f"lionsforge_http_request_duration_ms_average {request_metrics['average_duration_ms']}"),
+        ("# HELP lionsforge_application_exceptions_total Unhandled application exceptions."),
         "# TYPE lionsforge_application_exceptions_total counter",
         f"lionsforge_application_exceptions_total {error_metrics['total_count']}",
     ]
@@ -37,49 +28,27 @@ def render_prometheus_metrics() -> str:
         ]
     )
     for status_code, count in sorted(status_codes.items()):
-        lines.append(
-            'lionsforge_http_responses_total{status_code="'
-            f"{status_code}"
-            f'"}} {count}'
-        )
+        lines.append(f'lionsforge_http_responses_total{{status_code="{status_code}"}} {count}')
 
     exception_types = dict(error_metrics["by_exception_type"])
     lines.extend(
         [
-            (
-                "# HELP lionsforge_application_exceptions_by_type_total "
-                "Unhandled exceptions by type."
-            ),
+            ("# HELP lionsforge_application_exceptions_by_type_total Unhandled exceptions by type."),
             "# TYPE lionsforge_application_exceptions_by_type_total counter",
         ]
     )
     for exception_type, count in sorted(exception_types.items()):
-        lines.append(
-            'lionsforge_application_exceptions_by_type_total{exception_type="'
-            f"{exception_type}"
-            f'"}} {count}'
-        )
+        lines.append(f'lionsforge_application_exceptions_by_type_total{{exception_type="{exception_type}"}} {count}')
 
     lines.extend(
         [
-            (
-                "# HELP lionsforge_market_provider_available "
-                "Market provider availability (1 available, 0 unavailable)."
-            ),
+            ("# HELP lionsforge_market_provider_available Market provider availability (1 available, 0 unavailable)."),
             "# TYPE lionsforge_market_provider_available gauge",
         ]
     )
     for name, health in sorted(provider_health_registry.snapshot().items()):
         available = 1 if provider_health_registry.is_available(name) else 0
-        lines.append(
-            'lionsforge_market_provider_available{provider="'
-            f"{name}"
-            f'"}} {available}'
-        )
-        lines.append(
-            'lionsforge_market_provider_error_rate{provider="'
-            f"{name}"
-            f'"}} {health.error_rate}'
-        )
+        lines.append(f'lionsforge_market_provider_available{{provider="{name}"}} {available}')
+        lines.append(f'lionsforge_market_provider_error_rate{{provider="{name}"}} {health.error_rate}')
 
     return "\n".join(lines) + "\n"
