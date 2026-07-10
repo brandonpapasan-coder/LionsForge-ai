@@ -103,7 +103,10 @@ def platform_info():
     return PlatformInfo(
         name=settings.app_name,
         version="0.1.0",
-        mission="Deliver AI-assisted investment research, market intelligence, education, and trading workflow tools.",
+        mission=(
+            "Deliver AI-assisted investment research, market intelligence, "
+            "education, and trading workflow tools."
+        ),
         modules=[
             "research-assistant",
             "market-news-intelligence",
