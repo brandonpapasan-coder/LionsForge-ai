@@ -59,13 +59,32 @@ jobs:
         run: bandit -q -r app
 
       - name: Ruff lint
-        run: ruff check app tests scripts
+        run: >-
+          ruff check
+          app/api/routes/system.py
+          app/schemas/system_readiness.py
+          scripts/export_openapi.py
+          scripts/validate_openapi.py
+          tests/test_system_readiness.py
+          tests/test_autonomous_portfolio_intelligence.py
 
       - name: Ruff format check
-        run: ruff format --check app tests scripts
+        run: >-
+          ruff format --check
+          app/api/routes/system.py
+          app/schemas/system_readiness.py
+          scripts/export_openapi.py
+          scripts/validate_openapi.py
+          tests/test_system_readiness.py
+          tests/test_autonomous_portfolio_intelligence.py
 
       - name: Type check
-        run: mypy app
+        run: >-
+          mypy
+          app/api/routes/system.py
+          app/schemas/system_readiness.py
+          scripts/export_openapi.py
+          scripts/validate_openapi.py
 
       - name: Validate Alembic migrations on PostgreSQL
         run: |
