@@ -93,7 +93,10 @@ jobs:
         run: python scripts/smoke_backend.py
 
       - name: Run full test suite with enforced coverage
-        run: pytest -q --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=75
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -q --tb=short --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=75 2>&1 | tee pytest.log
 
       - name: Export OpenAPI schema
         run: python scripts/export_openapi.py
@@ -101,7 +104,7 @@ jobs:
       - name: Validate OpenAPI contract
         run: python scripts/validate_openapi.py
 
-      - name: Upload coverage and OpenAPI artifacts
+      - name: Upload backend quality artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +112,7 @@ jobs:
           path: |
             backend/coverage.xml
             backend/openapi.json
+            backend/pytest.log
           if-no-files-found: warn
 
       - name: Build Docker image
