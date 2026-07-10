@@ -1,6 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from threading import Lock
 from time import perf_counter
 from uuid import UUID, uuid4
@@ -48,7 +49,60 @@ class RequestMetricsRegistry:
             self.status_codes.clear()
 
 
+@dataclass(frozen=True)
+class ErrorEvent:
+    request_id: str
+    method: str
+    path: str
+    exception_type: str
+    occurred_at: datetime
+
+
+@dataclass
+class ErrorEventRegistry:
+    total_count: int = 0
+    by_exception_type: dict[str, int] = field(default_factory=dict)
+    last_event: ErrorEvent | None = None
+    _lock: Lock = field(default_factory=Lock, repr=False)
+
+    def record(
+        self,
+        request_id: str,
+        method: str,
+        path: str,
+        exception: Exception,
+    ) -> None:
+        event = ErrorEvent(
+            request_id=request_id,
+            method=method,
+            path=path,
+            exception_type=exception.__class__.__name__,
+            occurred_at=datetime.now(timezone.utc),
+        )
+        with self._lock:
+            self.total_count += 1
+            self.by_exception_type[event.exception_type] = (
+                self.by_exception_type.get(event.exception_type, 0) + 1
+            )
+            self.last_event = event
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            return {
+                "total_count": self.total_count,
+                "by_exception_type": dict(sorted(self.by_exception_type.items())),
+                "last_event": self.last_event,
+            }
+
+    def reset(self) -> None:
+        with self._lock:
+            self.total_count = 0
+            self.by_exception_type.clear()
+            self.last_event = None
+
+
 request_metrics_registry = RequestMetricsRegistry()
+error_event_registry = ErrorEventRegistry()
 
 
 def _request_id(value: str | None) -> str:
@@ -70,18 +124,25 @@ def configure_request_observability(app: FastAPI) -> None:
         try:
             response = await call_next(request)
             status_code = response.status_code
-        except Exception:
+        except Exception as exc:
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             request_metrics_registry.record(status_code, duration_ms)
+            error_event_registry.record(
+                request_id=request_id,
+                method=request.method,
+                path=request.url.path,
+                exception=exc,
+            )
             logger.exception(
                 json.dumps(
                     {
-                        "event": "http_request",
+                        "event": "http_request_error",
                         "request_id": request_id,
                         "method": request.method,
                         "path": request.url.path,
                         "status_code": status_code,
                         "duration_ms": duration_ms,
+                        "exception_type": exc.__class__.__name__,
                     }
                 )
             )
