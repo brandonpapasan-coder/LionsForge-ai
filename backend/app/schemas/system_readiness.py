@@ -34,3 +34,11 @@ class ProviderHealthRead(BaseModel):
 class ProviderHealthReport(BaseModel):
     providers: list[ProviderHealthRead]
     checked_at: datetime
+
+
+class RequestMetricsReport(BaseModel):
+    request_count: int
+    error_count: int
+    average_duration_ms: float
+    status_codes: dict[int, int]
+    checked_at: datetime
