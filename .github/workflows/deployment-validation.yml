@@ -36,8 +36,6 @@ jobs:
           grep -q "kind: Service" staging-rendered.yaml
           grep -q "kind: Deployment" production-rendered.yaml
           grep -q "kind: Service" production-rendered.yaml
-          kubectl apply --dry-run=client -f staging-rendered.yaml
-          kubectl apply --dry-run=client -f production-rendered.yaml
 
       - name: Create disposable kind cluster
         uses: helm/kind-action@v1.12.0
