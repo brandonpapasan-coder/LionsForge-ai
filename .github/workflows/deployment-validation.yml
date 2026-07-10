@@ -28,11 +28,48 @@ jobs:
       - name: Build production manifests
         run: kubectl kustomize infra/k8s/overlays/production > production-rendered.yaml
 
-      - name: Validate rendered manifests are non-empty
+      - name: Validate rendered manifests
         run: |
           test -s staging-rendered.yaml
           test -s production-rendered.yaml
           grep -q "kind: Deployment" staging-rendered.yaml
-          grep -q "kind: Deployment" production-rendered.yaml
           grep -q "kind: Service" staging-rendered.yaml
+          grep -q "kind: Deployment" production-rendered.yaml
           grep -q "kind: Service" production-rendered.yaml
+          kubectl apply --dry-run=client -f staging-rendered.yaml
+          kubectl apply --dry-run=client -f production-rendered.yaml
+
+      - name: Create disposable kind cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: lionsforge-ci
+
+      - name: Build and load staging backend image
+        run: |
+          docker build -t lionsforge-backend:staging backend
+          kind load docker-image lionsforge-backend:staging --name lionsforge-ci
+
+      - name: Deploy staging manifests
+        run: |
+          kubectl create namespace lionsforge-staging --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n lionsforge-staging create secret generic lionsforge-backend-secrets \
+            --from-literal=DATABASE_URL='sqlite:///./staging_smoke.db' \
+            --from-literal=JWT_SECRET_KEY='staging-smoke-secret' \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f staging-rendered.yaml
+          kubectl -n lionsforge-staging set image deployment/lionsforge-backend backend=lionsforge-backend:staging
+          kubectl -n lionsforge-staging rollout status deployment/lionsforge-backend --timeout=180s
+
+      - name: Smoke staging deployment
+        run: |
+          kubectl -n lionsforge-staging port-forward service/lionsforge-backend 18000:8000 > port-forward.log 2>&1 &
+          PORT_FORWARD_PID=$!
+          trap 'kill ${PORT_FORWARD_PID} || true; kubectl -n lionsforge-staging get all; kubectl -n lionsforge-staging logs deployment/lionsforge-backend --all-containers=true || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18000/health; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail http://127.0.0.1:18000/ready
+          curl --fail http://127.0.0.1:18000/api/v1/system/readiness
