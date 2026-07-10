@@ -9,6 +9,18 @@ export type ResearchReportSummary = {
   created_at: string;
 };
 
+export type ResearchEvidence = {
+  evidence_id: string;
+  symbol: string;
+  category: string;
+  source: string;
+  title: string;
+  observed_at: string;
+  confidence: string;
+  summary: string | null;
+  metadata: Record<string, unknown>;
+};
+
 export type ResearchReportDetail = ResearchReportSummary & {
   id: number;
   user_id: number;
@@ -28,7 +40,7 @@ export type ResearchReportDetail = ResearchReportSummary & {
     opportunities?: string[];
     assumptions?: string[];
   };
-  evidence_payload: Array<Record<string, unknown>>;
+  evidence_payload: ResearchEvidence[];
 };
 
 export type ResearchReportList = {
