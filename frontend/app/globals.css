@@ -31,6 +31,10 @@ main { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: 2rem 0 4r
 .status { display: inline-flex; align-items: center; gap: .6rem; padding: .7rem 1rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); white-space: nowrap; background: rgba(255,255,255,.03); }
 .status span { width: .65rem; height: .65rem; border-radius: 50%; background: var(--danger); box-shadow: 0 0 1rem currentColor; }
 .status.online span { background: var(--success); }
+.session-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; justify-content: flex-end; }
+.logout-button { border: 1px solid var(--border); border-radius: 999px; padding: .7rem 1rem; background: transparent; color: var(--text); cursor: pointer; }
+.logout-button:hover { border-color: rgba(78,161,255,.55); }
+.logout-button:disabled { opacity: .65; cursor: wait; }
 .hero { display: grid; grid-template-columns: 1.5fr .85fr; gap: 1.5rem; margin-top: 5rem; align-items: stretch; }
 .hero > div, .readiness-card, .module-grid article, .auth-card, .workspace-panel, .report-grid article, .report-facts, .report-sections article { border: 1px solid var(--border); border-radius: 1.4rem; background: rgba(13,27,45,.78); backdrop-filter: blur(18px); }
 .hero > div { padding: clamp(2rem, 5vw, 4rem); }
@@ -93,6 +97,7 @@ dd { margin: 0; font-weight: 800; text-transform: capitalize; }
   .topbar, .hero, .workspace-panel, .report-header { grid-template-columns: 1fr; display: grid; }
   .module-grid { grid-template-columns: repeat(2, 1fr); }
   .report-grid { grid-template-columns: 1fr 1fr; }
+  .session-actions { justify-content: flex-start; }
 }
 @media (max-width: 560px) {
   main { width: min(100% - 1rem, 1180px); padding-top: 1rem; }
