@@ -1,11 +1,54 @@
 import json
 import logging
+from dataclasses import dataclass, field
+from threading import Lock
 from time import perf_counter
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request, Response
 
 logger = logging.getLogger("lionsforge.request")
+
+
+@dataclass
+class RequestMetricsRegistry:
+    request_count: int = 0
+    error_count: int = 0
+    total_duration_ms: float = 0.0
+    status_codes: dict[int, int] = field(default_factory=dict)
+    _lock: Lock = field(default_factory=Lock, repr=False)
+
+    def record(self, status_code: int, duration_ms: float) -> None:
+        with self._lock:
+            self.request_count += 1
+            if status_code >= 500:
+                self.error_count += 1
+            self.total_duration_ms += duration_ms
+            self.status_codes[status_code] = self.status_codes.get(status_code, 0) + 1
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            average_duration_ms = (
+                self.total_duration_ms / self.request_count
+                if self.request_count
+                else 0.0
+            )
+            return {
+                "request_count": self.request_count,
+                "error_count": self.error_count,
+                "average_duration_ms": round(average_duration_ms, 2),
+                "status_codes": dict(sorted(self.status_codes.items())),
+            }
+
+    def reset(self) -> None:
+        with self._lock:
+            self.request_count = 0
+            self.error_count = 0
+            self.total_duration_ms = 0.0
+            self.status_codes.clear()
+
+
+request_metrics_registry = RequestMetricsRegistry()
 
 
 def _request_id(value: str | None) -> str:
@@ -29,6 +72,7 @@ def configure_request_observability(app: FastAPI) -> None:
             status_code = response.status_code
         except Exception:
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            request_metrics_registry.record(status_code, duration_ms)
             logger.exception(
                 json.dumps(
                     {
@@ -44,6 +88,7 @@ def configure_request_observability(app: FastAPI) -> None:
             raise
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        request_metrics_registry.record(status_code, duration_ms)
         response.headers["x-request-id"] = request_id
         logger.info(
             json.dumps(
