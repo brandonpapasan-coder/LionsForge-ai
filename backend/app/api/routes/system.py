@@ -5,7 +5,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.system_readiness import ReadinessCheck, SystemReadinessReport
+from app.schemas.system_readiness import (
+    ProviderHealthRead,
+    ProviderHealthReport,
+    ReadinessCheck,
+    SystemReadinessReport,
+)
+from app.services.market_provider_health import provider_health_registry
 
 router = APIRouter()
 
@@ -55,5 +61,33 @@ def system_readiness_endpoint(
         release="RC3",
         checks=checks,
         modules=RC3_MODULES,
+        checked_at=datetime.now(timezone.utc),
+    )
+
+
+@router.get("/providers", response_model=ProviderHealthReport)
+def provider_health_endpoint() -> ProviderHealthReport:
+    providers = []
+    for name, health in sorted(provider_health_registry.snapshot().items()):
+        providers.append(
+            ProviderHealthRead(
+                name=name,
+                status=(
+                    "available"
+                    if provider_health_registry.is_available(name)
+                    else "unavailable"
+                ),
+                success_count=health.success_count,
+                failure_count=health.failure_count,
+                consecutive_failures=health.consecutive_failures,
+                error_rate=health.error_rate,
+                last_latency_ms=health.last_latency_ms,
+                last_error=health.last_error,
+                last_success_at=health.last_success_at,
+                last_failure_at=health.last_failure_at,
+            )
+        )
+    return ProviderHealthReport(
+        providers=providers,
         checked_at=datetime.now(timezone.utc),
     )
