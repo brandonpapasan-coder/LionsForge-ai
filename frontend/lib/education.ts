@@ -21,3 +21,27 @@ export type LearningDashboard = {
   total_modules: number;
   courses: CourseCatalogItem[];
 };
+
+export type LessonDetail = {
+  course_id: string;
+  module_id: string;
+  course_title: string;
+  title: string;
+  summary: string;
+  estimated_minutes: number;
+  objectives: string[];
+  key_points: string[];
+  assessment: {
+    question: string;
+    options: string[];
+    passing_score: number;
+  };
+  completed: boolean;
+};
+
+export type AssessmentResult = {
+  score: number;
+  passed: boolean;
+  explanation: string;
+  completed_at: string | null;
+};
