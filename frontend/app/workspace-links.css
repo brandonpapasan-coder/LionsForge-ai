@@ -1,0 +1,35 @@
+.workspace-links {
+  margin-bottom: 1rem;
+}
+
+.workspace-link-card {
+  display: grid;
+  gap: .45rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 1.2rem;
+  background: linear-gradient(135deg, rgba(78,161,255,.14), rgba(13,27,45,.78));
+  text-decoration: none;
+  transition: transform .2s ease, border-color .2s ease;
+}
+
+.workspace-link-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(78,161,255,.55);
+}
+
+.workspace-link-card > span {
+  color: var(--accent);
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.workspace-link-card > strong {
+  font-size: 1.25rem;
+}
+
+.workspace-link-card > p {
+  margin: 0;
+  color: var(--muted);
+}
