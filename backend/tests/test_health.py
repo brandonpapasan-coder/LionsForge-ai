@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.core.observability import request_metrics_registry
 from app.db.session import get_db
-from app.main import app
+from app.main import app, settings
 from app.services.market_provider_health import provider_health_registry
 
 
@@ -14,11 +14,18 @@ class BrokenDatabaseSession:
 
 
 def test_health_ready_and_platform_status():
+    provider_health_registry.reset()
     with TestClient(app) as client:
         assert client.get("/health").status_code == 200
         readiness = client.get("/ready")
         assert readiness.status_code == 200
-        assert readiness.json() == {"status": "ready", "database": "available"}
+        assert readiness.json() == {
+            "status": "ready",
+            "database": "available",
+            "market_data": "available",
+            "primary_provider": "mock",
+            "unavailable_providers": [],
+        }
         assert client.get("/").status_code == 200
         assert client.get("/platform").status_code == 200
 
@@ -36,6 +43,45 @@ def test_ready_returns_503_when_database_is_unavailable():
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Database dependency is unavailable."}
+
+
+def test_ready_returns_503_when_primary_market_provider_is_unavailable():
+    provider_health_registry.reset()
+    for _ in range(provider_health_registry.failure_threshold):
+        provider_health_registry.record_failure("mock", RuntimeError("provider down"))
+
+    with TestClient(app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "unavailable",
+        "database": "available",
+        "market_data": "unavailable",
+        "primary_provider": "mock",
+        "unavailable_providers": ["mock"],
+    }
+    provider_health_registry.reset()
+
+
+def test_ready_is_degraded_when_failover_provider_is_unavailable(monkeypatch):
+    provider_health_registry.reset()
+    monkeypatch.setattr(settings, "market_data_failover_providers", "backup")
+    for _ in range(provider_health_registry.failure_threshold):
+        provider_health_registry.record_failure("backup", RuntimeError("timeout"))
+
+    with TestClient(app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "degraded",
+        "database": "available",
+        "market_data": "degraded",
+        "primary_provider": "mock",
+        "unavailable_providers": ["backup"],
+    }
+    provider_health_registry.reset()
 
 
 def test_request_id_is_preserved_when_valid_uuid_is_supplied():
