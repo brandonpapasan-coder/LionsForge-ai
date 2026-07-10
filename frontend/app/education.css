@@ -1,0 +1,89 @@
+.education-header {
+  display: grid;
+  grid-template-columns: 1.4fr .6fr;
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 2rem;
+}
+
+.education-header h1 {
+  margin: .45rem 0 1rem;
+  font-size: clamp(2.4rem, 6vw, 5rem);
+  line-height: 1;
+  letter-spacing: -.055em;
+}
+
+.learning-progress,
+.course-grid > article {
+  border: 1px solid var(--border);
+  border-radius: 1.4rem;
+  background: rgba(13,27,45,.78);
+}
+
+.learning-progress {
+  padding: 2rem;
+}
+
+.learning-progress > span {
+  display: block;
+  font-size: 3rem;
+  font-weight: 800;
+}
+
+.learning-progress p,
+.course-grid p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.course-grid > article {
+  padding: 1.5rem;
+}
+
+.course-grid h2 {
+  margin: 1rem 0 .6rem;
+}
+
+.module-list {
+  display: grid;
+  gap: .8rem;
+  margin-top: 1.5rem;
+}
+
+.module-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--border);
+}
+
+.module-list h3 {
+  margin: 0 0 .35rem;
+  font-size: 1rem;
+}
+
+.module-list p {
+  margin: 0;
+  font-size: .9rem;
+}
+
+.module-list > div > span {
+  color: var(--accent);
+  white-space: nowrap;
+  font-size: .85rem;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .education-header,
+  .course-grid {
+    grid-template-columns: 1fr;
+  }
+}
