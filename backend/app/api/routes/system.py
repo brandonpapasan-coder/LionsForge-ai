@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.observability import request_metrics_registry
 from app.db.session import get_db
 from app.schemas.system_readiness import (
     ProviderHealthRead,
     ProviderHealthReport,
     ReadinessCheck,
+    RequestMetricsReport,
     SystemReadinessReport,
 )
 from app.services.market_provider_health import provider_health_registry
@@ -89,5 +91,17 @@ def provider_health_endpoint() -> ProviderHealthReport:
         )
     return ProviderHealthReport(
         providers=providers,
+        checked_at=datetime.now(timezone.utc),
+    )
+
+
+@router.get("/metrics", response_model=RequestMetricsReport)
+def request_metrics_endpoint() -> RequestMetricsReport:
+    snapshot = request_metrics_registry.snapshot()
+    return RequestMetricsReport(
+        request_count=int(snapshot["request_count"]),
+        error_count=int(snapshot["error_count"]),
+        average_duration_ms=float(snapshot["average_duration_ms"]),
+        status_codes=dict(snapshot["status_codes"]),
         checked_at=datetime.now(timezone.utc),
     )
