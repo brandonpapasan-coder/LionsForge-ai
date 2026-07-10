@@ -9,6 +9,8 @@ class LearningModule(BaseModel):
     summary: str
     estimated_minutes: int = Field(ge=1)
     completed: bool = False
+    attempt_count: int = 0
+    best_score: int | None = None
 
 
 class CourseCatalogItem(BaseModel):
@@ -47,6 +49,8 @@ class LessonDetail(BaseModel):
     key_points: list[str]
     assessment: LessonAssessment
     completed: bool = False
+    attempt_count: int = 0
+    best_score: int | None = None
 
 
 class AssessmentSubmission(BaseModel):
@@ -58,6 +62,8 @@ class AssessmentResult(BaseModel):
     passed: bool
     explanation: str
     completed_at: datetime | None = None
+    attempt_count: int
+    best_score: int
 
 
 class LearningDashboard(BaseModel):
@@ -65,4 +71,5 @@ class LearningDashboard(BaseModel):
     recommended_course_id: str
     completed_modules: int
     total_modules: int
+    mastery_average: int | None = None
     courses: list[CourseCatalogItem]
