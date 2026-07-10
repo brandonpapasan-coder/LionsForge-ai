@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.dependency_health import evaluate_market_dependencies
 from app.core.metrics import render_prometheus_metrics
 from app.core.observability import configure_request_observability
+from app.core.rate_limit import configure_rate_limiting
 from app.db.init_db import init_db
 from app.db.session import get_db
 from app.services.market_provider_health import provider_health_registry
@@ -40,6 +41,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 configure_request_observability(app)
+configure_rate_limiting(app, settings)
 app.include_router(api_router, prefix=settings.api_prefix)
 
 
