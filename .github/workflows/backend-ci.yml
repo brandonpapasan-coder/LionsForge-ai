@@ -86,8 +86,12 @@ jobs:
       - name: Ruff format metrics
         run: ruff format --check app/core/metrics.py
 
-      - name: Ruff format observability
-        run: ruff format --check app/core/observability.py
+      - name: Capture Ruff observability diff
+        run: |
+          cp app/core/observability.py observability.before.py
+          ruff format app/core/observability.py
+          diff -u observability.before.py app/core/observability.py | tee ruff-observability.diff
+          test ! -s ruff-observability.diff
 
       - name: Ruff format rate limit
         run: ruff format --check app/core/rate_limit.py
@@ -144,6 +148,7 @@ jobs:
             backend/coverage.xml
             backend/openapi.json
             backend/pytest.log
+            backend/ruff-observability.diff
           if-no-files-found: warn
 
       - name: Build Docker image
