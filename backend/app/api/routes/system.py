@@ -99,9 +99,9 @@ def provider_health_endpoint() -> ProviderHealthReport:
 def request_metrics_endpoint() -> RequestMetricsReport:
     snapshot = request_metrics_registry.snapshot()
     return RequestMetricsReport(
-        request_count=int(snapshot["request_count"]),
-        error_count=int(snapshot["error_count"]),
-        average_duration_ms=float(snapshot["average_duration_ms"]),
-        status_codes=dict(snapshot["status_codes"]),
+        request_count=snapshot["request_count"],
+        error_count=snapshot["error_count"],
+        average_duration_ms=snapshot["average_duration_ms"],
+        status_codes=snapshot["status_codes"],
         checked_at=datetime.now(timezone.utc),
     )
