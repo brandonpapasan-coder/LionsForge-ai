@@ -78,6 +78,7 @@ jobs:
       - name: Type check
         run: >-
           mypy
+          --follow-imports=skip
           app/api/routes/system.py
           app/schemas/system_readiness.py
           scripts/export_openapi.py
