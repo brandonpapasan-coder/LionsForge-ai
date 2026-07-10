@@ -4,11 +4,34 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
 from time import perf_counter
+from typing import TypedDict
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request, Response
 
 logger = logging.getLogger("lionsforge.request")
+
+
+class RequestMetricsSnapshot(TypedDict):
+    request_count: int
+    error_count: int
+    average_duration_ms: float
+    status_codes: dict[int, int]
+
+
+@dataclass(frozen=True)
+class ErrorEvent:
+    request_id: str
+    method: str
+    path: str
+    exception_type: str
+    occurred_at: datetime
+
+
+class ErrorMetricsSnapshot(TypedDict):
+    total_count: int
+    by_exception_type: dict[str, int]
+    last_event: ErrorEvent | None
 
 
 @dataclass
@@ -27,7 +50,7 @@ class RequestMetricsRegistry:
             self.total_duration_ms += duration_ms
             self.status_codes[status_code] = self.status_codes.get(status_code, 0) + 1
 
-    def snapshot(self) -> dict[str, object]:
+    def snapshot(self) -> RequestMetricsSnapshot:
         with self._lock:
             average_duration_ms = (
                 self.total_duration_ms / self.request_count if self.request_count else 0.0
@@ -45,15 +68,6 @@ class RequestMetricsRegistry:
             self.error_count = 0
             self.total_duration_ms = 0.0
             self.status_codes.clear()
-
-
-@dataclass(frozen=True)
-class ErrorEvent:
-    request_id: str
-    method: str
-    path: str
-    exception_type: str
-    occurred_at: datetime
 
 
 @dataclass
@@ -84,7 +98,7 @@ class ErrorEventRegistry:
             )
             self.last_event = event
 
-    def snapshot(self) -> dict[str, object]:
+    def snapshot(self) -> ErrorMetricsSnapshot:
         with self._lock:
             return {
                 "total_count": self.total_count,
