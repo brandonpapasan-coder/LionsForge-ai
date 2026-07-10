@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.init_db import init_db
+from app.db.session import get_db
 
 settings = get_settings()
 
@@ -53,8 +56,15 @@ def health():
 
 
 @app.get("/ready")
-def ready():
-    return {"status": "ready"}
+def ready(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database dependency is unavailable.",
+        ) from exc
+    return {"status": "ready", "database": "available"}
 
 
 @app.get("/platform", response_model=PlatformInfo)
