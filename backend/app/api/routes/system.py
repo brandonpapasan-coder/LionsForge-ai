@@ -20,13 +20,27 @@ RC3_MODULES = [
 
 
 @router.get("/readiness", response_model=SystemReadinessReport)
-def system_readiness_endpoint(db: Session = Depends(get_db)) -> SystemReadinessReport:
+def system_readiness_endpoint(
+    db: Session = Depends(get_db),
+) -> SystemReadinessReport:
     checks: list[ReadinessCheck] = []
     try:
         db.execute(text("SELECT 1"))
-        checks.append(ReadinessCheck(name="database", status="pass", detail="Database connectivity verified."))
+        checks.append(
+            ReadinessCheck(
+                name="database",
+                status="pass",
+                detail="Database connectivity verified.",
+            )
+        )
     except Exception as exc:
-        checks.append(ReadinessCheck(name="database", status="fail", detail=f"Database readiness failed: {exc.__class__.__name__}"))
+        checks.append(
+            ReadinessCheck(
+                name="database",
+                status="fail",
+                detail=f"Database readiness failed: {exc.__class__.__name__}",
+            )
+        )
 
     checks.append(
         ReadinessCheck(
