@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { LogoutButton } from "@/components/logout-button";
 import { ResearchReportForm } from "@/components/research-report-form";
 import type { AuthUser } from "@/lib/auth";
 import type { ResearchReportList } from "@/lib/research";
@@ -45,9 +46,12 @@ export default async function DashboardPage() {
           <p className="eyebrow">LIONSFORGE AI WORKSPACE</p>
           <h1>Welcome, {session.user.full_name ?? session.user.email}.</h1>
         </div>
-        <div className="status online">
-          <span aria-hidden="true" />
-          Authenticated
+        <div className="session-actions">
+          <div className="status online">
+            <span aria-hidden="true" />
+            Authenticated
+          </div>
+          <LogoutButton />
         </div>
       </header>
 
