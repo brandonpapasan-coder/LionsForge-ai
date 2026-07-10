@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { getBackendReadiness } from "@/lib/backend";
 
 const modules = [
@@ -32,8 +34,8 @@ export default async function HomePage() {
             Create evidence-backed research, validate competing claims, and build financial expertise in one connected workspace.
           </p>
           <div className="actions">
-            <button type="button">Start research</button>
-            <button type="button" className="secondary">Explore curriculum</button>
+            <Link href="/login">Start research</Link>
+            <Link href="/register" className="secondary">Create account</Link>
           </div>
         </div>
         <aside className="readiness-card" aria-label="Backend readiness">
