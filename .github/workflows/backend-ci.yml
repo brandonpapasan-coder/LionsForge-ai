@@ -62,24 +62,46 @@ jobs:
         run: >-
           ruff check
           --select E9,F63,F7,F82
+          app/main.py
           app/api/routes/system.py
+          app/core/dependency_health.py
+          app/core/metrics.py
+          app/core/observability.py
+          app/core/rate_limit.py
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          tests/test_health.py
           tests/test_system_readiness.py
+          tests/test_rate_limit.py
+          tests/test_error_observability.py
           tests/test_autonomous_portfolio_intelligence.py
 
       - name: Ruff format check
         run: >-
           ruff format --check
+          app/main.py
+          app/core/dependency_health.py
+          app/core/metrics.py
+          app/core/observability.py
+          app/core/rate_limit.py
           app/schemas/system_readiness.py
           scripts/export_openapi.py
+          scripts/validate_openapi.py
+          tests/test_health.py
+          tests/test_rate_limit.py
+          tests/test_error_observability.py
 
       - name: Type check
         run: >-
           mypy
           --follow-imports=skip
+          app/main.py
           app/api/routes/system.py
+          app/core/dependency_health.py
+          app/core/metrics.py
+          app/core/observability.py
+          app/core/rate_limit.py
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
