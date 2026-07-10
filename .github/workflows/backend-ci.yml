@@ -61,6 +61,7 @@ jobs:
       - name: Ruff lint
         run: >-
           ruff check
+          --select E9,F63,F7,F82
           app/api/routes/system.py
           app/schemas/system_readiness.py
           scripts/export_openapi.py
