@@ -77,37 +77,17 @@ jobs:
           tests/test_error_observability.py
           tests/test_autonomous_portfolio_intelligence.py
 
-      - name: Ruff format app main
-        run: ruff format --check app/main.py
-
-      - name: Ruff format dependency health
-        run: ruff format --check app/core/dependency_health.py
-
-      - name: Ruff format metrics
-        run: ruff format --check app/core/metrics.py
-
-      - name: Capture Ruff observability diff
-        run: |
-          cp app/core/observability.py observability.before.py
-          ruff format app/core/observability.py
-          diff -u observability.before.py app/core/observability.py | tee ruff-observability.diff
-          test ! -s ruff-observability.diff
-
-      - name: Ruff format rate limit
-        run: ruff format --check app/core/rate_limit.py
-
-      - name: Ruff format system readiness schema
-        run: ruff format --check app/schemas/system_readiness.py
-
-      - name: Ruff format OpenAPI exporter
-        run: ruff format --check scripts/export_openapi.py
-
-      - name: Capture Ruff OpenAPI validator diff
-        run: |
-          cp scripts/validate_openapi.py validate-openapi.before.py
-          ruff format scripts/validate_openapi.py
-          diff -u validate-openapi.before.py scripts/validate_openapi.py | tee ruff-validate-openapi.diff
-          test ! -s ruff-validate-openapi.diff
+      - name: Ruff format check
+        run: >-
+          ruff format --check
+          app/main.py
+          app/core/dependency_health.py
+          app/core/metrics.py
+          app/core/observability.py
+          app/core/rate_limit.py
+          app/schemas/system_readiness.py
+          scripts/export_openapi.py
+          scripts/validate_openapi.py
 
       - name: Type check
         shell: bash
@@ -156,8 +136,6 @@ jobs:
             backend/openapi.json
             backend/pytest.log
             backend/mypy.log
-            backend/ruff-observability.diff
-            backend/ruff-validate-openapi.diff
           if-no-files-found: warn
 
       - name: Build Docker image
