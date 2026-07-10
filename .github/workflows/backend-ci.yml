@@ -110,18 +110,21 @@ jobs:
           test ! -s ruff-validate-openapi.diff
 
       - name: Type check
-        run: >-
-          mypy
-          --follow-imports=skip
-          app/main.py
-          app/api/routes/system.py
-          app/core/dependency_health.py
-          app/core/metrics.py
-          app/core/observability.py
-          app/core/rate_limit.py
-          app/schemas/system_readiness.py
-          scripts/export_openapi.py
-          scripts/validate_openapi.py
+        shell: bash
+        run: |
+          set -o pipefail
+          mypy \
+            --follow-imports=skip \
+            app/main.py \
+            app/api/routes/system.py \
+            app/core/dependency_health.py \
+            app/core/metrics.py \
+            app/core/observability.py \
+            app/core/rate_limit.py \
+            app/schemas/system_readiness.py \
+            scripts/export_openapi.py \
+            scripts/validate_openapi.py \
+            2>&1 | tee mypy.log
 
       - name: Validate Alembic migrations on PostgreSQL
         run: |
@@ -152,6 +155,7 @@ jobs:
             backend/coverage.xml
             backend/openapi.json
             backend/pytest.log
+            backend/mypy.log
             backend/ruff-observability.diff
             backend/ruff-validate-openapi.diff
           if-no-files-found: warn
