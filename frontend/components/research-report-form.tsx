@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import type { GeneratedResearchReport } from "@/lib/research";
 
 export function ResearchReportForm() {
+  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,6 +31,7 @@ export function ResearchReportForm() {
       const report = payload as GeneratedResearchReport;
       setMessage(`Created ${report.title} with ${report.metadata.confidence_level} confidence.`);
       event.currentTarget.reset();
+      router.refresh();
     } catch {
       setMessage("The research service is unavailable.");
     } finally {
