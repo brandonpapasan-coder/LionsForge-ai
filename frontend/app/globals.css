@@ -32,7 +32,7 @@ main { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: 2rem 0 4r
 .status span { width: .65rem; height: .65rem; border-radius: 50%; background: var(--danger); box-shadow: 0 0 1rem currentColor; }
 .status.online span { background: var(--success); }
 .hero { display: grid; grid-template-columns: 1.5fr .85fr; gap: 1.5rem; margin-top: 5rem; align-items: stretch; }
-.hero > div, .readiness-card, .module-grid article, .auth-card { border: 1px solid var(--border); border-radius: 1.4rem; background: rgba(13,27,45,.78); backdrop-filter: blur(18px); }
+.hero > div, .readiness-card, .module-grid article, .auth-card, .workspace-panel, .report-grid article { border: 1px solid var(--border); border-radius: 1.4rem; background: rgba(13,27,45,.78); backdrop-filter: blur(18px); }
 .hero > div { padding: clamp(2rem, 5vw, 4rem); }
 .hero h2 { margin: .8rem 0 1rem; font-size: clamp(2rem, 4vw, 3.5rem); letter-spacing: -.04em; }
 .lede { max-width: 680px; color: var(--muted); font-size: 1.08rem; line-height: 1.75; }
@@ -54,21 +54,35 @@ dd { margin: 0; font-weight: 800; text-transform: capitalize; }
 .auth-card h1 { margin: .7rem 0; font-size: clamp(2rem, 8vw, 3.2rem); letter-spacing: -.045em; }
 .auth-copy, .auth-switch { color: var(--muted); line-height: 1.6; }
 .auth-card form { display: grid; gap: 1rem; margin-top: 2rem; }
-.auth-card label { display: grid; gap: .45rem; color: var(--muted); font-size: .92rem; }
-.auth-card input { width: 100%; border: 1px solid var(--border); border-radius: .75rem; padding: .85rem 1rem; background: rgba(255,255,255,.04); color: var(--text); outline: none; }
-.auth-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(78,161,255,.13); }
-.auth-card button { margin-top: .4rem; border: 0; border-radius: .8rem; padding: .9rem 1rem; background: var(--accent); color: #04111f; font-weight: 800; cursor: pointer; }
-.auth-card button:disabled { opacity: .65; cursor: wait; }
+.auth-card label, .research-form label { display: grid; gap: .45rem; color: var(--muted); font-size: .92rem; }
+.auth-card input, .research-form input { width: 100%; border: 1px solid var(--border); border-radius: .75rem; padding: .85rem 1rem; background: rgba(255,255,255,.04); color: var(--text); outline: none; }
+.auth-card input:focus, .research-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(78,161,255,.13); }
+.auth-card button, .research-form button { margin-top: .4rem; border: 0; border-radius: .8rem; padding: .9rem 1rem; background: var(--accent); color: #04111f; font-weight: 800; cursor: pointer; }
+.auth-card button:disabled, .research-form button:disabled { opacity: .65; cursor: wait; }
 .auth-switch a { color: var(--accent); font-weight: 700; }
 .form-message { margin: 1rem 0 0; color: var(--muted); }
-.dashboard-header { margin-bottom: 4rem; }
-.dashboard-grid { margin-top: 0; }
+.dashboard-header { margin-bottom: 3rem; }
+.workspace-panel { display: grid; grid-template-columns: 1.1fr .9fr; gap: 2rem; padding: 2rem; align-items: end; }
+.workspace-panel h2, .section-heading h2 { margin: .55rem 0 0; font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -.035em; }
+.research-form { display: grid; gap: .75rem; }
+.research-form p { margin: .35rem 0 0; color: var(--muted); }
+.saved-reports { margin-top: 3rem; }
+.section-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: 1rem; }
+.section-heading > span { color: var(--muted); }
+.report-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.report-grid article { padding: 1.5rem; }
+.report-grid h3 { margin: 1rem 0 .65rem; }
+.report-grid p, .empty-state { color: var(--muted); line-height: 1.55; }
+.report-grid small { color: var(--muted); }
+.report-meta { display: flex; justify-content: space-between; gap: 1rem; color: var(--accent); font-size: .8rem; font-weight: 800; text-transform: uppercase; }
+.empty-state { grid-column: 1 / -1; }
 @media (max-width: 900px) {
-  .topbar, .hero { grid-template-columns: 1fr; display: grid; }
+  .topbar, .hero, .workspace-panel { grid-template-columns: 1fr; display: grid; }
   .module-grid { grid-template-columns: repeat(2, 1fr); }
+  .report-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {
   main { width: min(100% - 1rem, 1180px); padding-top: 1rem; }
-  .module-grid { grid-template-columns: 1fr; }
+  .module-grid, .report-grid { grid-template-columns: 1fr; }
   .topbar h1 { font-size: 2.6rem; }
 }
