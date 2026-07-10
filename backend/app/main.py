@@ -2,17 +2,19 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.dependency_health import evaluate_market_dependencies
 from app.core.metrics import render_prometheus_metrics
 from app.core.observability import configure_request_observability
 from app.db.init_db import init_db
 from app.db.session import get_db
+from app.services.market_provider_health import provider_health_registry
 
 settings = get_settings()
 
@@ -69,7 +71,21 @@ def ready(db: Session = Depends(get_db)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database dependency is unavailable.",
         ) from exc
-    return {"status": "ready", "database": "available"}
+
+    market = evaluate_market_dependencies(settings, provider_health_registry)
+    payload = {
+        "status": "ready" if market.status == "available" else market.status,
+        "database": "available",
+        "market_data": market.status,
+        "primary_provider": market.primary_provider,
+        "unavailable_providers": list(market.unavailable_providers),
+    }
+    if market.status == "unavailable":
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=payload,
+        )
+    return payload
 
 
 @app.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
