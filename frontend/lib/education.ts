@@ -3,6 +3,7 @@ export type LearningModule = {
   title: string;
   summary: string;
   estimated_minutes: number;
+  completed: boolean;
 };
 
 export type CourseCatalogItem = {
