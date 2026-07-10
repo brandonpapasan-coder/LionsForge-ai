@@ -29,7 +29,9 @@ class RequestMetricsRegistry:
 
     def snapshot(self) -> dict[str, object]:
         with self._lock:
-            average_duration_ms = self.total_duration_ms / self.request_count if self.request_count else 0.0
+            average_duration_ms = (
+                self.total_duration_ms / self.request_count if self.request_count else 0.0
+            )
             return {
                 "request_count": self.request_count,
                 "error_count": self.error_count,
@@ -77,7 +79,9 @@ class ErrorEventRegistry:
         )
         with self._lock:
             self.total_count += 1
-            self.by_exception_type[event.exception_type] = self.by_exception_type.get(event.exception_type, 0) + 1
+            self.by_exception_type[event.exception_type] = (
+                self.by_exception_type.get(event.exception_type, 0) + 1
+            )
             self.last_event = event
 
     def snapshot(self) -> dict[str, object]:
