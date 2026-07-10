@@ -186,6 +186,6 @@ jobs:
 
           test "${ready}" = "true"
           curl --fail --silent http://127.0.0.1:18000/ready \
-            | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload == {"status": "ready", "database": "available"}, payload'
+            | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload["status"] == "ready", payload; assert payload["database"] == "available", payload; assert payload["market_data"] == "available", payload; assert payload["primary_provider"], payload'
           curl --fail --silent http://127.0.0.1:18000/api/v1/system/readiness \
             | python -c 'import json, sys; payload = json.load(sys.stdin); assert payload["status"] == "ready", payload'
