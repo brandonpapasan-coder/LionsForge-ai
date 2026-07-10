@@ -20,7 +20,7 @@ def build_research_agent_report(symbol: str) -> ResearchAgentReport:
     factor = get_factor_score(normalized)
     confidence = calculate_research_confidence(normalized)
     evidence = [f"Quote source: {context.quote.source}"] + [f"News: {item.title}" for item in context.news[:3]]
-    confidence_score = Decimal(str(confidence.confidence_score)).quantize(Decimal("0.000001"))
+    confidence_score = Decimal(str(confidence.confidence)).quantize(Decimal("0.000001"))
 
     findings = [
         ResearchAgentFinding(
