@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     news_provider: str = "mock"
     news_api_key: str | None = None
 
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 120
+    rate_limit_window_seconds: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
