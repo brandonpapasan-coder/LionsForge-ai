@@ -5,6 +5,7 @@ import "./evidence.css";
 import "./education.css";
 import "./workspace-links.css";
 import "./module-progress.css";
+import "./lesson.css";
 
 export const metadata: Metadata = {
   title: "LionsForge AI",
