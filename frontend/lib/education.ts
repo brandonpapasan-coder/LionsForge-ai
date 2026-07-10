@@ -4,6 +4,8 @@ export type LearningModule = {
   summary: string;
   estimated_minutes: number;
   completed: boolean;
+  attempt_count: number;
+  best_score: number | null;
 };
 
 export type CourseCatalogItem = {
@@ -19,6 +21,7 @@ export type LearningDashboard = {
   recommended_course_id: string;
   completed_modules: number;
   total_modules: number;
+  mastery_average: number | null;
   courses: CourseCatalogItem[];
 };
 
@@ -37,6 +40,8 @@ export type LessonDetail = {
     passing_score: number;
   };
   completed: boolean;
+  attempt_count: number;
+  best_score: number | null;
 };
 
 export type AssessmentResult = {
@@ -44,4 +49,6 @@ export type AssessmentResult = {
   passed: boolean;
   explanation: string;
   completed_at: string | null;
+  attempt_count: number;
+  best_score: number;
 };
