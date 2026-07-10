@@ -1,0 +1,40 @@
+.evidence-section {
+  margin-top: 3rem;
+}
+
+.evidence-section > h2 {
+  margin: .55rem 0 1rem;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: -.035em;
+}
+
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.evidence-grid article {
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 1.4rem;
+  background: rgba(13,27,45,.78);
+}
+
+.evidence-grid h3 {
+  margin: 1rem 0 .65rem;
+}
+
+.evidence-grid p,
+.evidence-grid small {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .evidence-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 560px) {
+  .evidence-grid { grid-template-columns: 1fr; }
+}
