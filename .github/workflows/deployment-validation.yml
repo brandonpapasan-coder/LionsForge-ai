@@ -37,6 +37,15 @@ jobs:
           grep -q "kind: Deployment" production-rendered.yaml
           grep -q "kind: Service" production-rendered.yaml
 
+      - name: Validate monitoring assets
+        run: |
+          python -m json.tool infra/monitoring/grafana/lionsforge-backend-dashboard.json > /dev/null
+          test -s infra/monitoring/prometheus/lionsforge-alerts.yml
+          grep -q "LionsForgeBackendDown" infra/monitoring/prometheus/lionsforge-alerts.yml
+          grep -q "LionsForgeHighHttpErrorRate" infra/monitoring/prometheus/lionsforge-alerts.yml
+          grep -q "lionsforge_http_requests_total" infra/monitoring/grafana/lionsforge-backend-dashboard.json
+          grep -q "lionsforge_market_provider_available" infra/monitoring/grafana/lionsforge-backend-dashboard.json
+
       - name: Create disposable kind cluster
         uses: helm/kind-action@v1.12.0
         with:
