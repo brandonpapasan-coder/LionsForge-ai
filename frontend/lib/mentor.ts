@@ -11,9 +11,7 @@ export type MentorRecommendation = {
   action_target: string | null;
 };
 
-export type MentorChatResponse = {
-  conversation_id: number;
-  message_id: number;
+export type MentorResponsePayload = {
   intent: string;
   persona: string;
   answer: string;
@@ -24,6 +22,11 @@ export type MentorChatResponse = {
   confidence_reason: string;
   alternative_viewpoints: string[];
   recommendations: MentorRecommendation[];
+};
+
+export type MentorChatResponse = MentorResponsePayload & {
+  conversation_id: number;
+  message_id: number;
   created_at: string;
 };
 
@@ -34,4 +37,18 @@ export type MentorConversation = {
   active_context: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+};
+
+export type MentorMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  intent: string | null;
+  persona: string | null;
+  response_payload: MentorResponsePayload | null;
+  created_at: string;
+};
+
+export type MentorConversationDetail = MentorConversation & {
+  messages: MentorMessage[];
 };
