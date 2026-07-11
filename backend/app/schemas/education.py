@@ -69,6 +69,8 @@ class AssessmentResult(BaseModel):
 class LearningDashboard(BaseModel):
     learner_email: str
     recommended_course_id: str
+    recommended_module_id: str
+    recommendation_reason: str
     completed_modules: int
     total_modules: int
     mastery_average: int | None = None
