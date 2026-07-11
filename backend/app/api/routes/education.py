@@ -70,6 +70,32 @@ def _module_metrics(db: Session, user_id: int) -> dict[str, tuple[int, int | Non
     return {module_id: (int(attempts), int(best) if best is not None else None) for module_id, attempts, best in rows}
 
 
+def _recommendation(courses: list[CourseCatalogItem]) -> tuple[str, str, str]:
+    incomplete = [
+        (course, module)
+        for course in courses
+        for module in course.modules
+        if not module.completed
+    ]
+    attempted_incomplete = [item for item in incomplete if item[1].attempt_count > 0]
+    if attempted_incomplete:
+        course, module = min(
+            attempted_incomplete,
+            key=lambda item: item[1].best_score if item[1].best_score is not None else -1,
+        )
+        return course.course_id, module.module_id, "Revisit this lesson because it has the lowest demonstrated mastery among unfinished modules."
+    if incomplete:
+        course, module = incomplete[0]
+        return course.course_id, module.module_id, "Continue with the next incomplete lesson in your structured learning path."
+
+    completed = [(course, module) for course in courses for module in course.modules]
+    course, module = min(
+        completed,
+        key=lambda item: item[1].best_score if item[1].best_score is not None else -1,
+    )
+    return course.course_id, module.module_id, "Review this completed lesson to strengthen your lowest current mastery score."
+
+
 @router.get("/dashboard", response_model=LearningDashboard)
 def learning_dashboard(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> LearningDashboard:
     courses = _catalog()
@@ -82,9 +108,12 @@ def learning_dashboard(current_user: User = Depends(get_current_user), db: Sessi
             module.attempt_count, module.best_score = metrics.get(module.module_id, (0, None))
             if module.best_score is not None:
                 best_scores.append(module.best_score)
+    recommended_course_id, recommended_module_id, recommendation_reason = _recommendation(courses)
     return LearningDashboard(
         learner_email=current_user.email,
-        recommended_course_id="finance-foundations",
+        recommended_course_id=recommended_course_id,
+        recommended_module_id=recommended_module_id,
+        recommendation_reason=recommendation_reason,
         completed_modules=len(completed_ids),
         total_modules=sum(len(course.modules) for course in courses),
         mastery_average=round(sum(best_scores) / len(best_scores)) if best_scores else None,
