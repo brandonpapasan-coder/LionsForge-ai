@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { MentorWorkspace } from "@/components/mentor-workspace";
+import "./history.css";
 
 type MentorPageProps = {
   searchParams: Promise<{
