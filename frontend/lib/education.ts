@@ -19,6 +19,8 @@ export type CourseCatalogItem = {
 export type LearningDashboard = {
   learner_email: string;
   recommended_course_id: string;
+  recommended_module_id: string;
+  recommendation_reason: string;
   completed_modules: number;
   total_modules: number;
   mastery_average: number | null;
