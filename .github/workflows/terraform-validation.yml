@@ -1,0 +1,43 @@
+name: Terraform Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-validation.yml"
+  push:
+    branches:
+      - main
+      - "infra/**"
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/aws/staging
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize without backend
+        run: terraform init -backend=false
+
+      - name: Validate configuration
+        run: terraform validate
