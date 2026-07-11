@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
+import { ResearchNotebookEditor } from "@/components/research-notebook-editor";
 import type { ResearchProject, ResearchSession } from "@/lib/research";
 
 export function ResearchWorkspace() {
@@ -29,6 +30,13 @@ export function ResearchWorkspace() {
     setSelected(project);
     setError(null);
     await loadSessions(project.id);
+  }
+
+  function updateProject(savedProject: ResearchProject) {
+    setSelected(savedProject);
+    setProjects((current) => current.map((project) => (
+      project.id === savedProject.id ? savedProject : project
+    )));
   }
 
   async function loadProjects() {
@@ -199,15 +207,7 @@ export function ResearchWorkspace() {
               </form>
             </section>
 
-            <section className="research-notebook">
-              <div><p className="eyebrow">RESEARCH NOTEBOOK</p><h3>Structure the investigation</h3></div>
-              <div className="research-notebook-grid">
-                <article><strong>Thesis</strong><p>State the current working conclusion.</p></article>
-                <article><strong>Evidence</strong><p>Collect supporting and contradicting sources.</p></article>
-                <article><strong>Risks</strong><p>Record uncertainty, assumptions, and failure conditions.</p></article>
-                <article><strong>Decision Journal</strong><p>Track what changed your confidence and why.</p></article>
-              </div>
-            </section>
+            <ResearchNotebookEditor project={selected} onSaved={updateProject} />
           </section>
         ) : (
           <section className="research-empty"><h2>Create your first research project</h2><p>Start with a clear question, objective, and evidence trail.</p></section>
