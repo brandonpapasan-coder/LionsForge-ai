@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lionsforge-frontend
+  labels:
+    app: lionsforge-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lionsforge-frontend
+  template:
+    metadata:
+      labels:
+        app: lionsforge-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/brandonpapasan-coder/lionsforge-ai/frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: BACKEND_URL
+              value: http://lionsforge-backend
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
