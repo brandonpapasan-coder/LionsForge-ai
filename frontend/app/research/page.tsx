@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { ResearchWorkspace } from "@/components/research-workspace";
 import "./research.css";
+import "./sessions.css";
 
 export default async function ResearchPage() {
   const cookieStore = await cookies();
