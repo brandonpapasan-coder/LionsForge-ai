@@ -7,6 +7,7 @@ import "./workspace-links.css";
 import "./module-progress.css";
 import "./lesson.css";
 import "./mastery.css";
+import "./adaptive-learning.css";
 
 export const metadata: Metadata = {
   title: "LionsForge AI",
