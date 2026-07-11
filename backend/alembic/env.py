@@ -3,14 +3,14 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.session import Base
-from app.models import Alert, Portfolio, PortfolioHolding, User, Watchlist
+from app.models import Alert, MentorConversation, MentorMessage, Portfolio, PortfolioHolding, User, Watchlist
 
 config = context.config
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
-_models = (Alert, Portfolio, PortfolioHolding, User, Watchlist)
+_models = (Alert, MentorConversation, MentorMessage, Portfolio, PortfolioHolding, User, Watchlist)
 
 
 def run_migrations_online() -> None:
