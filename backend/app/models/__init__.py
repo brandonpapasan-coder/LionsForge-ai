@@ -3,6 +3,7 @@ from app.models.company import Company
 from app.models.mentor import MentorConversation, MentorMessage
 from app.models.portfolio import Portfolio, PortfolioHolding
 from app.models.research_project import ResearchProject
+from app.models.research_session import ResearchSession
 from app.models.user import User
 from app.models.watchlist import Watchlist
 
@@ -14,6 +15,7 @@ __all__ = [
     "Portfolio",
     "PortfolioHolding",
     "ResearchProject",
+    "ResearchSession",
     "User",
     "Watchlist",
 ]
