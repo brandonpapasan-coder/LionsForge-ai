@@ -20,7 +20,9 @@ async function getLearningDashboard(): Promise<LearningDashboard> {
 
 export default async function EducationPage() {
   const dashboard = await getLearningDashboard();
-  const recommended = dashboard.courses.find((course) => course.course_id === dashboard.recommended_course_id);
+  const recommendedCourse = dashboard.courses.find((course) => course.course_id === dashboard.recommended_course_id);
+  const recommendedModule = recommendedCourse?.modules.find((module) => module.module_id === dashboard.recommended_module_id);
+  const recommendationHref = `/education/${dashboard.recommended_course_id}/${dashboard.recommended_module_id}`;
 
   return (
     <main>
@@ -29,13 +31,22 @@ export default async function EducationPage() {
         <div>
           <p className="eyebrow">LIONSFORGE EDUCATION</p>
           <h1>Build mastery through structured, evidence-based learning.</h1>
-          <p className="lede">Recommended next: {recommended?.title ?? "Finance Foundations"}</p>
+          <p className="lede">Adaptive learning prioritizes unfinished work and your lowest demonstrated mastery.</p>
         </div>
         <aside className="learning-progress mastery-panel">
           <div><span>{dashboard.completed_modules}</span><p>of {dashboard.total_modules} modules completed</p></div>
           <div><span>{dashboard.mastery_average ?? "—"}{dashboard.mastery_average !== null ? "%" : ""}</span><p>average best assessment score</p></div>
         </aside>
       </header>
+
+      <section className="adaptive-recommendation">
+        <div>
+          <p className="eyebrow">RECOMMENDED NEXT</p>
+          <h2>{recommendedModule?.title ?? "Continue learning"}</h2>
+          <p>{recommendedCourse?.title} · {dashboard.recommendation_reason}</p>
+        </div>
+        <Link href={recommendationHref}>Continue lesson</Link>
+      </section>
 
       <section className="course-grid">
         {dashboard.courses.map((course) => (
