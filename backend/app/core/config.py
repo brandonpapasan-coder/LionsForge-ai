@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     news_api_key: str | None = None
 
     openai_api_key: str | None = None
-    openai_model: str = "gpt-5.5-mini"
+    openai_model: str = "gpt-5.5"
     openai_timeout_seconds: float = 30.0
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
