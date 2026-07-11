@@ -4,11 +4,22 @@ import { FormEvent, useState } from "react";
 
 import type { MentorChatResponse } from "@/lib/mentor";
 
-export function MentorWorkspace() {
+type MentorWorkspaceProps = {
+  researchProjectId: string | null;
+  researchSessionId: string | null;
+};
+
+export function MentorWorkspace({ researchProjectId, researchSessionId }: MentorWorkspaceProps) {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [responses, setResponses] = useState<MentorChatResponse[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const activeContext = {
+    goal: "Build evidence-based research and finance mastery",
+    ...(researchProjectId ? { research_project_id: researchProjectId } : {}),
+    ...(researchSessionId ? { research_session_id: researchSessionId } : {}),
+  };
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -17,7 +28,10 @@ export function MentorWorkspace() {
     const form = event.currentTarget;
     const data = new FormData(form);
     const message = String(data.get("message") ?? "").trim();
-    if (!message) return;
+    if (!message) {
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const response = await fetch("/api/mentor/chat", {
@@ -26,7 +40,7 @@ export function MentorWorkspace() {
         body: JSON.stringify({
           message,
           conversation_id: conversationId,
-          context: { goal: "Build evidence-based research and finance mastery" },
+          context: activeContext,
         }),
       });
       if (response.status === 401) {
@@ -49,17 +63,34 @@ export function MentorWorkspace() {
   }
 
   const latest = responses.at(-1);
+  const hasResearchContext = Boolean(researchProjectId || researchSessionId);
 
   return (
     <div className="mentor-grid">
       <aside className="mentor-sidebar">
         <p className="eyebrow">MENTOR CONTEXT</p>
-        <h2>Build stronger judgment.</h2>
-        <p className="muted">Ask about finance, research, economics, portfolios, or your learning path.</p>
+        <h2>{hasResearchContext ? "Research context active." : "Build stronger judgment."}</h2>
+        <p className="muted">
+          {hasResearchContext
+            ? "Your active research identifiers will be preserved with this mentor conversation."
+            : "Ask about finance, research, economics, portfolios, or your learning path."}
+        </p>
         <div className="context-card">
           <span>Active goal</span>
           <strong>Evidence-based mastery</strong>
         </div>
+        {researchProjectId ? (
+          <div className="context-card">
+            <span>Research project</span>
+            <strong>Project #{researchProjectId}</strong>
+          </div>
+        ) : null}
+        {researchSessionId ? (
+          <div className="context-card">
+            <span>Research session</span>
+            <strong>Session #{researchSessionId}</strong>
+          </div>
+        ) : null}
       </aside>
 
       <section className="mentor-chat">
@@ -74,8 +105,12 @@ export function MentorWorkspace() {
         <div className="conversation-stream" aria-live="polite">
           {responses.length === 0 ? (
             <div className="empty-conversation">
-              <h2>Start a conversation</h2>
-              <p>Try: “Help me challenge the assumptions in a company valuation.”</p>
+              <h2>{hasResearchContext ? "Review the active research" : "Start a conversation"}</h2>
+              <p>
+                {hasResearchContext
+                  ? "Ask the mentor to challenge assumptions, identify missing evidence, or recommend the next research step."
+                  : "Try: “Help me challenge the assumptions in a company valuation.”"}
+              </p>
             </div>
           ) : (
             responses.map((response) => (
@@ -101,7 +136,15 @@ export function MentorWorkspace() {
 
         <form className="mentor-composer" onSubmit={handleSubmit}>
           <label htmlFor="message">Ask the mentor</label>
-          <textarea id="message" name="message" required maxLength={8000} placeholder="What decision, lesson, or research question are you working through?" />
+          <textarea
+            id="message"
+            name="message"
+            required
+            maxLength={8000}
+            placeholder={hasResearchContext
+              ? "What should the mentor challenge or validate in this research?"
+              : "What decision, lesson, or research question are you working through?"}
+          />
           <button type="submit" disabled={submitting}>{submitting ? "Thinking..." : "Send question"}</button>
           {error ? <p role="alert" className="form-message">{error}</p> : null}
         </form>
