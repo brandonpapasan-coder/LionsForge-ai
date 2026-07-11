@@ -1,0 +1,72 @@
+name: Staging Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Backend image tag to deploy
+        required: true
+        default: latest
+
+permissions:
+  contents: read
+  packages: write
+
+environment:
+  name: staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/backend:${IMAGE_TAG}"
+          docker build -t "${IMAGE}" backend
+          docker push "${IMAGE}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG_STAGING: ${{ secrets.KUBE_CONFIG_STAGING }}
+        run: |
+          test -n "${KUBE_CONFIG_STAGING}"
+          mkdir -p "$HOME/.kube"
+          printf '%s' "${KUBE_CONFIG_STAGING}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Apply staging configuration
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_JWT_SECRET_KEY: ${{ secrets.STAGING_JWT_SECRET_KEY }}
+        run: |
+          kubectl create namespace lionsforge-staging --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n lionsforge-staging create secret generic lionsforge-backend-secrets \
+            --from-literal=DATABASE_URL="${STAGING_DATABASE_URL}" \
+            --from-literal=JWT_SECRET_KEY="${STAGING_JWT_SECRET_KEY}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -k infra/k8s/overlays/staging
+          kubectl -n lionsforge-staging set image deployment/lionsforge-backend backend="${IMAGE}"
+          kubectl -n lionsforge-staging rollout status deployment/lionsforge-backend --timeout=300s
+
+      - name: Run staging smoke test
+        env:
+          STAGING_TEST_EMAIL: ${{ secrets.STAGING_TEST_EMAIL }}
+          STAGING_TEST_SECRET: ${{ secrets.STAGING_TEST_SECRET }}
+          STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+        run: |
+          test -n "${STAGING_API_URL}"
+          python scripts/staging_smoke.py --base-url "${STAGING_API_URL}"
