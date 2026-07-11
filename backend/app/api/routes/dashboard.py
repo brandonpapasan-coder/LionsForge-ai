@@ -94,13 +94,21 @@ def get_executive_dashboard(
                 priority="high",
             )
         )
-    actions.append(
-        DashboardAction(
-            title="Consult the AI Mentor",
-            reason="Challenge assumptions and identify the next highest-value learning step.",
-            href="/mentor",
-            priority="medium",
-        )
+    actions.extend(
+        [
+            DashboardAction(
+                title="Continue your learning path",
+                reason="Strengthen the competencies that improve research and decision quality.",
+                href="/education",
+                priority="medium",
+            ),
+            DashboardAction(
+                title="Consult the AI Mentor",
+                reason="Challenge assumptions and identify the next highest-value learning step.",
+                href="/mentor",
+                priority="medium",
+            ),
+        ]
     )
 
     display_name = current_user.full_name or current_user.email.split("@", 1)[0]
