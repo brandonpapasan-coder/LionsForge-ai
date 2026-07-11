@@ -35,3 +35,17 @@ export type MentorConversation = {
   created_at: string;
   updated_at: string;
 };
+
+export type MentorMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  intent: string | null;
+  persona: string | null;
+  response_payload: MentorChatResponse | null;
+  created_at: string;
+};
+
+export type MentorConversationDetail = MentorConversation & {
+  messages: MentorMessage[];
+};
