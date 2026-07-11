@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: lionsforge-frontend
+spec:
+  selector:
+    app: lionsforge-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000

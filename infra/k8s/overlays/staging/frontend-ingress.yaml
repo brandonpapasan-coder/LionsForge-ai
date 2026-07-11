@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lionsforge-frontend
+spec:
+  rules:
+    - host: staging.lionsforge.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lionsforge-frontend
+                port:
+                  number: 80

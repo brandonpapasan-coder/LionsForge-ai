@@ -3,6 +3,8 @@ kind: Kustomization
 namespace: lionsforge-staging
 resources:
   - ../../backend
+  - ../../frontend
+  - frontend-ingress.yaml
 patches:
   - path: patch-configmap.yaml
   - path: patch-ingress.yaml
