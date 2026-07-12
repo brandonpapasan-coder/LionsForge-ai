@@ -24,9 +24,9 @@ module "vpc" {
   private_subnets  = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index + 10)]
   database_subnets = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index + 20)]
 
-  enable_nat_gateway            = true
-  single_nat_gateway            = true
-  enable_dns_hostnames          = true
+  enable_nat_gateway           = true
+  single_nat_gateway           = true
+  enable_dns_hostnames         = true
   create_database_subnet_group = true
 
   public_subnet_tags = {
