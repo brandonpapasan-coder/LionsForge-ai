@@ -33,8 +33,17 @@ jobs:
         with:
           terraform_version: 1.8.5
 
-      - name: Check formatting
-        run: terraform fmt -check -diff -recursive
+      - name: Format Terraform
+        run: terraform fmt -recursive
+
+      - name: Upload formatted Terraform
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-terraform
+          path: infra/terraform/aws/staging/*.tf
+
+      - name: Verify committed formatting
+        run: git diff --exit-code -- '*.tf'
 
       - name: Initialize without backend
         run: terraform init -backend=false
