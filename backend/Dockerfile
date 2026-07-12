@@ -5,7 +5,9 @@ WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 
 COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip uninstall -y pip setuptools wheel
 
 COPY . .
 RUN chown -R app:app /app
