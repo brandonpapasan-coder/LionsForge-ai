@@ -1,0 +1,13 @@
+# Terraform local state and generated plans
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+backend.hcl
+crash.log
+crash.*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
