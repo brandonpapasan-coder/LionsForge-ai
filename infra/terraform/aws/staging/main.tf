@@ -115,6 +115,6 @@ module "database" {
   final_snapshot_identifier_prefix = "${var.name}-final"
 
   performance_insights_enabled = true
-  create_monitoring_role        = true
-  monitoring_interval           = 60
+  create_monitoring_role       = true
+  monitoring_interval          = 60
 }
