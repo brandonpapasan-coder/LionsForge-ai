@@ -20,14 +20,14 @@ module "vpc" {
   cidr = var.vpc_cidr
   azs  = local.azs
 
-  public_subnets  = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index)]
-  private_subnets = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index + 10)]
+  public_subnets   = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index)]
+  private_subnets  = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index + 10)]
   database_subnets = [for index, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, index + 20)]
 
-  enable_nat_gateway     = true
-  single_nat_gateway     = true
-  enable_dns_hostnames   = true
-  create_database_subnet_group = true
+  enable_nat_gateway            = true
+  single_nat_gateway            = true
+  enable_dns_hostnames          = true
+  create_database_subnet_group  = true
 
   public_subnet_tags = {
     "kubernetes.io/role/elb" = 1
@@ -45,7 +45,7 @@ module "eks" {
   cluster_name    = var.name
   cluster_version = "1.30"
 
-  cluster_endpoint_public_access = true
+  cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
   vpc_id     = module.vpc.vpc_id
@@ -107,11 +107,11 @@ module "database" {
   db_subnet_group_name   = module.vpc.database_subnet_group
   vpc_security_group_ids = [aws_security_group.database.id]
 
-  multi_az               = false
-  publicly_accessible    = false
-  backup_retention_period = 7
-  deletion_protection     = true
-  skip_final_snapshot     = false
+  multi_az                         = false
+  publicly_accessible              = false
+  backup_retention_period          = 7
+  deletion_protection              = true
+  skip_final_snapshot              = false
   final_snapshot_identifier_prefix = "${var.name}-final"
 
   performance_insights_enabled = true
