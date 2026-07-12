@@ -13,6 +13,16 @@ class KnowledgeEntityCreate(BaseModel):
     attributes: dict = Field(default_factory=dict)
 
 
+class KnowledgeEntityUpdate(BaseModel):
+    entity_type: str | None = Field(default=None, min_length=1, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    validation_status: str | None = Field(default=None, pattern="^(unverified|validated|disputed|archived)$")
+    provenance: dict | None = None
+    attributes: dict | None = None
+
+
 class KnowledgeEntityRead(KnowledgeEntityCreate):
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,6 +48,15 @@ class KnowledgeRelationshipCreate(BaseModel):
         return self
 
 
+class KnowledgeRelationshipUpdate(BaseModel):
+    relationship_type: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    validation_status: str | None = Field(default=None, pattern="^(unverified|validated|disputed|archived)$")
+    provenance: dict | None = None
+    attributes: dict | None = None
+
+
 class KnowledgeRelationshipRead(KnowledgeRelationshipCreate):
     model_config = ConfigDict(from_attributes=True)
 
@@ -49,3 +68,8 @@ class KnowledgeRelationshipRead(KnowledgeRelationshipCreate):
 class KnowledgeGraphRead(BaseModel):
     entities: list[KnowledgeEntityRead]
     relationships: list[KnowledgeRelationshipRead]
+
+
+class KnowledgeTraversalRead(KnowledgeGraphRead):
+    root_entity_id: int
+    depth: int
