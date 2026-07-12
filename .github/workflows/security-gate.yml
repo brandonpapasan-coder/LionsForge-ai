@@ -1,0 +1,190 @@
+name: Security Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - "security/**"
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security analyzers
+        run: python -m pip install --disable-pip-version-check bandit==1.7.10 semgrep
+
+      - name: Run Bandit
+        run: bandit -q -r backend/app -x backend/tests -f json -o bandit-report.json
+
+      - name: Run Semgrep
+        run: semgrep scan --config=p/default --json --output semgrep-report.json backend frontend
+
+      - name: Enforce Semgrep error findings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("semgrep-report.json").read_text())
+          findings = [
+              item for item in report.get("results", [])
+              if item.get("extra", {}).get("severity") == "ERROR"
+          ]
+          if findings:
+              for item in findings:
+                  print(f"{item.get('path')}:{item.get('start', {}).get('line')} {item.get('check_id')}")
+              raise SystemExit(f"Semgrep found {len(findings)} error-severity finding(s)")
+          PY
+
+      - name: Upload static-analysis reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: |
+            bandit-report.json
+            semgrep-report.json
+          retention-days: 30
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Audit Python dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit==2.7.3
+          pip-audit -r requirements.txt --progress-spinner=off --format=json --output=../python-audit.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm audit --audit-level=high --json > ../npm-audit.json
+
+      - name: Upload dependency reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-reports
+          path: |
+            python-audit.json
+            npm-audit.json
+          retention-days: 30
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: true
+
+  container-security:
+    name: Container security and SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t lionsforge-backend:security backend
+
+      - name: Build frontend image
+        run: docker build -t lionsforge-frontend:security frontend
+
+      - name: Scan backend image
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format json \
+            --output /work/backend-trivy.json \
+            lionsforge-backend:security
+
+      - name: Scan frontend image
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format json \
+            --output /work/frontend-trivy.json \
+            lionsforge-frontend:security
+
+      - name: Generate backend SBOM
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --format spdx-json \
+            --output /work/backend-sbom.spdx.json \
+            lionsforge-backend:security
+
+      - name: Generate frontend SBOM
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --format spdx-json \
+            --output /work/frontend-sbom.spdx.json \
+            lionsforge-frontend:security
+
+      - name: Upload security artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-artifacts
+          path: |
+            backend-trivy.json
+            frontend-trivy.json
+            backend-sbom.spdx.json
+            frontend-sbom.spdx.json
+          retention-days: 30
