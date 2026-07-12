@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   static-analysis:
@@ -36,7 +35,24 @@ jobs:
         run: bandit -q -r backend/app -x backend/tests -f json -o bandit-report.json
 
       - name: Run Semgrep
-        run: semgrep scan --config=auto --error --json --output semgrep-report.json backend frontend
+        run: semgrep scan --config=p/default --json --output semgrep-report.json backend frontend
+
+      - name: Enforce Semgrep error findings
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("semgrep-report.json").read_text())
+          findings = [
+              item for item in report.get("results", [])
+              if item.get("extra", {}).get("severity") == "ERROR"
+          ]
+          if findings:
+              for item in findings:
+                  print(f"{item.get('path')}:{item.get('start', {}).get('line')} {item.get('check_id')}")
+              raise SystemExit(f"Semgrep found {len(findings)} error-severity finding(s)")
+          PY
 
       - name: Upload static-analysis reports
         if: always()
@@ -59,8 +75,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
 
       - name: Audit Python dependencies
         working-directory: backend
@@ -72,8 +86,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Audit frontend dependencies
         working-directory: frontend
@@ -120,38 +132,50 @@ jobs:
         run: docker build -t lionsforge-frontend:security frontend
 
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          image-ref: lionsforge-backend:security
-          format: sarif
-          output: backend-trivy.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format json \
+            --output /work/backend-trivy.json \
+            lionsforge-backend:security
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          image-ref: lionsforge-frontend:security
-          format: sarif
-          output: frontend-trivy.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "1"
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format json \
+            --output /work/frontend-trivy.json \
+            lionsforge-frontend:security
 
       - name: Generate backend SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: lionsforge-backend:security
-          format: spdx-json
-          output-file: backend-sbom.spdx.json
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --format spdx-json \
+            --output /work/backend-sbom.spdx.json \
+            lionsforge-backend:security
 
       - name: Generate frontend SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: lionsforge-frontend:security
-          format: spdx-json
-          output-file: frontend-sbom.spdx.json
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.58.2 image \
+            --format spdx-json \
+            --output /work/frontend-sbom.spdx.json \
+            lionsforge-frontend:security
 
       - name: Upload security artifacts
         if: always()
@@ -159,8 +183,8 @@ jobs:
         with:
           name: container-security-artifacts
           path: |
-            backend-trivy.sarif
-            frontend-trivy.sarif
+            backend-trivy.json
+            frontend-trivy.json
             backend-sbom.spdx.json
             frontend-sbom.spdx.json
           retention-days: 30
