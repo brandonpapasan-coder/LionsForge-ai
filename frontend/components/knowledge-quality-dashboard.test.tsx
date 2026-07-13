@@ -132,10 +132,10 @@ describe("KnowledgeQualityDashboard", () => {
   });
 
   it("shows a safe not-found message for inaccessible projects", async () => {
-    const fetchMock = successfulFetch();
-    fetchMock.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => projects }));
-    fetchMock.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => dashboard }));
-    fetchMock.mockImplementationOnce(async () => ({ ok: false, status: 404 }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projects })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => dashboard })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
