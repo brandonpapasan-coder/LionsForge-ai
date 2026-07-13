@@ -10,6 +10,7 @@ from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
 from app.models.mentor import MentorConversation, MentorMessage
 from app.models.mission import Mission, MissionStep
 from app.models.portfolio import Portfolio, PortfolioHolding
+from app.models.research_planning import ResearchPlanRecommendation, ResearchPlanRevision
 from app.models.research_project import ResearchProject
 from app.models.research_session import ResearchSession
 from app.models.user import User
@@ -35,6 +36,8 @@ __all__ = [
     "MissionStep",
     "Portfolio",
     "PortfolioHolding",
+    "ResearchPlanRecommendation",
+    "ResearchPlanRevision",
     "ResearchProject",
     "ResearchSession",
     "User",
