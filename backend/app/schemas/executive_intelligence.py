@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ExecutiveFact(BaseModel):
@@ -44,3 +45,44 @@ class ExecutiveIntelligenceBriefRead(BaseModel):
     recommended_actions: list[str]
     source_evidence_ids: list[int]
     methodology_version: str
+
+
+class ExecutiveBriefSnapshotRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    project_id: int
+    fingerprint: str
+    recommendation: str
+    decision_readiness_score: float
+    research_trust_index: float
+    consensus_status: str
+    overall_confidence: float
+    methodology_version: str
+    source_evidence_ids: list[int]
+    payload: dict
+    created_at: datetime
+
+
+class ExecutiveBriefSnapshotCreateResult(BaseModel):
+    snapshot: ExecutiveBriefSnapshotRead
+    created: bool
+
+
+class ExecutiveBriefSnapshotComparison(BaseModel):
+    left_snapshot_id: int
+    right_snapshot_id: int
+    recommendation_changed: bool
+    recommendation: dict
+    decision_readiness_delta: float
+    research_trust_index_delta: float
+    overall_confidence_delta: float
+    consensus_status: dict
+    evidence_added: list[int]
+    evidence_removed: list[int]
+    risks_added: list[dict]
+    risks_removed: list[dict]
+    unresolved_questions_added: list[str]
+    unresolved_questions_resolved: list[str]
+    recommended_actions_added: list[str]
+    recommended_actions_removed: list[str]
