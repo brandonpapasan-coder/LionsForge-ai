@@ -6,6 +6,7 @@ from app.models.evidence import EvidenceRecord
 from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
 from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.mentor import MentorConversation, MentorMessage
+from app.models.mission import Mission, MissionStep
 from app.models.portfolio import Portfolio, PortfolioHolding
 from app.models.research_project import ResearchProject
 from app.models.research_session import ResearchSession
@@ -24,6 +25,8 @@ __all__ = [
     "LessonProgress",
     "MentorConversation",
     "MentorMessage",
+    "Mission",
+    "MissionStep",
     "Portfolio",
     "PortfolioHolding",
     "ResearchProject",
