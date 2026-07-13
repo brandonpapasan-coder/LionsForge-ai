@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_graph, knowledge_memory, market, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_projects, research_sessions, research_trust_index, system, watchlists
+from app.api.routes import alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, market, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_projects, research_sessions, research_trust_index, system, watchlists
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -10,6 +10,7 @@ api_router.include_router(knowledge_graph.router, prefix="/knowledge-graph", tag
 api_router.include_router(knowledge_extraction.router, prefix="/knowledge-graph", tags=["knowledge-extraction"])
 api_router.include_router(entity_resolution.router, prefix="/knowledge-graph", tags=["entity-resolution"])
 api_router.include_router(knowledge_memory.router, prefix="/knowledge-memory", tags=["knowledge-memory"])
+api_router.include_router(knowledge_federation.router, prefix="/knowledge-federation", tags=["knowledge-federation"])
 api_router.include_router(evidence_intelligence.router, prefix="/evidence-intelligence", tags=["evidence-intelligence"])
 api_router.include_router(research_trust_index.router, prefix="/research-trust-index", tags=["research-trust-index"])
 api_router.include_router(multi_agent_consensus.router, prefix="/multi-agent-consensus", tags=["multi-agent-consensus"])
