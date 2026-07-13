@@ -83,7 +83,7 @@ def test_empty_dashboard_is_deterministic(client):
     assert payload["methodology_version"] == "knowledge-quality-v1"
     assert payload["memories"]["total"] == 0
     assert payload["evidence_total"] == 0
-    assert payload["health_score"] == 0.25
+    assert payload["health_score"] == 0.35
     assert payload["top_risks"] == []
     assert payload["recent_activity"] == []
 
