@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
@@ -57,13 +58,29 @@ const dashboard = {
   ],
 };
 
+const projects = [
+  {
+    id: 7,
+    title: "Grid Storage Study",
+    description: null,
+    objective: null,
+    status: "active",
+    context: {},
+    created_at: "2026-07-12T20:00:00Z",
+    updated_at: "2026-07-13T20:00:00Z",
+  },
+];
+
+function successfulFetch(projectDashboard = dashboard) {
+  return vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projects })
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => dashboard })
+    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projectDashboard });
+}
+
 describe("KnowledgeQualityDashboard", () => {
-  it("renders transparent quality metrics, risks, and activity", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => dashboard,
-    }));
+  it("renders transparent organization-wide metrics, risks, and activity", async () => {
+    vi.stubGlobal("fetch", successfulFetch());
 
     render(<KnowledgeQualityDashboard />);
 
@@ -72,32 +89,69 @@ describe("KnowledgeQualityDashboard", () => {
     expect(screen.getByText("Contested knowledge requires review")).toBeInTheDocument();
     expect(screen.getByText("Battery storage finding")).toBeInTheDocument();
     expect(screen.getByText(/does not validate research/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Knowledge scope" })).toBeInTheDocument();
+  });
+
+  it("loads project-scoped quality when an owned project is selected", async () => {
+    const projectDashboard = { ...dashboard, project_id: 7, health_score: 0.64 };
+    const fetchMock = successfulFetch(projectDashboard);
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<KnowledgeQualityDashboard />);
+    await screen.findByText("82%");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Knowledge scope" }), "7");
+
+    expect(await screen.findByText("64%")).toBeInTheDocument();
+    expect(screen.getByText(/Project: Grid Storage Study/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/knowledge-quality/projects/7",
+      { cache: "no-store" },
+    );
   });
 
   it("shows an honest no-baseline state for empty data", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        ...dashboard,
-        health_score: 0,
-        memories: { ...dashboard.memories, total: 0, validated: 0, provisional: 0, contested: 0 },
-        evidence_total: 0,
-        evidence_approved: 0,
-        evidence_pending_review: 0,
-        top_risks: [],
-        recent_activity: [],
-      }),
+    vi.stubGlobal("fetch", successfulFetch({
+      ...dashboard,
+      health_score: 0,
+      memories: { ...dashboard.memories, total: 0, validated: 0, provisional: 0, contested: 0 },
+      evidence_total: 0,
+      evidence_approved: 0,
+      evidence_pending_review: 0,
+      top_risks: [],
+      recent_activity: [],
     }));
+    const user = userEvent.setup();
 
     render(<KnowledgeQualityDashboard />);
+    await screen.findByText("82%");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Knowledge scope" }), "7");
 
     expect(await screen.findByText("No baseline")).toBeInTheDocument();
-    expect(screen.getByText(/No research baseline exists yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No research baseline exists for this scope yet/i)).toBeInTheDocument();
   });
 
-  it("exposes API failures through an alert", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+  it("shows a safe not-found message for inaccessible projects", async () => {
+    const fetchMock = successfulFetch();
+    fetchMock.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => projects }));
+    fetchMock.mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => dashboard }));
+    fetchMock.mockImplementationOnce(async () => ({ ok: false, status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<KnowledgeQualityDashboard />);
+    await screen.findByText("82%");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Knowledge scope" }), "7");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That research project could not be found or is not available to this account.",
+    );
+  });
+
+  it("exposes organization dashboard API failures through an alert", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [] })
+      .mockResolvedValueOnce({ ok: false, status: 500 }));
 
     render(<KnowledgeQualityDashboard />);
 
