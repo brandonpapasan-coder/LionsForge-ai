@@ -87,6 +87,7 @@ def promote_completed_mission(
             "recommendation": brief["recommendation"],
             "research_trust_index": brief["research_trust_index"],
             "consensus_status": brief["consensus_status"],
+            "unresolved_questions": brief.get("unresolved_questions", []),
         }
         state = {**candidate, "provenance": provenance}
         fingerprint = _fingerprint(state)
@@ -180,6 +181,7 @@ def update_memory(db: Session, memory: KnowledgeMemory, changes: dict) -> Knowle
         "confidence": memory.confidence,
         "source_evidence_ids": memory.source_evidence_ids,
         "provenance": memory.provenance,
+        "superseded_by_id": memory.superseded_by_id,
         "revision_number": memory.revision_number,
     }
     memory.fingerprint = _fingerprint(state)
