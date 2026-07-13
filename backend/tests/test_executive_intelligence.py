@@ -100,7 +100,7 @@ def test_executive_brief_reports_insufficient_evidence(client):
     body = response.json()
     assert body["recommendation"] == "insufficient_evidence"
     assert body["source_evidence_ids"] == []
-    assert body["decision_readiness_score"] == 30.0
+    assert body["decision_readiness_score"] == 0.0
 
 
 def test_executive_brief_requires_owned_project(client):
