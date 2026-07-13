@@ -61,6 +61,17 @@ def promote_completed_mission(
                 "source_evidence_ids": fact["evidence_ids"],
             }
         )
+    for conclusion in brief.get("provisional_conclusions", []):
+        candidates.append(
+            {
+                "statement": conclusion,
+                "summary": conclusion,
+                "category": "provisional_conclusion",
+                "status": "provisional",
+                "confidence": min(brief["overall_confidence"], 0.79),
+                "source_evidence_ids": brief["source_evidence_ids"],
+            }
+        )
     for finding in brief.get("minority_findings", []):
         candidates.append(
             {
@@ -132,6 +143,7 @@ def list_memories(
     category: str | None = None,
     mission_id: int | None = None,
     snapshot_id: int | None = None,
+    evidence_id: int | None = None,
     query: str | None = None,
 ) -> list[KnowledgeMemory]:
     stmt = select(KnowledgeMemory).where(KnowledgeMemory.owner_id == owner_id)
@@ -150,7 +162,14 @@ def list_memories(
         stmt = stmt.where(
             or_(KnowledgeMemory.statement.ilike(pattern), KnowledgeMemory.summary.ilike(pattern))
         )
-    return list(db.scalars(stmt.order_by(desc(KnowledgeMemory.updated_at), desc(KnowledgeMemory.id))).all())
+    memories = list(
+        db.scalars(
+            stmt.order_by(desc(KnowledgeMemory.updated_at), desc(KnowledgeMemory.id))
+        ).all()
+    )
+    if evidence_id is not None:
+        memories = [item for item in memories if evidence_id in item.source_evidence_ids]
+    return memories
 
 
 def revisions_for(db: Session, memory_id: int) -> list[KnowledgeMemoryRevision]:
@@ -191,7 +210,11 @@ def update_memory(db: Session, memory: KnowledgeMemory, changes: dict) -> Knowle
     return memory
 
 
-def supersede_memory(db: Session, memory: KnowledgeMemory, replacement: KnowledgeMemory) -> KnowledgeMemory:
+def supersede_memory(
+    db: Session,
+    memory: KnowledgeMemory,
+    replacement: KnowledgeMemory,
+) -> KnowledgeMemory:
     if memory.project_id != replacement.project_id:
         raise ValueError("Memories must belong to the same project")
     if memory.id == replacement.id:
