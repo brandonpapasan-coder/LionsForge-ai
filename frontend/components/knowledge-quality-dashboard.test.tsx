@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
 
