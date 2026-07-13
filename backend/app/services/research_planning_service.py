@@ -231,6 +231,7 @@ def generate_project_recommendations(
         recommendations.append(item)
         created += 1
     db.commit()
+    recommendations.sort(key=lambda item: (-item.priority_score, -item.id))
     return recommendations, created, reused
 
 
