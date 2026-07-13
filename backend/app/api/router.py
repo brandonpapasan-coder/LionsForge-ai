@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, events, factors, knowledge_extraction, knowledge_graph, market, mentor, news, portfolios, research, research_agent, research_projects, research_sessions, system, watchlists
+from app.api.routes import alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, factors, knowledge_extraction, knowledge_graph, market, mentor, news, portfolios, research, research_agent, research_projects, research_sessions, system, watchlists
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -9,6 +9,7 @@ api_router.include_router(education.router, prefix="/education", tags=["educatio
 api_router.include_router(knowledge_graph.router, prefix="/knowledge-graph", tags=["knowledge-graph"])
 api_router.include_router(knowledge_extraction.router, prefix="/knowledge-graph", tags=["knowledge-extraction"])
 api_router.include_router(entity_resolution.router, prefix="/knowledge-graph", tags=["entity-resolution"])
+api_router.include_router(evidence_intelligence.router, prefix="/evidence-intelligence", tags=["evidence-intelligence"])
 api_router.include_router(mentor.router, prefix="/mentor", tags=["mentor"])
 api_router.include_router(research.router, prefix="/research", tags=["research"])
 api_router.include_router(research_agent.router, prefix="/research-agent", tags=["research-agent"])
