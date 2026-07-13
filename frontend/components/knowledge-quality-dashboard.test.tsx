@@ -71,11 +71,22 @@ const projects = [
   },
 ];
 
+function response(body: unknown, status = 200) {
+  return Promise.resolve({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+}
+
 function successfulFetch(projectDashboard = dashboard) {
-  return vi.fn()
-    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projects })
-    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => dashboard })
-    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projectDashboard });
+  return vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/research-projects") return response(projects);
+    if (url === "/api/knowledge-quality") return response(dashboard);
+    if (url === "/api/knowledge-quality/projects/7") return response(projectDashboard);
+    return response(null, 404);
+  });
 }
 
 describe("KnowledgeQualityDashboard", () => {
@@ -104,7 +115,7 @@ describe("KnowledgeQualityDashboard", () => {
 
     expect(await screen.findByText("64%")).toBeInTheDocument();
     expect(screen.getByText(/Project: Grid Storage Study/i)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/knowledge-quality/projects/7",
       { cache: "no-store" },
     );
@@ -132,10 +143,12 @@ describe("KnowledgeQualityDashboard", () => {
   });
 
   it("shows a safe not-found message for inaccessible projects", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => projects })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => dashboard })
-      .mockResolvedValueOnce({ ok: false, status: 404 });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/research-projects") return response(projects);
+      if (url === "/api/knowledge-quality") return response(dashboard);
+      return response(null, 404);
+    });
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
@@ -149,9 +162,11 @@ describe("KnowledgeQualityDashboard", () => {
   });
 
   it("exposes organization dashboard API failures through an alert", async () => {
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [] })
-      .mockResolvedValueOnce({ ok: false, status: 500 }));
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/research-projects") return response([]);
+      return response(null, 500);
+    }));
 
     render(<KnowledgeQualityDashboard />);
 
