@@ -4,6 +4,7 @@ from app.models.education import LessonProgress
 from app.models.entity_resolution import KnowledgeEntityAlias, KnowledgeEntityMergeAudit
 from app.models.evidence import EvidenceRecord
 from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
+from app.models.knowledge_federation import KnowledgeFederationLink, KnowledgeFederationRevision
 from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
 from app.models.mentor import MentorConversation, MentorMessage
@@ -22,6 +23,8 @@ __all__ = [
     "KnowledgeEntity",
     "KnowledgeEntityAlias",
     "KnowledgeEntityMergeAudit",
+    "KnowledgeFederationLink",
+    "KnowledgeFederationRevision",
     "KnowledgeMemory",
     "KnowledgeMemoryRevision",
     "KnowledgeRelationship",
