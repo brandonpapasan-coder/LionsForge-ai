@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
 export function ExecutiveDashboard() {
@@ -56,6 +57,8 @@ export function ExecutiveDashboard() {
           </article>
         ))}
       </section>
+
+      <KnowledgeQualityDashboard />
 
       <div className="dashboard-grid">
         <section className="dashboard-panel">
