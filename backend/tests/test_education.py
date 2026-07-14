@@ -115,6 +115,131 @@ def test_education_progress_is_isolated_by_user(client):
     assert response.json()["recommended_lesson_slug"] == "financial-statements-foundations"
 
 
+def test_adaptive_assessment_requires_authentication(client):
+    assert client.get("/api/v1/education/assessment").status_code == 401
+    assert client.post(
+        "/api/v1/education/assessment",
+        json={"question_id": "fs-foundation-1", "selected_option": 1},
+    ).status_code == 401
+
+
+def test_adaptive_assessment_starts_at_foundation_and_explains_difficulty(client):
+    headers = auth_headers(client)
+    response = client.get("/api/v1/education/assessment", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lesson_slug"] == "financial-statements-foundations"
+    assert payload["competency"] == "financial-statements"
+    assert payload["difficulty"] == "foundation"
+    assert payload["difficulty_reason"] == "Foundation difficulty selected because mastery is 0%."
+    assert payload["question"]["id"] == "fs-foundation-1"
+    assert "correct_option" not in payload["question"]
+    assert payload["question"]["objective"]
+
+
+def test_correct_assessment_updates_progress_and_next_recommendation(client):
+    headers = auth_headers(client)
+    assessment = client.get("/api/v1/education/assessment", headers=headers).json()
+    response = client.post(
+        "/api/v1/education/assessment",
+        headers=headers,
+        json={"question_id": assessment["question"]["id"], "selected_option": 1},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["score"] == 100
+    assert payload["passed"] is True
+    assert payload["learning_objective"] == assessment["question"]["objective"]
+    assert payload["education_hub"]["completed_lessons"] == 1
+    assert payload["education_hub"]["recommended_lesson_slug"] == "valuation-and-cash-flow"
+
+
+def test_incorrect_assessment_keeps_lesson_in_remediation(client):
+    headers = auth_headers(client)
+    assessment = client.get("/api/v1/education/assessment", headers=headers).json()
+    response = client.post(
+        "/api/v1/education/assessment",
+        headers=headers,
+        json={"question_id": assessment["question"]["id"], "selected_option": 0},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["score"] == 0
+    assert payload["passed"] is False
+    assert payload["education_hub"]["recommended_lesson_slug"] == "financial-statements-foundations"
+    assert "below the 70% remediation threshold" in payload["education_hub"]["recommendation_reason"]
+
+
+def test_assessment_difficulty_advances_with_mastery(client):
+    headers = auth_headers(client)
+    client.put(
+        "/api/v1/education/lessons/financial-statements-foundations/progress",
+        headers=headers,
+        json={"status": "completed", "score": 95},
+    )
+    client.put(
+        "/api/v1/education/lessons/valuation-and-cash-flow/progress",
+        headers=headers,
+        json={"status": "in_progress", "score": 80},
+    )
+    response = client.get("/api/v1/education/assessment", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lesson_slug"] == "valuation-and-cash-flow"
+    assert payload["difficulty"] == "intermediate"
+    assert payload["question"]["id"] == "valuation-intermediate-1"
+
+
+def test_stale_or_invalid_assessment_submission_is_rejected(client):
+    headers = auth_headers(client)
+    stale = client.post(
+        "/api/v1/education/assessment",
+        headers=headers,
+        json={"question_id": "valuation-foundation-1", "selected_option": 0},
+    )
+    assert stale.status_code == 409
+
+    assessment = client.get("/api/v1/education/assessment", headers=headers).json()
+    invalid_option = client.post(
+        "/api/v1/education/assessment",
+        headers=headers,
+        json={"question_id": assessment["question"]["id"], "selected_option": 99},
+    )
+    assert invalid_option.status_code == 422
+
+
+def test_assessment_progress_is_isolated_by_user(client):
+    owner_headers = auth_headers(client, email="assessment-owner@example.com")
+    assessment = client.get("/api/v1/education/assessment", headers=owner_headers).json()
+    client.post(
+        "/api/v1/education/assessment",
+        headers=owner_headers,
+        json={"question_id": assessment["question"]["id"], "selected_option": 1},
+    )
+
+    other_headers = auth_headers(client, email="assessment-other@example.com")
+    other = client.get("/api/v1/education", headers=other_headers).json()
+    assert other["completed_lessons"] == 0
+    assert other["assessed_lessons"] == 0
+
+
+def test_completed_path_rejects_new_assessment(client):
+    headers = auth_headers(client)
+    for slug in (
+        "financial-statements-foundations",
+        "valuation-and-cash-flow",
+        "evidence-quality-and-bias",
+        "research-thesis-construction",
+    ):
+        client.put(
+            f"/api/v1/education/lessons/{slug}/progress",
+            headers=headers,
+            json={"status": "completed", "score": 85},
+        )
+    response = client.get("/api/v1/education/assessment", headers=headers)
+    assert response.status_code == 409
+
+
 def test_unknown_lesson_is_rejected(client):
     headers = auth_headers(client)
     response = client.put(
