@@ -14,6 +14,7 @@ from app.schemas.education import EducationHubRead, LessonProgressUpdate, Lesson
 from app.services.education import LESSON_BY_SLUG, LESSONS
 
 router = APIRouter()
+REMEDIATION_SCORE_THRESHOLD = 70
 
 
 @dataclass
@@ -35,6 +36,10 @@ def _proficiency_band(mastery_percent: int) -> str:
     return "foundation"
 
 
+def _humanize_competency(competency: str) -> str:
+    return competency.replace("-", " ")
+
+
 def _build_hub(db: Session, user_id: int) -> EducationHubRead:
     progress_rows = list(db.scalars(select(LessonProgress).where(LessonProgress.user_id == user_id)).all())
     progress_by_slug = {row.lesson_slug: row for row in progress_rows}
@@ -43,7 +48,6 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
     competency_counts: dict[str, CompetencyAccumulator] = defaultdict(CompetencyAccumulator)
     completed = 0
     scores: list[int] = []
-    recommended_lesson_slug: str | None = None
 
     for lesson in LESSONS:
         progress = progress_by_slug.get(lesson["slug"])
@@ -53,8 +57,6 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         if status == "completed":
             completed += 1
             competency.completed += 1
-        elif recommended_lesson_slug is None:
-            recommended_lesson_slug = lesson["slug"]
         if score is not None:
             scores.append(score)
             competency.scores.append(score)
@@ -69,6 +71,7 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         )
 
     competencies = []
+    competency_metrics: dict[str, tuple[int | None, int]] = {}
     for competency_name, counts in sorted(competency_counts.items()):
         completion_component = round((counts.completed / counts.total) * 100)
         average_score = round(sum(counts.scores) / len(counts.scores)) if counts.scores else None
@@ -77,6 +80,7 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
             if average_score is not None
             else completion_component
         )
+        competency_metrics[competency_name] = (average_score, mastery_percent)
         competencies.append(
             {
                 "competency": competency_name,
@@ -88,6 +92,35 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
                 "proficiency_band": _proficiency_band(mastery_percent),
             }
         )
+
+    unfinished_lessons = [lesson for lesson in lessons if lesson.status != "completed"]
+    recommended_lesson_slug: str | None = None
+    recommendation_reason = "All current lessons are complete."
+
+    weak_competencies = sorted(
+        (
+            (competency, average_score, mastery_percent)
+            for competency, (average_score, mastery_percent) in competency_metrics.items()
+            if average_score is not None and average_score < REMEDIATION_SCORE_THRESHOLD
+        ),
+        key=lambda item: (item[1], item[2], item[0]),
+    )
+    for competency, average_score, _ in weak_competencies:
+        remediation_lesson = next(
+            (lesson for lesson in unfinished_lessons if lesson.competency == competency),
+            None,
+        )
+        if remediation_lesson is not None:
+            recommended_lesson_slug = remediation_lesson.slug
+            recommendation_reason = (
+                f"Strengthen {_humanize_competency(competency)}: your {average_score}% assessment average "
+                f"is below the {REMEDIATION_SCORE_THRESHOLD}% remediation threshold."
+            )
+            break
+
+    if recommended_lesson_slug is None and unfinished_lessons:
+        recommended_lesson_slug = unfinished_lessons[0].slug
+        recommendation_reason = "Continue the curriculum with the next unfinished lesson."
 
     total = len(LESSONS)
     completion_percent = round((completed / total) * 100) if total else 0
@@ -106,6 +139,7 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         mastery_percent=mastery_percent,
         proficiency_band=_proficiency_band(mastery_percent),
         recommended_lesson_slug=recommended_lesson_slug,
+        recommendation_reason=recommendation_reason,
         lessons=lessons,
         competencies=competencies,
     )

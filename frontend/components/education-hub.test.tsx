@@ -15,6 +15,7 @@ const hub: EducationHubData = {
   mastery_percent: 64,
   proficiency_band: "proficient",
   recommended_lesson_slug: "valuation-and-cash-flow",
+  recommendation_reason: "Continue the curriculum with the next unfinished lesson.",
   lessons: [
     {
       slug: "financial-statements-foundations",
@@ -75,7 +76,7 @@ afterEach(() => {
 });
 
 describe("EducationHub", () => {
-  it("renders mastery, assessment, recommendation, and competency details", async () => {
+  it("renders mastery, recommendation rationale, and competency details", async () => {
     vi.stubGlobal("fetch", vi.fn(() => response(hub)));
 
     render(<EducationHub />);
@@ -85,10 +86,38 @@ describe("EducationHub", () => {
     expect(screen.getByText("25%")).toBeInTheDocument();
     expect(screen.getByText("90%")).toBeInTheDocument();
     expect(screen.getAllByText("Valuation and Cash Flow")).toHaveLength(2);
+    expect(screen.getByText("Continue the curriculum with the next unfinished lesson.")).toBeInTheDocument();
     expect(screen.getByText("45 minute intermediate lesson")).toBeInTheDocument();
     expect(screen.getByText("expert · 90% average")).toBeInTheDocument();
     expect(screen.getByText("foundation · not assessed")).toBeInTheDocument();
     expect(screen.getByText("recommended")).toBeInTheDocument();
+  });
+
+  it("shows a score-aware remediation explanation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        response({
+          ...hub,
+          average_score: 55,
+          recommendation_reason:
+            "Strengthen valuation: your 55% assessment average is below the 70% remediation threshold.",
+          lessons: hub.lessons.map((lesson) =>
+            lesson.slug === "valuation-and-cash-flow"
+              ? { ...lesson, status: "in_progress", score: 55 }
+              : lesson,
+          ),
+        }),
+      ),
+    );
+
+    render(<EducationHub />);
+
+    expect(
+      await screen.findByText(
+        "Strengthen valuation: your 55% assessment average is below the 70% remediation threshold.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("starts the recommended lesson and refreshes mastery data", async () => {
@@ -132,6 +161,7 @@ describe("EducationHub", () => {
           completed_lessons: 4,
           completion_percent: 100,
           recommended_lesson_slug: null,
+          recommendation_reason: "All current lessons are complete.",
         }),
       ),
     );
@@ -139,7 +169,7 @@ describe("EducationHub", () => {
     render(<EducationHub />);
 
     expect(await screen.findByText("Path complete")).toBeInTheDocument();
-    expect(screen.getByText("All current lessons completed")).toBeInTheDocument();
+    expect(screen.getByText("All current lessons are complete.")).toBeInTheDocument();
   });
 
   it("exposes load and save failures through accessible alerts", async () => {

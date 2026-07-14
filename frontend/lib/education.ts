@@ -29,6 +29,7 @@ export type EducationHubData = {
   mastery_percent: number;
   proficiency_band: string;
   recommended_lesson_slug: string | null;
+  recommendation_reason: string;
   lessons: Lesson[];
   competencies: CompetencySummary[];
 };
