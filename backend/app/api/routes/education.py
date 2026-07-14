@@ -15,45 +15,91 @@ from app.services.education import LESSON_BY_SLUG, LESSONS
 router = APIRouter()
 
 
+def _proficiency_band(mastery_percent: int) -> str:
+    if mastery_percent >= 90:
+        return "expert"
+    if mastery_percent >= 75:
+        return "advanced"
+    if mastery_percent >= 60:
+        return "proficient"
+    if mastery_percent >= 40:
+        return "developing"
+    return "foundation"
+
+
 def _build_hub(db: Session, user_id: int) -> EducationHubRead:
     progress_rows = list(db.scalars(select(LessonProgress).where(LessonProgress.user_id == user_id)).all())
     progress_by_slug = {row.lesson_slug: row for row in progress_rows}
 
     lessons: list[LessonRead] = []
-    competency_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"completed": 0, "total": 0})
+    competency_counts: dict[str, dict[str, object]] = defaultdict(
+        lambda: {"completed": 0, "total": 0, "scores": []}
+    )
     completed = 0
+    scores: list[int] = []
+    recommended_lesson_slug: str | None = None
 
     for lesson in LESSONS:
         progress = progress_by_slug.get(lesson["slug"])
         status = progress.status if progress else "not_started"
+        score = progress.score if progress else None
         if status == "completed":
             completed += 1
             competency_counts[lesson["competency"]]["completed"] += 1
+        elif recommended_lesson_slug is None:
+            recommended_lesson_slug = lesson["slug"]
+        if score is not None:
+            scores.append(score)
+            competency_counts[lesson["competency"]]["scores"].append(score)
         competency_counts[lesson["competency"]]["total"] += 1
         lessons.append(
             LessonRead(
                 **lesson,
                 status=status,
-                score=progress.score if progress else None,
+                score=score,
                 completed_at=progress.completed_at if progress else None,
             )
         )
 
-    competencies = [
-        {
-            "competency": competency,
-            "completed_lessons": counts["completed"],
-            "total_lessons": counts["total"],
-            "mastery_percent": round((counts["completed"] / counts["total"]) * 100),
-        }
-        for competency, counts in sorted(competency_counts.items())
-    ]
+    competencies = []
+    for competency, counts in sorted(competency_counts.items()):
+        competency_scores = counts["scores"]
+        completion_component = round((counts["completed"] / counts["total"]) * 100)
+        average_score = round(sum(competency_scores) / len(competency_scores)) if competency_scores else None
+        mastery_percent = (
+            round((completion_component * 0.4) + (average_score * 0.6))
+            if average_score is not None
+            else completion_component
+        )
+        competencies.append(
+            {
+                "competency": competency,
+                "completed_lessons": counts["completed"],
+                "total_lessons": counts["total"],
+                "assessed_lessons": len(competency_scores),
+                "average_score": average_score,
+                "mastery_percent": mastery_percent,
+                "proficiency_band": _proficiency_band(mastery_percent),
+            }
+        )
 
     total = len(LESSONS)
+    completion_percent = round((completed / total) * 100) if total else 0
+    average_score = round(sum(scores) / len(scores)) if scores else None
+    mastery_percent = (
+        round((completion_percent * 0.4) + (average_score * 0.6))
+        if average_score is not None
+        else completion_percent
+    )
     return EducationHubRead(
         completed_lessons=completed,
         total_lessons=total,
-        completion_percent=round((completed / total) * 100) if total else 0,
+        assessed_lessons=len(scores),
+        completion_percent=completion_percent,
+        average_score=average_score,
+        mastery_percent=mastery_percent,
+        proficiency_band=_proficiency_band(mastery_percent),
+        recommended_lesson_slug=recommended_lesson_slug,
         lessons=lessons,
         competencies=competencies,
     )
