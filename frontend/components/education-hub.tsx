@@ -79,7 +79,8 @@ export function EducationHub() {
         <article>
           <span>Recommended next step</span>
           <strong>{recommendedLesson?.title ?? "Path complete"}</strong>
-          <p>{recommendedLesson ? `${recommendedLesson.estimated_minutes} minute ${recommendedLesson.level} lesson` : "All current lessons completed"}</p>
+          <p>{data.recommendation_reason}</p>
+          {recommendedLesson ? <small>{recommendedLesson.estimated_minutes} minute {recommendedLesson.level} lesson</small> : null}
         </article>
       </section>
 
