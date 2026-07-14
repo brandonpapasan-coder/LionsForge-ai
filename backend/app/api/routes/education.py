@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,13 @@ from app.schemas.education import EducationHubRead, LessonProgressUpdate, Lesson
 from app.services.education import LESSON_BY_SLUG, LESSONS
 
 router = APIRouter()
+
+
+@dataclass
+class CompetencyAccumulator:
+    completed: int = 0
+    total: int = 0
+    scores: list[int] = field(default_factory=list)
 
 
 def _proficiency_band(mastery_percent: int) -> str:
@@ -32,9 +40,7 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
     progress_by_slug = {row.lesson_slug: row for row in progress_rows}
 
     lessons: list[LessonRead] = []
-    competency_counts: dict[str, dict[str, object]] = defaultdict(
-        lambda: {"completed": 0, "total": 0, "scores": []}
-    )
+    competency_counts: dict[str, CompetencyAccumulator] = defaultdict(CompetencyAccumulator)
     completed = 0
     scores: list[int] = []
     recommended_lesson_slug: str | None = None
@@ -43,15 +49,16 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         progress = progress_by_slug.get(lesson["slug"])
         status = progress.status if progress else "not_started"
         score = progress.score if progress else None
+        competency = competency_counts[lesson["competency"]]
         if status == "completed":
             completed += 1
-            competency_counts[lesson["competency"]]["completed"] += 1
+            competency.completed += 1
         elif recommended_lesson_slug is None:
             recommended_lesson_slug = lesson["slug"]
         if score is not None:
             scores.append(score)
-            competency_counts[lesson["competency"]]["scores"].append(score)
-        competency_counts[lesson["competency"]]["total"] += 1
+            competency.scores.append(score)
+        competency.total += 1
         lessons.append(
             LessonRead(
                 **lesson,
@@ -62,10 +69,9 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         )
 
     competencies = []
-    for competency, counts in sorted(competency_counts.items()):
-        competency_scores = counts["scores"]
-        completion_component = round((counts["completed"] / counts["total"]) * 100)
-        average_score = round(sum(competency_scores) / len(competency_scores)) if competency_scores else None
+    for competency_name, counts in sorted(competency_counts.items()):
+        completion_component = round((counts.completed / counts.total) * 100)
+        average_score = round(sum(counts.scores) / len(counts.scores)) if counts.scores else None
         mastery_percent = (
             round((completion_component * 0.4) + (average_score * 0.6))
             if average_score is not None
@@ -73,10 +79,10 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         )
         competencies.append(
             {
-                "competency": competency,
-                "completed_lessons": counts["completed"],
-                "total_lessons": counts["total"],
-                "assessed_lessons": len(competency_scores),
+                "competency": competency_name,
+                "completed_lessons": counts.completed,
+                "total_lessons": counts.total,
+                "assessed_lessons": len(counts.scores),
                 "average_score": average_score,
                 "mastery_percent": mastery_percent,
                 "proficiency_band": _proficiency_band(mastery_percent),
