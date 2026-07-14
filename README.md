@@ -1,10 +1,30 @@
 # LionsForge AI
 
-AI-powered investment research and trading platform.
+LionsForge AI is an AI-assisted research, evidence validation, knowledge management, and education platform. It is designed to help people investigate complex questions, organize supporting material, expose uncertainty, preserve research history, and strengthen research skills while keeping humans responsible for conclusions and approvals.
 
 ## Current status
 
-LionsForge AI is in early MVP development. The backend uses FastAPI with versioned APIs for research, market data, news, watchlists, portfolios, alerts, education, and future trading workflows.
+The repository is under active MVP development. The current application includes a FastAPI backend, a Next.js frontend, authenticated research workflows, institutional knowledge-quality views, automated backend and frontend testing, deployment validation, and security checks.
+
+The repository also contains legacy investment-research modules from an earlier product direction. Those modules are not the strategic focus of LionsForge AI and should be treated as compatibility or migration candidates until they are explicitly retained, reframed, or removed.
+
+## Product principles
+
+- Evidence and provenance should remain visible.
+- AI output should distinguish evidence, inference, assumptions, and uncertainty.
+- Significant research conclusions remain subject to human review.
+- Knowledge changes should be traceable through history and audit records.
+- Education should be integrated with practical research workflows.
+- Security, accessibility, reliability, and maintainability are release requirements.
+
+## Repository structure
+
+```text
+backend/     FastAPI application, data models, services, and backend tests
+frontend/    Next.js application, API proxies, components, and Vitest tests
+infra/       Deployment and infrastructure definitions when present
+docs/        Engineering, testing, and operational documentation
+```
 
 ## Backend quick start
 
@@ -27,80 +47,71 @@ python -m app.db.init_db
 python scripts/smoke_backend.py
 ```
 
-API docs:
+API documentation is available locally at:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-## Available endpoints
+## Frontend quick start
 
-```text
-GET  /
-GET  /health
-GET  /ready
-GET  /platform
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-GET  /api/v1/auth/me
-POST /api/v1/research/analyze
-GET  /api/v1/research/context/{ticker}
-GET  /api/v1/research/evidence/{ticker}
-GET  /api/v1/research/confidence/{ticker}
-GET  /api/v1/research/thesis/{ticker}
-GET  /api/v1/market/quotes/{symbol}
-POST /api/v1/market/quotes
-GET  /api/v1/news/market
-GET  /api/v1/news/company/{symbol}
-GET  /api/v1/watchlists
-POST /api/v1/watchlists
-GET  /api/v1/portfolios
-POST /api/v1/portfolios
-POST /api/v1/portfolios/{portfolio_id}/holdings
-GET  /api/v1/portfolios/{portfolio_id}/value
-GET  /api/v1/portfolios/{portfolio_id}/performance
-GET  /api/v1/portfolios/{portfolio_id}/holdings/value
-GET  /api/v1/portfolios/{portfolio_id}/holdings/allocation
-GET  /api/v1/alerts
-POST /api/v1/alerts
-GET  /api/v1/alerts/evaluate
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-Authenticated routes use bearer tokens from `/api/v1/auth/login`.
+Common validation commands:
 
-## Backend foundation added
+```bash
+npm test
+npx tsc --noEmit
+npm run build
+```
 
-- FastAPI application with versioned routing
-- Environment-driven settings
-- SQLAlchemy database session setup
-- SQLite local database default
-- User account model and auth routes
-- Authenticated profile endpoint
-- Protected watchlist routes
-- Protected portfolio routes
-- Protected alert routes
-- Market provider abstraction, quote cache, and quote endpoints
-- Evidence-driven research context with quote and news evidence
-- Evidence-backed research confidence scoring
-- Explainable investment thesis endpoint
-- Persistent watchlist model and endpoints
-- Persistent portfolio models and analytics endpoints
-- Persistent alert model and evaluation endpoint
-- Mock news API contract
+## Active platform capabilities
 
-## MVP roadmap
+Current development is centered on:
 
-1. Backend API foundation
-2. User accounts
-3. Database models for saved lists, portfolios, and alerts
-4. Market data provider integration
-5. News and filing ingestion
-6. AI research summary engine
-7. Portfolio monitoring
-8. Trading simulation and broker integration
-9. Web dashboard
-10. Mobile-ready API support
+- User authentication and protected application routes
+- Research projects and project-scoped workflows
+- Evidence and institutional knowledge records
+- Knowledge-quality metrics, risks, priorities, and recent activity
+- Project-level quality drill-down with safe inaccessible-project handling
+- Transparent no-baseline states for empty research scopes
+- Frontend component testing with Vitest and Testing Library
+- Backend CI, Frontend CI, Security Gate, and Deployment Validation workflows
 
-## Compliance note
+## API direction
 
-LionsForge AI is intended to support research and education workflows. Live trading features must include risk controls, audit logs, user disclosures, and regulatory review before production use.
+The target API surface is organized around research, evidence, knowledge, education, administration, and platform operations. Authenticated routes use bearer tokens obtained through the authentication API.
+
+The repository currently retains older market, watchlist, portfolio, alert, and ticker-oriented research endpoints. They are considered legacy until a separate architecture decision determines whether each endpoint should be removed, archived, or adapted into a general research example.
+
+## Engineering workflow
+
+Changes should be delivered through focused pull requests and must pass the repository's required quality gates:
+
+- Backend tests and validation
+- Frontend tests, type checking, application build, and production container build
+- Security Gate
+- Deployment Validation
+- Documentation updates when behavior or setup changes
+
+Tests should cover successful, loading, empty, unauthorized, not-found, and failed states where those states exist. User-visible status must not rely on color alone.
+
+## Near-term priorities
+
+1. Remove or isolate obsolete trading-era product assumptions.
+2. Expand automated coverage across authentication, API proxies, and race conditions.
+3. Make frontend dependency installation deterministic with a committed lockfile and `npm ci`.
+4. Improve request cancellation and stale-data handling in asynchronous dashboards.
+5. Continue building the research, validation, knowledge, and education workflows around transparent human oversight.
+
+## Legacy financial modules
+
+Legacy financial functionality may include market quotes, company news, watchlists, portfolios, holdings analytics, alerts, and ticker-based research. Its presence in the repository does not indicate that LionsForge AI is an active trading platform. No live trading capability should be introduced without a new, explicit product decision and appropriate security, risk, legal, and regulatory review.
+
+## License and contribution status
+
+Contribution and licensing guidance should be added before broader external distribution. Until then, repository changes should follow existing branch protections, review expectations, and automated checks.
