@@ -13,7 +13,12 @@ def test_education_hub_returns_catalog_and_progress(client):
     payload = initial.json()
     assert payload["total_lessons"] == 4
     assert payload["completed_lessons"] == 0
+    assert payload["assessed_lessons"] == 0
     assert payload["completion_percent"] == 0
+    assert payload["average_score"] is None
+    assert payload["mastery_percent"] == 0
+    assert payload["proficiency_band"] == "foundation"
+    assert payload["recommended_lesson_slug"] == "financial-statements-foundations"
 
     updated = client.put(
         "/api/v1/education/lessons/financial-statements-foundations/progress",
@@ -23,11 +28,24 @@ def test_education_hub_returns_catalog_and_progress(client):
     assert updated.status_code == 200
     payload = updated.json()
     assert payload["completed_lessons"] == 1
+    assert payload["assessed_lessons"] == 1
     assert payload["completion_percent"] == 25
+    assert payload["average_score"] == 90
+    assert payload["mastery_percent"] == 64
+    assert payload["proficiency_band"] == "proficient"
+    assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
     lesson = next(item for item in payload["lessons"] if item["slug"] == "financial-statements-foundations")
     assert lesson["status"] == "completed"
     assert lesson["score"] == 90
     assert lesson["completed_at"] is not None
+
+    competency = next(
+        item for item in payload["competencies"] if item["competency"] == lesson["competency"]
+    )
+    assert competency["assessed_lessons"] == 1
+    assert competency["average_score"] == 90
+    assert competency["mastery_percent"] == 94
+    assert competency["proficiency_band"] == "expert"
 
 
 def test_education_progress_is_isolated_by_user(client):
@@ -42,6 +60,7 @@ def test_education_progress_is_isolated_by_user(client):
     response = client.get("/api/v1/education", headers=other_headers)
     assert response.status_code == 200
     assert response.json()["completed_lessons"] == 0
+    assert response.json()["assessed_lessons"] == 0
 
 
 def test_unknown_lesson_is_rejected(client):
