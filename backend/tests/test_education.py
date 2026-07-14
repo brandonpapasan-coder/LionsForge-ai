@@ -40,7 +40,7 @@ def test_education_hub_returns_catalog_and_progress(client):
     assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
     assert (
         payload["recommendation_reason"]
-        == "Continue the curriculum with the next available foundation lesson."
+        == "Continue with Valuation and Cash Flow; its prerequisite lessons are complete."
     )
     lesson = next(item for item in payload["lessons"] if item["slug"] == "financial-statements-foundations")
     assert lesson["status"] == "completed"
