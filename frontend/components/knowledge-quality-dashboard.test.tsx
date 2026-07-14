@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
@@ -181,5 +182,38 @@ describe("KnowledgeQualityDashboard", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("Institutional knowledge quality could not be loaded.");
     });
+  });
+
+  it("handles unauthorized responses without exposing dashboard data", async () => {
+    const navigationError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.fn(() => response(null, 401));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<KnowledgeQualityDashboard />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/knowledge-quality", { cache: "no-store" });
+    });
+    expect(screen.queryByText("82%")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+    navigationError.mockRestore();
+  });
+
+  it("allows keyboard users to reach and operate the knowledge-scope selector", async () => {
+    const user = userEvent.setup();
+    const projectDashboard: KnowledgeQualityDashboardData = { ...dashboard, project_id: 7, health_score: 0.64 };
+    vi.stubGlobal("fetch", successfulFetch(projectDashboard));
+
+    render(<KnowledgeQualityDashboard />);
+    await screen.findByText("82%");
+
+    const selector = screen.getByRole("combobox", { name: "Knowledge scope" });
+    await user.tab();
+    expect(selector).toHaveFocus();
+    await user.selectOptions(selector, "7");
+
+    expect(await screen.findByText("64%")).toBeInTheDocument();
+    expect(selector).toHaveValue("7");
   });
 });
