@@ -135,7 +135,7 @@ describe("EducationHub", () => {
 
     expect(await screen.findByLabelText("64% mastery")).toBeInTheDocument();
     expect(screen.getByText("proficient mastery")).toBeInTheDocument();
-    expect(screen.getAllByText("Valuation and Cash Flow")).toHaveLength(3);
+    expect(screen.getAllByText("Valuation and Cash Flow")).toHaveLength(2);
 
     const recommended = lessonCard("Valuation and Cash Flow");
     expect(recommended).toHaveAttribute("data-path-state", "recommended");
