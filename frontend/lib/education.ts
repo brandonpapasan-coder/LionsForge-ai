@@ -33,3 +33,29 @@ export type EducationHubData = {
   lessons: Lesson[];
   competencies: CompetencySummary[];
 };
+
+export type AssessmentQuestion = {
+  id: string;
+  prompt: string;
+  options: string[];
+  objective: string;
+};
+
+export type AdaptiveAssessment = {
+  lesson_slug: string;
+  competency: string;
+  difficulty: string;
+  difficulty_reason: string;
+  question: AssessmentQuestion;
+};
+
+export type AssessmentResult = {
+  lesson_slug: string;
+  competency: string;
+  difficulty: string;
+  score: number;
+  passed: boolean;
+  feedback: string;
+  learning_objective: string;
+  education_hub: EducationHubData;
+};
