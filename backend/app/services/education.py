@@ -6,6 +6,7 @@ LESSONS = [
         "level": "foundation",
         "competency": "financial-statements",
         "estimated_minutes": 35,
+        "prerequisites": [],
     },
     {
         "slug": "valuation-and-cash-flow",
@@ -14,6 +15,7 @@ LESSONS = [
         "level": "intermediate",
         "competency": "valuation",
         "estimated_minutes": 45,
+        "prerequisites": ["financial-statements-foundations"],
     },
     {
         "slug": "evidence-quality-and-bias",
@@ -22,6 +24,7 @@ LESSONS = [
         "level": "foundation",
         "competency": "evidence-evaluation",
         "estimated_minutes": 30,
+        "prerequisites": [],
     },
     {
         "slug": "research-thesis-construction",
@@ -30,6 +33,7 @@ LESSONS = [
         "level": "intermediate",
         "competency": "research-reasoning",
         "estimated_minutes": 40,
+        "prerequisites": ["evidence-quality-and-bias"],
     },
 ]
 
