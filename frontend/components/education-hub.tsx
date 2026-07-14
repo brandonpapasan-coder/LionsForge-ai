@@ -35,6 +35,7 @@ export function EducationHub() {
   }, []);
 
   async function updateLesson(lesson: Lesson, status: "in_progress" | "completed") {
+    if (lesson.path_state === "locked") return;
     setUpdating(lesson.slug);
     setError(null);
     try {
@@ -44,7 +45,7 @@ export function EducationHub() {
         body: JSON.stringify({ status, score: status === "completed" ? 100 : null }),
       });
       if (!response.ok) {
-        setError("Lesson progress could not be saved.");
+        setError(response.status === 409 ? "Complete the prerequisite lessons before starting this lesson." : "Lesson progress could not be saved.");
         return;
       }
       setData((await response.json()) as EducationHubData);
@@ -205,32 +206,49 @@ export function EducationHub() {
         ))}
       </section>
 
-      <section className="lesson-grid">
-        {data.lessons.map((lesson) => (
-          <article className="lesson-card" key={lesson.slug} data-recommended={lesson.slug === data.recommended_lesson_slug}>
-            <div className="lesson-meta">
-              <span>{lesson.level}</span>
-              <span>{lesson.estimated_minutes} min</span>
-              {lesson.slug === data.recommended_lesson_slug ? <span>recommended</span> : null}
-            </div>
-            <h2>{lesson.title}</h2>
-            <p>{lesson.description}</p>
-            <div className="lesson-footer">
-              <span className={`lesson-status status-${lesson.status}`}>{lesson.status.replaceAll("_", " ")}</span>
-              {lesson.status === "completed" ? (
-                <strong>Score {lesson.score ?? 100}%</strong>
+      <section className="lesson-grid" aria-label="Adaptive learning path">
+        {data.lessons.map((lesson) => {
+          const locked = lesson.path_state === "locked";
+          return (
+            <article
+              className="lesson-card"
+              key={lesson.slug}
+              data-path-state={lesson.path_state}
+              data-recommended={lesson.slug === data.recommended_lesson_slug}
+              aria-label={`${lesson.title}: ${lesson.path_state}`}
+            >
+              <div className="lesson-meta">
+                <span>{lesson.level}</span>
+                <span>{lesson.estimated_minutes} min</span>
+                <span>{lesson.path_state}</span>
+              </div>
+              <h2>{lesson.title}</h2>
+              <p>{lesson.description}</p>
+              <p>{lesson.path_reason}</p>
+              {lesson.prerequisites.length > 0 ? (
+                <small>Prerequisites: {lesson.prerequisites.map((slug) => data.lessons.find((item) => item.slug === slug)?.title ?? slug).join(", ")}</small>
               ) : (
-                <button
-                  type="button"
-                  disabled={updating === lesson.slug}
-                  onClick={() => void updateLesson(lesson, lesson.status === "not_started" ? "in_progress" : "completed")}
-                >
-                  {updating === lesson.slug ? "Saving…" : lesson.status === "not_started" ? "Start lesson" : "Complete lesson"}
-                </button>
+                <small>No prerequisite lessons.</small>
               )}
-            </div>
-          </article>
-        ))}
+              <div className="lesson-footer">
+                <span className={`lesson-status status-${lesson.status}`}>{lesson.status.replaceAll("_", " ")}</span>
+                {lesson.status === "completed" ? (
+                  <strong>Score {lesson.score ?? 100}%</strong>
+                ) : locked ? (
+                  <button type="button" disabled>Complete prerequisites</button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={updating === lesson.slug}
+                    onClick={() => void updateLesson(lesson, lesson.status === "not_started" ? "in_progress" : "completed")}
+                  >
+                    {updating === lesson.slug ? "Saving…" : lesson.status === "not_started" ? "Start lesson" : "Complete lesson"}
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })}
       </section>
 
       {error ? <p className="form-message" role="alert">{error}</p> : null}
