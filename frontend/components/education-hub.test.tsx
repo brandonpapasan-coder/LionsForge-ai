@@ -84,7 +84,7 @@ describe("EducationHub", () => {
     expect(screen.getByText("proficient mastery")).toBeInTheDocument();
     expect(screen.getByText("25%")).toBeInTheDocument();
     expect(screen.getByText("90%")).toBeInTheDocument();
-    expect(screen.getByText("Valuation and Cash Flow")).toBeInTheDocument();
+    expect(screen.getAllByText("Valuation and Cash Flow")).toHaveLength(2);
     expect(screen.getByText("45 minute intermediate lesson")).toBeInTheDocument();
     expect(screen.getByText("expert · 90% average")).toBeInTheDocument();
     expect(screen.getByText("foundation · not assessed")).toBeInTheDocument();
