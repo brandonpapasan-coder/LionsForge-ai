@@ -5,9 +5,12 @@ export type Lesson = {
   level: string;
   competency: string;
   estimated_minutes: number;
+  prerequisites: string[];
   status: string;
   score: number | null;
   completed_at: string | null;
+  path_state: "available" | "recommended" | "locked" | "completed" | "remediation";
+  path_reason: string;
 };
 
 export type CompetencySummary = {
