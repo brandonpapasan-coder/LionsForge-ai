@@ -39,5 +39,6 @@ class EducationHubRead(BaseModel):
     mastery_percent: int
     proficiency_band: str
     recommended_lesson_slug: str | None
+    recommendation_reason: str
     lessons: list[LessonRead]
     competencies: list[CompetencySummary]
