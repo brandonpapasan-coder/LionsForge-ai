@@ -14,13 +14,21 @@ export type CompetencySummary = {
   competency: string;
   completed_lessons: number;
   total_lessons: number;
+  assessed_lessons: number;
+  average_score: number | null;
   mastery_percent: number;
+  proficiency_band: string;
 };
 
 export type EducationHubData = {
   completed_lessons: number;
   total_lessons: number;
+  assessed_lessons: number;
   completion_percent: number;
+  average_score: number | null;
+  mastery_percent: number;
+  proficiency_band: string;
+  recommended_lesson_slug: string | null;
   lessons: Lesson[];
   competencies: CompetencySummary[];
 };

@@ -49,6 +49,8 @@ export function EducationHub() {
   if (error && !data) return <section className="education-state" role="alert">{error}</section>;
   if (!data) return <section className="education-state">Loading your learning path…</section>;
 
+  const recommendedLesson = data.lessons.find((lesson) => lesson.slug === data.recommended_lesson_slug);
+
   return (
     <div className="education-shell">
       <header className="education-hero">
@@ -57,28 +59,47 @@ export function EducationHub() {
           <h1>Build durable mastery.</h1>
           <p>Complete focused lessons that directly strengthen research quality and decision-making.</p>
         </div>
-        <div className="education-progress-ring" aria-label={`${data.completion_percent}% complete`}>
-          <strong>{data.completion_percent}%</strong>
-          <span>{data.completed_lessons} of {data.total_lessons} lessons</span>
+        <div className="education-progress-ring" aria-label={`${data.mastery_percent}% mastery`}>
+          <strong>{data.mastery_percent}%</strong>
+          <span>{data.proficiency_band} mastery</span>
         </div>
       </header>
 
-      <section className="competency-grid">
+      <section className="competency-grid" aria-label="Learning overview">
+        <article>
+          <span>Curriculum progress</span>
+          <strong>{data.completion_percent}%</strong>
+          <p>{data.completed_lessons} of {data.total_lessons} lessons completed</p>
+        </article>
+        <article>
+          <span>Assessment performance</span>
+          <strong>{data.average_score === null ? "—" : `${data.average_score}%`}</strong>
+          <p>{data.assessed_lessons} assessed lessons</p>
+        </article>
+        <article>
+          <span>Recommended next step</span>
+          <strong>{recommendedLesson?.title ?? "Path complete"}</strong>
+          <p>{recommendedLesson ? `${recommendedLesson.estimated_minutes} minute ${recommendedLesson.level} lesson` : "All current lessons completed"}</p>
+        </article>
+      </section>
+
+      <section className="competency-grid" aria-label="Competency mastery">
         {data.competencies.map((competency) => (
           <article key={competency.competency}>
             <span>{competency.competency.replaceAll("-", " ")}</span>
             <strong>{competency.mastery_percent}%</strong>
-            <p>{competency.completed_lessons} of {competency.total_lessons} completed</p>
+            <p>{competency.proficiency_band} · {competency.average_score === null ? "not assessed" : `${competency.average_score}% average`}</p>
           </article>
         ))}
       </section>
 
       <section className="lesson-grid">
         {data.lessons.map((lesson) => (
-          <article className="lesson-card" key={lesson.slug}>
+          <article className="lesson-card" key={lesson.slug} data-recommended={lesson.slug === data.recommended_lesson_slug}>
             <div className="lesson-meta">
               <span>{lesson.level}</span>
               <span>{lesson.estimated_minutes} min</span>
+              {lesson.slug === data.recommended_lesson_slug ? <span>recommended</span> : null}
             </div>
             <h2>{lesson.title}</h2>
             <p>{lesson.description}</p>
