@@ -15,9 +15,12 @@ class LessonRead(BaseModel):
     level: str
     competency: str
     estimated_minutes: int
+    prerequisites: list[str]
     status: str
     score: int | None
     completed_at: datetime | None
+    path_state: str
+    path_reason: str
 
 
 class CompetencySummary(BaseModel):

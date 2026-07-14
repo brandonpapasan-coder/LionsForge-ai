@@ -19,7 +19,10 @@ def test_education_hub_returns_catalog_and_progress(client):
     assert payload["mastery_percent"] == 0
     assert payload["proficiency_band"] == "foundation"
     assert payload["recommended_lesson_slug"] == "financial-statements-foundations"
-    assert payload["recommendation_reason"] == "Continue the curriculum with the next unfinished lesson."
+    assert (
+        payload["recommendation_reason"]
+        == "Continue the curriculum with the next available foundation lesson."
+    )
 
     updated = client.put(
         "/api/v1/education/lessons/financial-statements-foundations/progress",
@@ -35,7 +38,10 @@ def test_education_hub_returns_catalog_and_progress(client):
     assert payload["mastery_percent"] == 64
     assert payload["proficiency_band"] == "proficient"
     assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
-    assert payload["recommendation_reason"] == "Continue the curriculum with the next unfinished lesson."
+    assert (
+        payload["recommendation_reason"]
+        == "Continue with Valuation and Cash Flow; its prerequisite lessons are complete."
+    )
     lesson = next(item for item in payload["lessons"] if item["slug"] == "financial-statements-foundations")
     assert lesson["status"] == "completed"
     assert lesson["score"] == 90
@@ -73,7 +79,7 @@ def test_low_score_prioritizes_unfinished_remediation(client):
     payload = response.json()
     assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
     assert payload["recommendation_reason"] == (
-        "Strengthen valuation: your 55% assessment average is below the 70% remediation threshold."
+        "Strengthen valuation: the latest 55% assessment score is below the 70% mastery threshold."
     )
 
 
@@ -167,7 +173,7 @@ def test_incorrect_assessment_keeps_lesson_in_remediation(client):
     assert payload["score"] == 0
     assert payload["passed"] is False
     assert payload["education_hub"]["recommended_lesson_slug"] == "financial-statements-foundations"
-    assert "below the 70% remediation threshold" in payload["education_hub"]["recommendation_reason"]
+    assert "below the 70% mastery threshold" in payload["education_hub"]["recommendation_reason"]
 
 
 def test_assessment_difficulty_advances_with_mastery(client):
