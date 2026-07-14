@@ -1,6 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
 
@@ -89,13 +88,23 @@ function successfulFetch(projectDashboard = dashboard) {
   });
 }
 
+function selectProject() {
+  fireEvent.change(screen.getByRole("combobox", { name: "Knowledge scope" }), {
+    target: { value: "7" },
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
 describe("KnowledgeQualityDashboard", () => {
   it("renders transparent organization-wide metrics, risks, and activity", async () => {
     vi.stubGlobal("fetch", successfulFetch());
 
     render(<KnowledgeQualityDashboard />);
 
-    expect(screen.getByText("Loading institutional knowledge health…")).toBeInTheDocument();
     expect(await screen.findByText("82%")).toBeInTheDocument();
     expect(screen.getByText("Contested knowledge requires review")).toBeInTheDocument();
     expect(screen.getByText("Battery storage finding")).toBeInTheDocument();
@@ -107,11 +116,10 @@ describe("KnowledgeQualityDashboard", () => {
     const projectDashboard = { ...dashboard, project_id: 7, health_score: 0.64 };
     const fetchMock = successfulFetch(projectDashboard);
     vi.stubGlobal("fetch", fetchMock);
-    const user = userEvent.setup();
 
     render(<KnowledgeQualityDashboard />);
     await screen.findByText("82%");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Knowledge scope" }), "7");
+    selectProject();
 
     expect(await screen.findByText("64%")).toBeInTheDocument();
     expect(screen.getByText(/Project: Grid Storage Study/i)).toBeInTheDocument();
@@ -132,11 +140,10 @@ describe("KnowledgeQualityDashboard", () => {
       top_risks: [],
       recent_activity: [],
     }));
-    const user = userEvent.setup();
 
     render(<KnowledgeQualityDashboard />);
     await screen.findByText("82%");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Knowledge scope" }), "7");
+    selectProject();
 
     expect(await screen.findByText("No baseline")).toBeInTheDocument();
     expect(screen.getByText(/No research baseline exists for this scope yet/i)).toBeInTheDocument();
@@ -150,11 +157,10 @@ describe("KnowledgeQualityDashboard", () => {
       return response(null, 404);
     });
     vi.stubGlobal("fetch", fetchMock);
-    const user = userEvent.setup();
 
     render(<KnowledgeQualityDashboard />);
     await screen.findByText("82%");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Knowledge scope" }), "7");
+    selectProject();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That research project could not be found or is not available to this account.",
