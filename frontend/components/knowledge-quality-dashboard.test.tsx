@@ -3,8 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
+import type { KnowledgeQualityDashboard as KnowledgeQualityDashboardData } from "@/lib/knowledge-quality";
 
-const dashboard = {
+const dashboard: KnowledgeQualityDashboardData = {
   project_id: null,
   methodology_version: "knowledge-quality-v1",
   generated_at: "2026-07-13T20:00:00Z",
@@ -79,7 +80,7 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function successfulFetch(projectDashboard = dashboard) {
+function successfulFetch(projectDashboard: KnowledgeQualityDashboardData = dashboard) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/api/research-projects") return response(projects);
@@ -114,7 +115,7 @@ describe("KnowledgeQualityDashboard", () => {
   });
 
   it("loads project-scoped quality when an owned project is selected", async () => {
-    const projectDashboard = { ...dashboard, project_id: 7, health_score: 0.64 };
+    const projectDashboard: KnowledgeQualityDashboardData = { ...dashboard, project_id: 7, health_score: 0.64 };
     const fetchMock = successfulFetch(projectDashboard);
     vi.stubGlobal("fetch", fetchMock);
 
