@@ -24,12 +24,20 @@ class CompetencySummary(BaseModel):
     competency: str
     completed_lessons: int
     total_lessons: int
+    assessed_lessons: int
+    average_score: int | None
     mastery_percent: int
+    proficiency_band: str
 
 
 class EducationHubRead(BaseModel):
     completed_lessons: int
     total_lessons: int
+    assessed_lessons: int
     completion_percent: int
+    average_score: int | None
+    mastery_percent: int
+    proficiency_band: str
+    recommended_lesson_slug: str | None
     lessons: list[LessonRead]
     competencies: list[CompetencySummary]
