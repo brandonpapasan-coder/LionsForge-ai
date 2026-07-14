@@ -33,7 +33,7 @@ def test_education_hub_returns_catalog_and_progress(client):
     assert payload["average_score"] == 90
     assert payload["mastery_percent"] == 64
     assert payload["proficiency_band"] == "proficient"
-    assert payload["recommended_lesson_slug"] == "evidence-quality-and-bias"
+    assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
     lesson = next(item for item in payload["lessons"] if item["slug"] == "financial-statements-foundations")
     assert lesson["status"] == "completed"
     assert lesson["score"] == 90
