@@ -2,12 +2,21 @@
 
 import { useEffect, useState } from "react";
 
-import type { EducationHubData, Lesson } from "@/lib/education";
+import type {
+  AdaptiveAssessment,
+  AssessmentResult,
+  EducationHubData,
+  Lesson,
+} from "@/lib/education";
 
 export function EducationHub() {
   const [data, setData] = useState<EducationHubData | null>(null);
+  const [assessment, setAssessment] = useState<AdaptiveAssessment | null>(null);
+  const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [assessmentBusy, setAssessmentBusy] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -46,6 +55,58 @@ export function EducationHub() {
     }
   }
 
+  async function loadAssessment() {
+    setAssessmentBusy(true);
+    setAssessmentResult(null);
+    setSelectedOption(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/education/assessment", { cache: "no-store" });
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!response.ok) {
+        setError(response.status === 409 ? "Complete-path learners do not have another assessment yet." : "The adaptive assessment could not be loaded.");
+        return;
+      }
+      setAssessment((await response.json()) as AdaptiveAssessment);
+    } catch {
+      setError("The education service is unavailable.");
+    } finally {
+      setAssessmentBusy(false);
+    }
+  }
+
+  async function submitAssessment() {
+    if (!assessment || selectedOption === null) return;
+    setAssessmentBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/education/assessment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          question_id: assessment.question.id,
+          selected_option: selectedOption,
+        }),
+      });
+      if (!response.ok) {
+        setError("The assessment response could not be scored.");
+        return;
+      }
+      const result = (await response.json()) as AssessmentResult;
+      setAssessmentResult(result);
+      setData(result.education_hub);
+      setAssessment(null);
+      setSelectedOption(null);
+    } catch {
+      setError("The education service is unavailable.");
+    } finally {
+      setAssessmentBusy(false);
+    }
+  }
+
   if (error && !data) return <section className="education-state" role="alert">{error}</section>;
   if (!data) return <section className="education-state">Loading your learning path…</section>;
 
@@ -57,7 +118,7 @@ export function EducationHub() {
         <div>
           <p className="eyebrow">EDUCATION HUB</p>
           <h1>Build durable mastery.</h1>
-          <p>Complete focused lessons that directly strengthen research quality and decision-making.</p>
+          <p>Complete focused lessons and adaptive competency checks that strengthen research quality and decision-making.</p>
         </div>
         <div className="education-progress-ring" aria-label={`${data.mastery_percent}% mastery`}>
           <strong>{data.mastery_percent}%</strong>
@@ -82,6 +143,56 @@ export function EducationHub() {
           <p>{data.recommendation_reason}</p>
           {recommendedLesson ? <small>{recommendedLesson.estimated_minutes} minute {recommendedLesson.level} lesson</small> : null}
         </article>
+      </section>
+
+      <section className="lesson-card" aria-label="Adaptive competency assessment">
+        <div className="lesson-meta">
+          <span>adaptive assessment</span>
+          {assessment ? <span>{assessment.difficulty}</span> : null}
+        </div>
+        <h2>Competency check</h2>
+        {!assessment && !assessmentResult ? (
+          <>
+            <p>Measure your current understanding and update your learning path with an explainable, competency-based checkpoint.</p>
+            <button type="button" disabled={assessmentBusy || !data.recommended_lesson_slug} onClick={() => void loadAssessment()}>
+              {assessmentBusy ? "Loading…" : data.recommended_lesson_slug ? "Begin assessment" : "Path complete"}
+            </button>
+          </>
+        ) : null}
+        {assessment ? (
+          <div>
+            <p><strong>{assessment.competency.replaceAll("-", " ")}</strong> · {assessment.difficulty_reason}</p>
+            <p>{assessment.question.objective}</p>
+            <fieldset>
+              <legend>{assessment.question.prompt}</legend>
+              {assessment.question.options.map((option, index) => (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="assessment-option"
+                    value={index}
+                    checked={selectedOption === index}
+                    onChange={() => setSelectedOption(index)}
+                  />
+                  {option}
+                </label>
+              ))}
+            </fieldset>
+            <button type="button" disabled={assessmentBusy || selectedOption === null} onClick={() => void submitAssessment()}>
+              {assessmentBusy ? "Scoring…" : "Submit assessment"}
+            </button>
+          </div>
+        ) : null}
+        {assessmentResult ? (
+          <div role="status">
+            <p><strong>{assessmentResult.score}% · {assessmentResult.passed ? "Passed" : "Needs review"}</strong></p>
+            <p>{assessmentResult.feedback}</p>
+            <p>Learning objective: {assessmentResult.learning_objective}</p>
+            <button type="button" disabled={assessmentBusy || !data.recommended_lesson_slug} onClick={() => void loadAssessment()}>
+              {data.recommended_lesson_slug ? "Take next assessment" : "Learning path complete"}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="competency-grid" aria-label="Competency mastery">

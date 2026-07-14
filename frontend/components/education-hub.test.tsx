@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EducationHub } from "@/components/education-hub";
-import type { EducationHubData } from "@/lib/education";
+import type { AdaptiveAssessment, AssessmentResult, EducationHubData } from "@/lib/education";
 
 const hub: EducationHubData = {
   completed_lessons: 1,
@@ -62,6 +62,19 @@ const hub: EducationHubData = {
   ],
 };
 
+const assessment: AdaptiveAssessment = {
+  lesson_slug: "valuation-and-cash-flow",
+  competency: "valuation",
+  difficulty: "foundation",
+  difficulty_reason: "Foundation difficulty was selected because valuation mastery is 0%.",
+  question: {
+    id: "valuation-foundation-1",
+    prompt: "What does discounted cash-flow analysis estimate?",
+    options: ["Intrinsic value from future cash flows", "Historical book value only", "Daily trading volume"],
+    objective: "Explain the purpose of discounted cash-flow valuation.",
+  },
+};
+
 function response(body: unknown, status = 200) {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
@@ -91,6 +104,76 @@ describe("EducationHub", () => {
     expect(screen.getByText("expert · 90% average")).toBeInTheDocument();
     expect(screen.getByText("foundation · not assessed")).toBeInTheDocument();
     expect(screen.getByText("recommended")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Begin assessment" })).toBeInTheDocument();
+  });
+
+  it("loads and displays an explainable adaptive assessment", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementationOnce(() => response(hub)).mockImplementationOnce(() => response(assessment));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EducationHub />);
+    await user.click(await screen.findByRole("button", { name: "Begin assessment" }));
+
+    expect(await screen.findByText("What does discounted cash-flow analysis estimate?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Adaptive competency assessment")).toHaveTextContent(
+      "Foundation difficulty was selected because valuation mastery is 0%.",
+    );
+    expect(screen.getByText("Explain the purpose of discounted cash-flow valuation.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/education/assessment", { cache: "no-store" });
+  });
+
+  it("submits an assessment and refreshes mastery and feedback", async () => {
+    const user = userEvent.setup();
+    const updatedHub: EducationHubData = {
+      ...hub,
+      completed_lessons: 2,
+      assessed_lessons: 2,
+      completion_percent: 50,
+      average_score: 95,
+      mastery_percent: 77,
+      proficiency_band: "advanced",
+      recommended_lesson_slug: null,
+      recommendation_reason: "All current lessons are complete.",
+      lessons: hub.lessons.map((lesson) =>
+        lesson.slug === "valuation-and-cash-flow"
+          ? { ...lesson, status: "completed", score: 100, completed_at: "2026-07-14T21:00:00Z" }
+          : lesson,
+      ),
+    };
+    const result: AssessmentResult = {
+      lesson_slug: "valuation-and-cash-flow",
+      competency: "valuation",
+      difficulty: "foundation",
+      score: 100,
+      passed: true,
+      feedback: "You demonstrated the stated valuation objective.",
+      learning_objective: "Explain the purpose of discounted cash-flow valuation.",
+      education_hub: updatedHub,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => response(hub))
+      .mockImplementationOnce(() => response(assessment))
+      .mockImplementationOnce(() => response(result));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EducationHub />);
+    await user.click(await screen.findByRole("button", { name: "Begin assessment" }));
+    await user.click(await screen.findByLabelText("Intrinsic value from future cash flows"));
+    await user.click(screen.getByRole("button", { name: "Submit assessment" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/education/assessment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question_id: "valuation-foundation-1", selected_option: 0 }),
+      });
+    });
+    expect(await screen.findByText("100% · Passed")).toBeInTheDocument();
+    expect(screen.getByText("You demonstrated the stated valuation objective.")).toBeInTheDocument();
+    expect(screen.getByLabelText("77% mastery")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Learning path complete" })).toBeDisabled();
   });
 
   it("shows a score-aware remediation explanation", async () => {
@@ -103,9 +186,7 @@ describe("EducationHub", () => {
           recommendation_reason:
             "Strengthen valuation: your 55% assessment average is below the 70% remediation threshold.",
           lessons: hub.lessons.map((lesson) =>
-            lesson.slug === "valuation-and-cash-flow"
-              ? { ...lesson, status: "in_progress", score: 55 }
-              : lesson,
+            lesson.slug === "valuation-and-cash-flow" ? { ...lesson, status: "in_progress", score: 55 } : lesson,
           ),
         }),
       ),
@@ -129,10 +210,7 @@ describe("EducationHub", () => {
         lesson.slug === "valuation-and-cash-flow" ? { ...lesson, status: "in_progress" } : lesson,
       ),
     };
-    const fetchMock = vi
-      .fn()
-      .mockImplementationOnce(() => response(hub))
-      .mockImplementationOnce(() => response(updated));
+    const fetchMock = vi.fn().mockImplementationOnce(() => response(hub)).mockImplementationOnce(() => response(updated));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<EducationHub />);
@@ -168,11 +246,12 @@ describe("EducationHub", () => {
 
     render(<EducationHub />);
 
-    expect(await screen.findByText("Path complete")).toBeInTheDocument();
+    expect(await screen.findAllByText("Path complete")).toHaveLength(2);
     expect(screen.getByText("All current lessons are complete.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Path complete" })).toBeDisabled();
   });
 
-  it("exposes load and save failures through accessible alerts", async () => {
+  it("exposes load, save, and assessment failures through accessible alerts", async () => {
     vi.stubGlobal("fetch", vi.fn(() => response(null, 500)));
     const { unmount } = render(<EducationHub />);
 
@@ -180,15 +259,21 @@ describe("EducationHub", () => {
     unmount();
 
     const user = userEvent.setup();
-    const fetchMock = vi
+    const saveFetchMock = vi.fn().mockImplementationOnce(() => response(hub)).mockImplementationOnce(() => response(null, 500));
+    vi.stubGlobal("fetch", saveFetchMock);
+    const saveView = render(<EducationHub />);
+    await screen.findByLabelText("64% mastery");
+    await user.click(screen.getByRole("button", { name: "Start lesson" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Lesson progress could not be saved.");
+    saveView.unmount();
+
+    const assessmentFetchMock = vi
       .fn()
       .mockImplementationOnce(() => response(hub))
       .mockImplementationOnce(() => response(null, 500));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", assessmentFetchMock);
     render(<EducationHub />);
-    await screen.findByLabelText("64% mastery");
-    await user.click(screen.getByRole("button", { name: "Start lesson" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Lesson progress could not be saved.");
+    await user.click(await screen.findByRole("button", { name: "Begin assessment" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The adaptive assessment could not be loaded.");
   });
 });

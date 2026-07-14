@@ -42,3 +42,34 @@ class EducationHubRead(BaseModel):
     recommendation_reason: str
     lessons: list[LessonRead]
     competencies: list[CompetencySummary]
+
+
+class AssessmentQuestionRead(BaseModel):
+    id: str
+    prompt: str
+    options: list[str]
+    objective: str
+
+
+class AdaptiveAssessmentRead(BaseModel):
+    lesson_slug: str
+    competency: str
+    difficulty: str
+    difficulty_reason: str
+    question: AssessmentQuestionRead
+
+
+class AssessmentSubmission(BaseModel):
+    question_id: str
+    selected_option: int = Field(ge=0)
+
+
+class AssessmentResultRead(BaseModel):
+    lesson_slug: str
+    competency: str
+    difficulty: str
+    score: int
+    passed: bool
+    feedback: str
+    learning_objective: str
+    education_hub: EducationHubRead

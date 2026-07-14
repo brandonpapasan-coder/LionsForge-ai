@@ -10,11 +10,21 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.education import LessonProgress
 from app.models.user import User
-from app.schemas.education import EducationHubRead, LessonProgressUpdate, LessonRead
+from app.schemas.education import (
+    AdaptiveAssessmentRead,
+    AssessmentQuestionRead,
+    AssessmentResultRead,
+    AssessmentSubmission,
+    EducationHubRead,
+    LessonProgressUpdate,
+    LessonRead,
+)
+from app.services.assessments import ASSESSMENT_BANK
 from app.services.education import LESSON_BY_SLUG, LESSONS
 
 router = APIRouter()
 REMEDIATION_SCORE_THRESHOLD = 70
+ASSESSMENT_PASS_SCORE = 70
 
 
 @dataclass
@@ -34,6 +44,14 @@ def _proficiency_band(mastery_percent: int) -> str:
     if mastery_percent >= 40:
         return "developing"
     return "foundation"
+
+
+def _assessment_difficulty(mastery_percent: int) -> tuple[str, str]:
+    if mastery_percent >= 75:
+        return "advanced", f"Advanced difficulty selected because mastery is {mastery_percent}%."
+    if mastery_percent >= 40:
+        return "intermediate", f"Intermediate difficulty selected because mastery is {mastery_percent}%."
+    return "foundation", f"Foundation difficulty selected because mastery is {mastery_percent}%."
 
 
 def _humanize_competency(competency: str) -> str:
@@ -145,12 +163,89 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
     )
 
 
+def _assessment_for_user(db: Session, user_id: int) -> AdaptiveAssessmentRead:
+    hub = _build_hub(db, user_id)
+    if hub.recommended_lesson_slug is None:
+        raise HTTPException(status_code=409, detail="All current lessons are complete")
+
+    lesson = LESSON_BY_SLUG[hub.recommended_lesson_slug]
+    competency = next(item for item in hub.competencies if item.competency == lesson["competency"])
+    difficulty, reason = _assessment_difficulty(competency.mastery_percent)
+    question = ASSESSMENT_BANK[lesson["slug"]][difficulty]
+    return AdaptiveAssessmentRead(
+        lesson_slug=lesson["slug"],
+        competency=lesson["competency"],
+        difficulty=difficulty,
+        difficulty_reason=reason,
+        question=AssessmentQuestionRead(
+            id=question["id"],
+            prompt=question["prompt"],
+            options=question["options"],
+            objective=question["objective"],
+        ),
+    )
+
+
 @router.get("", response_model=EducationHubRead)
 def get_education_hub(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> EducationHubRead:
     return _build_hub(db, current_user.id)
+
+
+@router.get("/assessment", response_model=AdaptiveAssessmentRead)
+def get_adaptive_assessment(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AdaptiveAssessmentRead:
+    return _assessment_for_user(db, current_user.id)
+
+
+@router.post("/assessment", response_model=AssessmentResultRead)
+def submit_adaptive_assessment(
+    payload: AssessmentSubmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AssessmentResultRead:
+    assessment = _assessment_for_user(db, current_user.id)
+    question = ASSESSMENT_BANK[assessment.lesson_slug][assessment.difficulty]
+    if payload.question_id != question["id"]:
+        raise HTTPException(status_code=409, detail="Assessment question is no longer current")
+    if payload.selected_option >= len(question["options"]):
+        raise HTTPException(status_code=422, detail="Selected option is out of range")
+
+    score = 100 if payload.selected_option == question["correct_option"] else 0
+    passed = score >= ASSESSMENT_PASS_SCORE
+    progress = db.scalar(
+        select(LessonProgress).where(
+            LessonProgress.user_id == current_user.id,
+            LessonProgress.lesson_slug == assessment.lesson_slug,
+        )
+    )
+    if progress is None:
+        progress = LessonProgress(user_id=current_user.id, lesson_slug=assessment.lesson_slug)
+        db.add(progress)
+    progress.status = "completed" if passed else "in_progress"
+    progress.score = score
+    progress.completed_at = datetime.utcnow() if passed else None
+    db.commit()
+
+    feedback = (
+        f"Mastery demonstrated for {_humanize_competency(assessment.competency)}."
+        if passed
+        else f"Review {_humanize_competency(assessment.competency)} and retry the recommended lesson."
+    )
+    return AssessmentResultRead(
+        lesson_slug=assessment.lesson_slug,
+        competency=assessment.competency,
+        difficulty=assessment.difficulty,
+        score=score,
+        passed=passed,
+        feedback=feedback,
+        learning_objective=question["objective"],
+        education_hub=_build_hub(db, current_user.id),
+    )
 
 
 @router.put("/lessons/{lesson_slug}/progress", response_model=EducationHubRead)
