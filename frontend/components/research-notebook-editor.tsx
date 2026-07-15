@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import type { ResearchProject } from "@/lib/research";
 
@@ -19,25 +19,41 @@ type ResearchNotebookEditorProps = {
 export function ResearchNotebookEditor({ project, onSaved }: ResearchNotebookEditorProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const saveRequest = useRef<AbortController | null>(null);
   const notebook = (project.context?.notebook ?? {}) as NotebookContext;
 
   useEffect(() => {
+    saveRequest.current?.abort();
+    saveRequest.current = null;
+    setSaving(false);
     setMessage(null);
+
+    return () => {
+      saveRequest.current?.abort();
+      saveRequest.current = null;
+    };
   }, [project.id]);
 
   async function saveNotebook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    saveRequest.current?.abort();
+    const controller = new AbortController();
+    saveRequest.current = controller;
+    const projectId = project.id;
+    const projectContext = project.context;
+
     setSaving(true);
     setMessage(null);
     const form = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch(`/api/research-projects/${project.id}`, {
+      const response = await fetch(`/api/research-projects/${projectId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           context: {
-            ...project.context,
+            ...projectContext,
             notebook: {
               thesis: String(form.get("thesis") ?? "").trim(),
               evidence: String(form.get("evidence") ?? "").trim(),
@@ -47,16 +63,25 @@ export function ResearchNotebookEditor({ project, onSaved }: ResearchNotebookEdi
           },
         }),
       });
+      if (controller.signal.aborted || saveRequest.current !== controller) return;
       if (!response.ok) {
         setMessage("The notebook could not be saved.");
         return;
       }
-      onSaved((await response.json()) as ResearchProject);
+      const savedProject = (await response.json()) as ResearchProject;
+      if (controller.signal.aborted || saveRequest.current !== controller) return;
+      onSaved(savedProject);
       setMessage("Notebook saved.");
-    } catch {
-      setMessage("The notebook service is unavailable.");
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+      if (!controller.signal.aborted && saveRequest.current === controller) {
+        setMessage("The notebook service is unavailable.");
+      }
     } finally {
-      setSaving(false);
+      if (saveRequest.current === controller) {
+        saveRequest.current = null;
+        setSaving(false);
+      }
     }
   }
 
