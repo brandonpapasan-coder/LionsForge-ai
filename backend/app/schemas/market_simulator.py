@@ -66,3 +66,67 @@ class SimulationPortfolioRead(BaseModel):
     total_equity: Decimal
     total_return: Decimal
     concentration_risk: Decimal
+
+
+class ScenarioRunCreate(BaseModel):
+    scenario_name: Literal[
+        "bull_market",
+        "bear_market",
+        "high_volatility",
+        "inflation_shock",
+        "rate_cut_rally",
+    ]
+    initial_price: Decimal = Field(gt=0, le=Decimal("1000000000"))
+    steps: int = Field(default=30, ge=1, le=5000)
+    seed: int = Field(default=1, ge=0, le=2147483647)
+
+
+class ScenarioPointRead(BaseModel):
+    step: int
+    return_rate: Decimal
+    price: Decimal
+    shock_applied: bool
+
+
+class ScenarioRunRead(BaseModel):
+    scenario_name: str
+    initial_price: Decimal
+    final_price: Decimal
+    cumulative_return: Decimal
+    steps: int
+    seed: int
+    points: list[ScenarioPointRead]
+
+
+class PortfolioStressCreate(BaseModel):
+    scenario_name: Literal[
+        "bull_market",
+        "bear_market",
+        "high_volatility",
+        "inflation_shock",
+        "rate_cut_rally",
+    ]
+    steps: int = Field(default=30, ge=1, le=5000)
+    seed: int = Field(default=1, ge=0, le=2147483647)
+
+
+class StressedPositionRead(BaseModel):
+    symbol: str
+    starting_price: Decimal
+    ending_price: Decimal
+    quantity: Decimal
+    starting_value: Decimal
+    ending_value: Decimal
+    value_change: Decimal
+
+
+class PortfolioStressRead(BaseModel):
+    account_id: int
+    scenario_name: str
+    steps: int
+    seed: int
+    starting_equity: Decimal
+    ending_equity: Decimal
+    equity_change: Decimal
+    projected_return: Decimal
+    positions: list[StressedPositionRead]
