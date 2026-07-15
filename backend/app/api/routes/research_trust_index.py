@@ -1,12 +1,15 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.models.evidence import EvidenceRecord, EvidenceReviewEvent
 from app.models.research_project import ResearchProject
 from app.models.user import User
-from app.schemas.research_trust_index import ResearchTrustIndexRead
+from app.schemas.research_trust_index import ProjectGovernanceSnapshotRead, ResearchTrustIndexRead
 from app.services.research_trust_index_service import calculate_project_rti
 
 router = APIRouter()
@@ -32,3 +35,32 @@ def get_project_trust_index(
 ) -> ResearchTrustIndexRead:
     _owned_project(db, current_user.id, project_id)
     return ResearchTrustIndexRead(**calculate_project_rti(db, current_user.id, project_id))
+
+
+@router.get("/projects/{project_id}/governance-snapshot", response_model=ProjectGovernanceSnapshotRead)
+def get_project_governance_snapshot(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProjectGovernanceSnapshotRead:
+    project = _owned_project(db, current_user.id, project_id)
+    review_history = list(
+        db.scalars(
+            select(EvidenceReviewEvent)
+            .join(EvidenceRecord, EvidenceReviewEvent.evidence_id == EvidenceRecord.id)
+            .where(
+                EvidenceReviewEvent.owner_id == current_user.id,
+                EvidenceRecord.owner_id == current_user.id,
+                EvidenceRecord.project_id == project_id,
+            )
+            .order_by(EvidenceReviewEvent.created_at.asc(), EvidenceReviewEvent.id.asc())
+        ).all()
+    )
+    return ProjectGovernanceSnapshotRead(
+        project_id=project.id,
+        project_title=project.title,
+        project_status=project.status,
+        generated_at=datetime.utcnow(),
+        trust_index=ResearchTrustIndexRead(**calculate_project_rti(db, current_user.id, project_id)),
+        review_history=review_history,
+    )
