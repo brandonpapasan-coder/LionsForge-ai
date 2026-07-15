@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ResearchTrustPanel } from "@/components/research-trust-panel";
@@ -63,7 +63,9 @@ describe("ResearchTrustPanel", () => {
     render(<ResearchTrustPanel projectId={7} />);
 
     expect(await screen.findByText("84%")).toBeInTheDocument();
-    expect(screen.getByText("78%")).toBeInTheDocument();
+    const stabilityCard = screen.getByText("Validation stability").closest("article");
+    expect(stabilityCard).not.toBeNull();
+    expect(within(stabilityCard as HTMLElement).getByText("78%")).toBeInTheDocument();
     expect(screen.getByText("rti-v2", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Resolve frequently reversed evidence decisions.")).toBeInTheDocument();
     expect(screen.getByText("2", { selector: "strong" })).toBeInTheDocument();
