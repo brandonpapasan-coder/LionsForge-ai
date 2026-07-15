@@ -57,7 +57,7 @@ http://127.0.0.1:8000/docs
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -104,9 +104,8 @@ Tests should cover successful, loading, empty, unauthorized, not-found, and fail
 
 1. Remove or isolate obsolete trading-era product assumptions.
 2. Expand automated coverage across authentication, API proxies, and race conditions.
-3. Make frontend dependency installation deterministic with a committed lockfile and `npm ci`.
-4. Improve request cancellation and stale-data handling in asynchronous dashboards.
-5. Continue building the research, validation, knowledge, and education workflows around transparent human oversight.
+3. Improve request cancellation and stale-data handling in asynchronous dashboards.
+4. Continue building the research, validation, knowledge, and education workflows around transparent human oversight.
 
 ## Legacy financial modules
 
