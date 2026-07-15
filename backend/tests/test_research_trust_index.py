@@ -114,6 +114,30 @@ def test_review_reversals_reduce_validation_stability(client):
     assert any("reversal" in limitation.lower() for limitation in reversed_body["limitations"])
 
 
+def test_project_governance_snapshot_embeds_rti_and_ordered_review_history(client):
+    headers = auth_headers(client, email="governance-snapshot@example.com")
+    project = create_project(client, headers, "Governed research")
+    evidence = create_evidence(client, headers, project["id"], 40)
+    review_evidence(client, headers, evidence["id"], "approved", "Initial validation")
+    review_evidence(client, headers, evidence["id"], "needs_review", "New concern")
+
+    response = client.get(
+        f"/api/v1/research-trust-index/projects/{project['id']}/governance-snapshot",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_id"] == project["id"]
+    assert body["project_title"] == "Governed research"
+    assert body["project_status"] == project["status"]
+    assert body["generated_at"]
+    assert body["trust_index"]["methodology_version"] == "rti-v2"
+    assert body["trust_index"]["review_event_count"] == 2
+    assert [event["validation_status"] for event in body["review_history"]] == ["approved", "needs_review"]
+    assert [event["reviewer_notes"] for event in body["review_history"]] == ["Initial validation", "New concern"]
+
+
 def test_conflicts_reduce_corroboration_and_are_disclosed(client):
     headers = auth_headers(client, email="rti-conflict@example.com")
     project = create_project(client, headers, "Conflict project")
@@ -143,3 +167,9 @@ def test_project_rti_is_owner_isolated(client):
         headers=other_headers,
     )
     assert response.status_code == 404
+
+    snapshot_response = client.get(
+        f"/api/v1/research-trust-index/projects/{project['id']}/governance-snapshot",
+        headers=other_headers,
+    )
+    assert snapshot_response.status_code == 404
