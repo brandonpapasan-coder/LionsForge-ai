@@ -20,8 +20,11 @@ class ResearchTrustIndexRead(BaseModel):
     contradicting_count: int
     approved_count: int
     conflict_count: int
+    review_event_count: int
+    reviewed_evidence_count: int
+    review_reversal_count: int
     components: list[RTIComponent]
     strengths: list[str]
     limitations: list[str]
     recommended_actions: list[str]
-    methodology_version: str = "rti-v1"
+    methodology_version: str = "rti-v2"
