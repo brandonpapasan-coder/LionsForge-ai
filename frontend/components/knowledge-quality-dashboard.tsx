@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ResearchTrustPanel } from "@/components/research-trust-panel";
 import type { KnowledgeQualityDashboard as KnowledgeQualityDashboardData } from "@/lib/knowledge-quality";
 import type { ResearchProject } from "@/lib/research";
 
@@ -134,6 +135,7 @@ export function KnowledgeQualityDashboard() {
 
   const hasKnowledge = data.memories.total > 0 || data.evidence_total > 0;
   const selectedProject = projects.find((project) => String(project.id) === selectedProjectId);
+  const selectedProjectNumericId = selectedProjectId === "organization" ? null : Number(selectedProjectId);
   const metrics = [
     ["Health score", hasKnowledge ? percent(data.health_score) : "No baseline", "Composite advisory indicator; it does not validate research."],
     ["Validated knowledge", String(data.memories.validated), `${data.memories.provisional} provisional and ${data.memories.contested} contested records`],
@@ -144,74 +146,80 @@ export function KnowledgeQualityDashboard() {
   ];
 
   return (
-    <section className="dashboard-panel" aria-labelledby="knowledge-quality-title">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">INSTITUTIONAL KNOWLEDGE QUALITY</p>
-          <h2 id="knowledge-quality-title">Research health and review burden</h2>
-          <p className="muted">
-            {selectedProject ? `Project: ${selectedProject.title} · ` : "Organization-wide · "}
-            Methodology {data.methodology_version} · Generated {new Date(data.generated_at).toLocaleString()}
-          </p>
+    <>
+      <section className="dashboard-panel" aria-labelledby="knowledge-quality-title">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">INSTITUTIONAL KNOWLEDGE QUALITY</p>
+            <h2 id="knowledge-quality-title">Research health and review burden</h2>
+            <p className="muted">
+              {selectedProject ? `Project: ${selectedProject.title} · ` : "Organization-wide · "}
+              Methodology {data.methodology_version} · Generated {new Date(data.generated_at).toLocaleString()}
+            </p>
+          </div>
+          <label>
+            Knowledge scope
+            <select value={selectedProjectId} onChange={(event) => changeScope(event.target.value)}>
+              <option value="organization">All owned projects</option>
+              {projects.map((project) => <option key={project.id} value={String(project.id)}>{project.title}</option>)}
+            </select>
+          </label>
         </div>
-        <label>
-          Knowledge scope
-          <select value={selectedProjectId} onChange={(event) => changeScope(event.target.value)}>
-            <option value="organization">All owned projects</option>
-            {projects.map((project) => <option key={project.id} value={String(project.id)}>{project.title}</option>)}
-          </select>
-        </label>
-      </div>
 
-      {error && <p role="alert">{error}</p>}
-      {loading && <p className="muted" aria-live="polite">Refreshing knowledge health…</p>}
-      {!hasKnowledge && <p className="muted">No research baseline exists for this scope yet. Scores remain unset until evidence or knowledge records are available.</p>}
+        {error && <p role="alert">{error}</p>}
+        {loading && <p className="muted" aria-live="polite">Refreshing knowledge health…</p>}
+        {!hasKnowledge && <p className="muted">No research baseline exists for this scope yet. Scores remain unset until evidence or knowledge records are available.</p>}
 
-      <div className="metric-grid" aria-label="Knowledge quality metrics">
-        {metrics.map(([name, value, detail]) => (
-          <article className="metric-card" key={name}>
-            <span>{name}</span>
-            <strong>{value}</strong>
-            <p>{detail}</p>
-          </article>
-        ))}
-      </div>
+        <div className="metric-grid" aria-label="Knowledge quality metrics">
+          {metrics.map(([name, value, detail]) => (
+            <article className="metric-card" key={name}>
+              <span>{name}</span>
+              <strong>{value}</strong>
+              <p>{detail}</p>
+            </article>
+          ))}
+        </div>
 
-      <div className="dashboard-grid">
-        <section>
-          <div className="panel-heading"><div><p className="eyebrow">HEALTH COMPONENTS</p><h3>How the score is formed</h3></div></div>
-          <div className="activity-list">
-            {Object.entries(data.health_components).map(([name, value]) => (
-              <div className="activity-card" key={name}>
-                <span>{percent(value)}</span>
-                <div><strong>{label(name)}</strong><p>Transparent component contribution to the advisory health score.</p></div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <div className="dashboard-grid">
+          <section>
+            <div className="panel-heading"><div><p className="eyebrow">HEALTH COMPONENTS</p><h3>How the score is formed</h3></div></div>
+            <div className="activity-list">
+              {Object.entries(data.health_components).map(([name, value]) => (
+                <div className="activity-card" key={name}>
+                  <span>{percent(value)}</span>
+                  <div><strong>{label(name)}</strong><p>Transparent component contribution to the advisory health score.</p></div>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <section>
-          <div className="panel-heading"><div><p className="eyebrow">TOP RISKS</p><h3>Items requiring attention</h3></div></div>
-          <div className="activity-list">
-            {data.top_risks.length ? data.top_risks.map((risk) => (
-              <div className="activity-card" key={`${risk.risk_type}-${risk.title}`}>
-                <span>{percent(risk.severity)}</span>
-                <div><strong>{risk.title}</strong><p>{risk.detail}</p></div>
-              </div>
-            )) : <p className="muted">No ranked knowledge risks are currently reported.</p>}
-          </div>
-        </section>
-      </div>
+          <section>
+            <div className="panel-heading"><div><p className="eyebrow">TOP RISKS</p><h3>Items requiring attention</h3></div></div>
+            <div className="activity-list">
+              {data.top_risks.length ? data.top_risks.map((risk) => (
+                <div className="activity-card" key={`${risk.risk_type}-${risk.title}`}>
+                  <span>{percent(risk.severity)}</span>
+                  <div><strong>{risk.title}</strong><p>{risk.detail}</p></div>
+                </div>
+              )) : <p className="muted">No ranked knowledge risks are currently reported.</p>}
+            </div>
+          </section>
+        </div>
 
-      <div className="panel-heading"><div><p className="eyebrow">RECENT KNOWLEDGE ACTIVITY</p><h3>Latest reviewed changes</h3></div></div>
-      <div className="activity-list">
-        {data.recent_activity.length ? data.recent_activity.slice(0, 8).map((activity) => (
-          <div className="activity-card" key={`${activity.record_type}-${activity.record_id}`}>
-            <span>{label(activity.status)}</span>
-            <div><strong>{activity.title}</strong><p>{label(activity.record_type)} · {new Date(activity.occurred_at).toLocaleString()}</p></div>
-          </div>
-        )) : <p className="muted">Knowledge revisions and review activity will appear here.</p>}
-      </div>
-    </section>
+        <div className="panel-heading"><div><p className="eyebrow">RECENT KNOWLEDGE ACTIVITY</p><h3>Latest reviewed changes</h3></div></div>
+        <div className="activity-list">
+          {data.recent_activity.length ? data.recent_activity.slice(0, 8).map((activity) => (
+            <div className="activity-card" key={`${activity.record_type}-${activity.record_id}`}>
+              <span>{label(activity.status)}</span>
+              <div><strong>{activity.title}</strong><p>{label(activity.record_type)} · {new Date(activity.occurred_at).toLocaleString()}</p></div>
+            </div>
+          )) : <p className="muted">Knowledge revisions and review activity will appear here.</p>}
+        </div>
+      </section>
+
+      {selectedProjectNumericId !== null && Number.isInteger(selectedProjectNumericId) && (
+        <ResearchTrustPanel projectId={selectedProjectNumericId} />
+      )}
+    </>
   );
 }
