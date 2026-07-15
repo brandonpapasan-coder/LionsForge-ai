@@ -130,3 +130,16 @@ class PortfolioStressRead(BaseModel):
     equity_change: Decimal
     projected_return: Decimal
     positions: list[StressedPositionRead]
+
+
+class MentorFeedbackRead(BaseModel):
+    risk_tier: Literal["moderate", "elevated", "high"]
+    summary: str
+    observations: list[str]
+    reflection_questions: list[str]
+    disclaimer: str
+
+
+class PortfolioMentorFeedbackRead(BaseModel):
+    stress: PortfolioStressRead
+    feedback: MentorFeedbackRead
