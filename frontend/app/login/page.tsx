@@ -1,15 +1,23 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const loginRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    loginRequest.current?.abort();
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    loginRequest.current?.abort();
+    const controller = new AbortController();
+    loginRequest.current = controller;
     setSubmitting(true);
     setMessage(null);
     const form = new FormData(event.currentTarget);
@@ -23,18 +31,29 @@ export default function LoginPage() {
           secret: String(form.get("secret") ?? ""),
           full_name: null,
         }),
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || loginRequest.current !== controller) {
+        return;
+      }
       if (!response.ok) {
         const payload = await response.json();
-        setMessage(payload.detail ?? "Unable to sign in.");
+        if (!controller.signal.aborted && loginRequest.current === controller) {
+          setMessage(payload.detail ?? "Unable to sign in.");
+        }
         return;
       }
       router.push("/mentor");
       router.refresh();
     } catch {
-      setMessage("The authentication service is unavailable.");
+      if (!controller.signal.aborted && loginRequest.current === controller) {
+        setMessage("The authentication service is unavailable.");
+      }
     } finally {
-      setSubmitting(false);
+      if (loginRequest.current === controller) {
+        loginRequest.current = null;
+        setSubmitting(false);
+      }
     }
   }
 
