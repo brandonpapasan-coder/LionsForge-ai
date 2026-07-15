@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from hashlib import sha256
-from random import Random
 
 PRICE = Decimal("0.000001")
+UNIT = Decimal("0.000000000000000001")
 
 
 @dataclass(frozen=True)
@@ -58,9 +58,11 @@ SCENARIOS: dict[str, ScenarioDefinition] = {
 }
 
 
-def _stable_seed(*parts: object) -> int:
+def _unit_interval(*parts: object) -> Decimal:
     digest = sha256("|".join(str(part) for part in parts).encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "big", signed=False)
+    numerator = int.from_bytes(digest[:8], "big", signed=False)
+    denominator = (1 << 64) - 1
+    return (Decimal(numerator) / Decimal(denominator)).quantize(UNIT, rounding=ROUND_HALF_UP)
 
 
 def run_scenario(
@@ -78,14 +80,16 @@ def run_scenario(
         raise ValueError("steps must be between 1 and 5000")
 
     definition = SCENARIOS[scenario_name]
-    rng = Random(_stable_seed(scenario_name, seed, initial_price, steps))
     current_price = initial_price.quantize(PRICE, rounding=ROUND_HALF_UP)
     points: list[ScenarioPoint] = []
 
     for step in range(1, steps + 1):
-        normalized_noise = Decimal(str(rng.uniform(-1.0, 1.0)))
+        noise_unit = _unit_interval(scenario_name, seed, initial_price, steps, step, "noise")
+        normalized_noise = noise_unit * Decimal("2") - Decimal("1")
         return_rate = definition.drift + definition.volatility * normalized_noise
-        shock_applied = rng.random() < float(definition.shock_probability)
+
+        shock_unit = _unit_interval(scenario_name, seed, initial_price, steps, step, "shock")
+        shock_applied = shock_unit < definition.shock_probability
         if shock_applied:
             return_rate += definition.shock_magnitude
 
