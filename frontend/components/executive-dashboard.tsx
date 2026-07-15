@@ -11,9 +11,15 @@ export function ExecutiveDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function load() {
       try {
-        const response = await fetch("/api/dashboard", { cache: "no-store" });
+        const response = await fetch("/api/dashboard", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         if (response.status === 401) {
           window.location.href = "/login";
           return;
@@ -22,12 +28,16 @@ export function ExecutiveDashboard() {
           setError("The executive dashboard could not be loaded.");
           return;
         }
-        setData((await response.json()) as ExecutiveDashboardData);
-      } catch {
-        setError("The dashboard service is unavailable.");
+        const payload = (await response.json()) as ExecutiveDashboardData;
+        if (!controller.signal.aborted) setData(payload);
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        if (!controller.signal.aborted) setError("The dashboard service is unavailable.");
       }
     }
+
     void load();
+    return () => controller.abort();
   }, []);
 
   if (error) {
