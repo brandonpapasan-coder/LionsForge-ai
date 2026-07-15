@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { ResearchNotebookEditor } from "@/components/research-notebook-editor";
 import type { ResearchProject, ResearchSession } from "@/lib/research";
@@ -14,22 +14,44 @@ export function ResearchWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
+  const projectsRequest = useRef<AbortController | null>(null);
+  const sessionsRequest = useRef<AbortController | null>(null);
 
   async function loadSessions(projectId: number) {
-    const response = await fetch(`/api/research-projects/${projectId}/sessions`, { cache: "no-store" });
-    if (!response.ok) {
-      setError("Research sessions could not be loaded.");
-      return;
+    sessionsRequest.current?.abort();
+    const controller = new AbortController();
+    sessionsRequest.current = controller;
+
+    try {
+      const response = await fetch(`/api/research-projects/${projectId}/sessions`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (!response.ok) {
+        setError("Research sessions could not be loaded.");
+        return;
+      }
+      const payload = (await response.json()) as ResearchSession[];
+      if (controller.signal.aborted || sessionsRequest.current !== controller) return;
+      setSessions(payload);
+      setActiveSession(payload[0] ?? null);
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+      if (!controller.signal.aborted && sessionsRequest.current === controller) {
+        setError("Research sessions could not be loaded.");
+      }
+    } finally {
+      if (sessionsRequest.current === controller) sessionsRequest.current = null;
     }
-    const payload = (await response.json()) as ResearchSession[];
-    setSessions(payload);
-    setActiveSession(payload[0] ?? null);
   }
 
-  async function selectProject(project: ResearchProject) {
+  function selectProject(project: ResearchProject) {
     setSelected(project);
+    setSessions([]);
+    setActiveSession(null);
     setError(null);
-    await loadSessions(project.id);
+    void loadSessions(project.id);
   }
 
   function updateProject(savedProject: ResearchProject) {
@@ -39,23 +61,44 @@ export function ResearchWorkspace() {
     )));
   }
 
-  async function loadProjects() {
-    const response = await fetch("/api/research-projects", { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!response.ok) {
-      setError("Research projects could not be loaded.");
-      return;
-    }
-    const payload = (await response.json()) as ResearchProject[];
-    setProjects(payload);
-    if (payload[0]) await selectProject(payload[0]);
-  }
-
   useEffect(() => {
+    const controller = new AbortController();
+    projectsRequest.current = controller;
+
+    async function loadProjects() {
+      try {
+        const response = await fetch("/api/research-projects", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (response.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+        if (!response.ok) {
+          setError("Research projects could not be loaded.");
+          return;
+        }
+        const payload = (await response.json()) as ResearchProject[];
+        if (controller.signal.aborted) return;
+        setProjects(payload);
+        if (payload[0]) selectProject(payload[0]);
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        if (!controller.signal.aborted) setError("Research projects could not be loaded.");
+      } finally {
+        if (projectsRequest.current === controller) projectsRequest.current = null;
+      }
+    }
+
     void loadProjects();
+    return () => {
+      controller.abort();
+      projectsRequest.current = null;
+      sessionsRequest.current?.abort();
+      sessionsRequest.current = null;
+    };
   }, []);
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
@@ -81,6 +124,7 @@ export function ResearchWorkspace() {
         return;
       }
       const project = (await response.json()) as ResearchProject;
+      sessionsRequest.current?.abort();
       setProjects((current) => [project, ...current]);
       setSelected(project);
       setSessions([]);
@@ -139,7 +183,7 @@ export function ResearchWorkspace() {
               type="button"
               key={project.id}
               className={selected?.id === project.id ? "active" : ""}
-              onClick={() => void selectProject(project)}
+              onClick={() => selectProject(project)}
             >
               <strong>{project.title}</strong>
               <span>{project.objective ?? project.description ?? "Open research project"}</span>
