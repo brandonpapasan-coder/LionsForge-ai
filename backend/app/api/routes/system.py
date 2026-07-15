@@ -14,6 +14,7 @@ from app.schemas.system_readiness import (
     ReadinessCheck,
     SystemReadinessReport,
 )
+from app.services.openai_mentor import OpenAIMentorProvider
 
 router = APIRouter()
 
@@ -65,6 +66,18 @@ def system_readiness_endpoint(
         modules=RC3_MODULES,
         checked_at=datetime.now(timezone.utc),
     )
+
+
+@router.get("/providers")
+def provider_health_endpoint(
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    del current_user
+    provider = OpenAIMentorProvider()
+    return {
+        "providers": {"openai_mentor": provider.health()},
+        "checked_at": datetime.now(timezone.utc),
+    }
 
 
 @router.get("/metrics", response_model=OperationalMetricsReport)
