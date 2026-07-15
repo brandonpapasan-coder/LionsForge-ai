@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.observability import configure_request_observability
 from app.db.init_db import init_db
 
 settings = get_settings()
@@ -28,9 +29,10 @@ class PlatformInfo(BaseModel):
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
-    description="AI-powered investment research and trading platform.",
+    description="AI-powered research, validation, and education platform.",
     lifespan=lifespan,
 )
+configure_request_observability(app)
 app.include_router(api_router, prefix=settings.api_prefix)
 
 
@@ -62,12 +64,12 @@ def platform_info():
     return PlatformInfo(
         name=settings.app_name,
         version="0.1.0",
-        mission="Deliver AI-assisted investment research, market intelligence, education, and trading workflow tools.",
+        mission="Deliver AI-assisted research, evidence validation, and adaptive education.",
         modules=[
             "research-assistant",
+            "evidence-validation",
             "market-news-intelligence",
-            "portfolio-watchlists",
-            "finance-education",
-            "trading-risk-controls",
+            "portfolio-risk-intelligence",
+            "adaptive-education",
         ],
     )
