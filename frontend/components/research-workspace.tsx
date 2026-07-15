@@ -6,6 +6,10 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ResearchNotebookEditor } from "@/components/research-notebook-editor";
 import type { ResearchProject, ResearchSession } from "@/lib/research";
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function ResearchWorkspace() {
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [selected, setSelected] = useState<ResearchProject | null>(null);
@@ -16,6 +20,8 @@ export function ResearchWorkspace() {
   const [creatingSession, setCreatingSession] = useState(false);
   const projectsRequest = useRef<AbortController | null>(null);
   const sessionsRequest = useRef<AbortController | null>(null);
+  const projectCreateRequest = useRef<AbortController | null>(null);
+  const sessionCreateRequest = useRef<AbortController | null>(null);
 
   async function loadSessions(projectId: number) {
     sessionsRequest.current?.abort();
@@ -37,7 +43,7 @@ export function ResearchWorkspace() {
       setSessions(payload);
       setActiveSession(payload[0] ?? null);
     } catch (requestError) {
-      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+      if (isAbortError(requestError)) return;
       if (!controller.signal.aborted && sessionsRequest.current === controller) {
         setError("Research sessions could not be loaded.");
       }
@@ -47,6 +53,9 @@ export function ResearchWorkspace() {
   }
 
   function selectProject(project: ResearchProject) {
+    sessionCreateRequest.current?.abort();
+    sessionCreateRequest.current = null;
+    setCreatingSession(false);
     setSelected(project);
     setSessions([]);
     setActiveSession(null);
@@ -85,7 +94,7 @@ export function ResearchWorkspace() {
         setProjects(payload);
         if (payload[0]) selectProject(payload[0]);
       } catch (requestError) {
-        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        if (isAbortError(requestError)) return;
         if (!controller.signal.aborted) setError("Research projects could not be loaded.");
       } finally {
         if (projectsRequest.current === controller) projectsRequest.current = null;
@@ -98,11 +107,18 @@ export function ResearchWorkspace() {
       projectsRequest.current = null;
       sessionsRequest.current?.abort();
       sessionsRequest.current = null;
+      projectCreateRequest.current?.abort();
+      projectCreateRequest.current = null;
+      sessionCreateRequest.current?.abort();
+      sessionCreateRequest.current = null;
     };
   }, []);
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    projectCreateRequest.current?.abort();
+    const controller = new AbortController();
+    projectCreateRequest.current = controller;
     setCreatingProject(true);
     setError(null);
     const form = event.currentTarget;
@@ -118,55 +134,79 @@ export function ResearchWorkspace() {
           objective: String(data.get("objective") ?? "").trim() || null,
           context: {},
         }),
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || projectCreateRequest.current !== controller) return;
       if (!response.ok) {
         setError("The research project could not be created.");
         return;
       }
       const project = (await response.json()) as ResearchProject;
+      if (controller.signal.aborted || projectCreateRequest.current !== controller) return;
       sessionsRequest.current?.abort();
+      sessionCreateRequest.current?.abort();
+      sessionCreateRequest.current = null;
+      setCreatingSession(false);
       setProjects((current) => [project, ...current]);
       setSelected(project);
       setSessions([]);
       setActiveSession(null);
       form.reset();
-    } catch {
-      setError("The research service is unavailable.");
+    } catch (requestError) {
+      if (!isAbortError(requestError) && !controller.signal.aborted && projectCreateRequest.current === controller) {
+        setError("The research service is unavailable.");
+      }
     } finally {
-      setCreatingProject(false);
+      if (projectCreateRequest.current === controller) {
+        projectCreateRequest.current = null;
+        setCreatingProject(false);
+      }
     }
   }
 
   async function createSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
+    sessionCreateRequest.current?.abort();
+    const controller = new AbortController();
+    sessionCreateRequest.current = controller;
+    const projectId = selected.id;
+    const projectTitle = selected.title;
     setCreatingSession(true);
     setError(null);
     const form = event.currentTarget;
     const data = new FormData(form);
 
     try {
-      const response = await fetch(`/api/research-projects/${selected.id}/sessions`, {
+      const response = await fetch(`/api/research-projects/${projectId}/sessions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           title: String(data.get("session_title") ?? "").trim(),
           objective: String(data.get("session_objective") ?? "").trim() || null,
-          context: { project_title: selected.title },
+          context: { project_title: projectTitle },
         }),
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || sessionCreateRequest.current !== controller) return;
       if (!response.ok) {
         setError("The research session could not be created.");
         return;
       }
       const session = (await response.json()) as ResearchSession;
+      if (controller.signal.aborted || sessionCreateRequest.current !== controller) return;
       setSessions((current) => [session, ...current]);
       setActiveSession(session);
       form.reset();
-    } catch {
-      setError("The research session service is unavailable.");
+    } catch (requestError) {
+      if (!isAbortError(requestError) && !controller.signal.aborted && sessionCreateRequest.current === controller) {
+        setError("The research session service is unavailable.");
+      }
     } finally {
-      setCreatingSession(false);
+      if (sessionCreateRequest.current === controller) {
+        sessionCreateRequest.current = null;
+        setCreatingSession(false);
+      }
     }
   }
 
