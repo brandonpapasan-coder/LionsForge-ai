@@ -71,6 +71,16 @@ const projects = [
     created_at: "2026-07-12T20:00:00Z",
     updated_at: "2026-07-13T20:00:00Z",
   },
+  {
+    id: 8,
+    title: "Advanced Materials Study",
+    description: null,
+    objective: null,
+    status: "active",
+    context: {},
+    created_at: "2026-07-12T20:00:00Z",
+    updated_at: "2026-07-13T20:00:00Z",
+  },
 ];
 
 function response(body: unknown, status = 200) {
@@ -79,6 +89,14 @@ function response(body: unknown, status = 200) {
     status,
     json: async () => body,
   });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 function successfulFetch(projectDashboard: KnowledgeQualityDashboardData = dashboard) {
@@ -91,9 +109,9 @@ function successfulFetch(projectDashboard: KnowledgeQualityDashboardData = dashb
   });
 }
 
-function selectProject() {
+function selectProject(projectId = "7") {
   fireEvent.change(screen.getByRole("combobox", { name: "Knowledge scope" }), {
-    target: { value: "7" },
+    target: { value: projectId },
   });
 }
 
@@ -128,8 +146,65 @@ describe("KnowledgeQualityDashboard", () => {
     expect(screen.getByText(/Project: Grid Storage Study/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/knowledge-quality/projects/7",
-      { cache: "no-store" },
+      expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("keeps the newest scope when an older request finishes last", async () => {
+    const firstProjectResponse = deferred<Awaited<ReturnType<typeof response>>>();
+    let firstProjectSignal: AbortSignal | undefined;
+    const secondProjectDashboard: KnowledgeQualityDashboardData = {
+      ...dashboard,
+      project_id: 8,
+      health_score: 0.91,
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/research-projects") return response(projects);
+      if (url === "/api/knowledge-quality") return response(dashboard);
+      if (url === "/api/knowledge-quality/projects/7") {
+        firstProjectSignal = init?.signal ?? undefined;
+        return firstProjectResponse.promise;
+      }
+      if (url === "/api/knowledge-quality/projects/8") return response(secondProjectDashboard);
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<KnowledgeQualityDashboard />);
+    await screen.findByText("82%");
+
+    selectProject("7");
+    selectProject("8");
+
+    expect(await screen.findByText("91%")).toBeInTheDocument();
+    expect(screen.getByText(/Project: Advanced Materials Study/i)).toBeInTheDocument();
+    expect(firstProjectSignal?.aborted).toBe(true);
+
+    firstProjectResponse.resolve(await response({ ...dashboard, project_id: 7, health_score: 0.64 }));
+    await waitFor(() => expect(screen.queryByText("64%")).not.toBeInTheDocument());
+    expect(screen.getByText("91%")).toBeInTheDocument();
+  });
+
+  it("aborts an active dashboard request when unmounted", async () => {
+    const organizationResponse = deferred<Awaited<ReturnType<typeof response>>>();
+    let organizationSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/research-projects") return response(projects);
+      if (url === "/api/knowledge-quality") {
+        organizationSignal = init?.signal ?? undefined;
+        return organizationResponse.promise;
+      }
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { unmount } = render(<KnowledgeQualityDashboard />);
+    await waitFor(() => expect(organizationSignal).toBeDefined());
+
+    unmount();
+    expect(organizationSignal?.aborted).toBe(true);
   });
 
   it("shows an honest no-baseline state for empty data", async () => {
@@ -192,7 +267,10 @@ describe("KnowledgeQualityDashboard", () => {
     const { container } = render(<KnowledgeQualityDashboard />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/knowledge-quality", { cache: "no-store" });
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/knowledge-quality",
+        expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+      );
     });
     expect(screen.queryByText("82%")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
