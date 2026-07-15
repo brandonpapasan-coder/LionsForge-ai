@@ -45,8 +45,54 @@ def test_evidence_ingestion_scores_and_rejects_duplicates(client):
     assert duplicate.status_code == 409
 
 
-def test_review_and_conflict_detection(client):
+def test_review_history_is_immutable_and_owner_scoped(client):
     headers = auth_headers(client, email="evidence-review@example.com")
+    project = create_project(client, headers)
+    created = client.post(
+        "/api/v1/evidence-intelligence",
+        headers=headers,
+        json=evidence_payload(project["id"]),
+    )
+    assert created.status_code == 201
+    evidence_id = created.json()["id"]
+
+    first = client.patch(
+        f"/api/v1/evidence-intelligence/{evidence_id}/review",
+        headers=headers,
+        json={"validation_status": "needs_review", "reviewer_notes": "Resolve methodology conflict"},
+    )
+    assert first.status_code == 200
+
+    second = client.patch(
+        f"/api/v1/evidence-intelligence/{evidence_id}/review",
+        headers=headers,
+        json={"validation_status": "approved", "reviewer_notes": "Conflict resolved"},
+    )
+    assert second.status_code == 200
+
+    history = client.get(
+        f"/api/v1/evidence-intelligence/{evidence_id}/reviews",
+        headers=headers,
+    )
+    assert history.status_code == 200
+    assert [event["previous_status"] for event in history.json()] == ["unverified", "needs_review"]
+    assert [event["validation_status"] for event in history.json()] == ["needs_review", "approved"]
+    assert [event["reviewer_notes"] for event in history.json()] == [
+        "Resolve methodology conflict",
+        "Conflict resolved",
+    ]
+    assert all(event["reviewer_id"] == event["owner_id"] for event in history.json())
+
+    other_headers = auth_headers(client, email="evidence-outsider@example.com")
+    hidden = client.get(
+        f"/api/v1/evidence-intelligence/{evidence_id}/reviews",
+        headers=other_headers,
+    )
+    assert hidden.status_code == 404
+
+
+def test_review_and_conflict_detection(client):
+    headers = auth_headers(client, email="evidence-conflict@example.com")
     project = create_project(client, headers)
 
     supporting = evidence_payload(project["id"], "supports")
