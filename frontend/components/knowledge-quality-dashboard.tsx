@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { KnowledgeQualityDashboard as KnowledgeQualityDashboardData } from "@/lib/knowledge-quality";
 import type { ResearchProject } from "@/lib/research";
@@ -14,15 +14,22 @@ export function KnowledgeQualityDashboard() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("organization");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const dashboardRequest = useRef<AbortController | null>(null);
+  const projectsRequest = useRef<AbortController | null>(null);
 
   async function loadDashboard(projectId: string) {
+    dashboardRequest.current?.abort();
+    const controller = new AbortController();
+    dashboardRequest.current = controller;
+
     setLoading(true);
     setError(null);
     try {
       const path = projectId === "organization"
         ? "/api/knowledge-quality"
         : `/api/knowledge-quality/projects/${projectId}`;
-      const response = await fetch(path, { cache: "no-store" });
+      const response = await fetch(path, { cache: "no-store", signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -36,35 +43,59 @@ export function KnowledgeQualityDashboard() {
         setError("Institutional knowledge quality could not be loaded.");
         return;
       }
-      setData((await response.json()) as KnowledgeQualityDashboardData);
-    } catch {
-      setError("The knowledge quality service is unavailable.");
+      const nextData = (await response.json()) as KnowledgeQualityDashboardData;
+      if (!controller.signal.aborted) setData(nextData);
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+      if (!controller.signal.aborted) setError("The knowledge quality service is unavailable.");
     } finally {
-      setLoading(false);
+      if (dashboardRequest.current === controller) {
+        dashboardRequest.current = null;
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
+    const controller = new AbortController();
+    projectsRequest.current = controller;
+
     async function initialize() {
       try {
-        const response = await fetch("/api/research-projects", { cache: "no-store" });
+        const response = await fetch("/api/research-projects", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         if (response.status === 401) {
           window.location.href = "/login";
           return;
         }
         if (response.ok) {
-          setProjects((await response.json()) as ResearchProject[]);
+          const nextProjects = (await response.json()) as ResearchProject[];
+          if (!controller.signal.aborted) setProjects(nextProjects);
+        }
+      } catch (requestError) {
+        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
+          // Project discovery is supplemental; the organization dashboard remains usable without it.
         }
       } finally {
-        await loadDashboard("organization");
+        if (!controller.signal.aborted) await loadDashboard("organization");
       }
     }
+
     void initialize();
+    return () => {
+      controller.abort();
+      projectsRequest.current = null;
+      dashboardRequest.current?.abort();
+      dashboardRequest.current = null;
+    };
   }, []);
 
-  async function changeScope(projectId: string) {
+  function changeScope(projectId: string) {
     setSelectedProjectId(projectId);
-    await loadDashboard(projectId);
+    void loadDashboard(projectId);
   }
 
   if (loading && !data) {
@@ -82,7 +113,7 @@ export function KnowledgeQualityDashboard() {
         </div>
         <label>
           Knowledge scope
-          <select value={selectedProjectId} onChange={(event) => void changeScope(event.target.value)}>
+          <select value={selectedProjectId} onChange={(event) => changeScope(event.target.value)}>
             <option value="organization">All owned projects</option>
             {projects.map((project) => <option key={project.id} value={String(project.id)}>{project.title}</option>)}
           </select>
@@ -118,7 +149,7 @@ export function KnowledgeQualityDashboard() {
         </div>
         <label>
           Knowledge scope
-          <select value={selectedProjectId} onChange={(event) => void changeScope(event.target.value)} disabled={loading}>
+          <select value={selectedProjectId} onChange={(event) => changeScope(event.target.value)}>
             <option value="organization">All owned projects</option>
             {projects.map((project) => <option key={project.id} value={String(project.id)}>{project.title}</option>)}
           </select>
