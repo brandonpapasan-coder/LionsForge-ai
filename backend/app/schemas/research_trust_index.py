@@ -1,4 +1,8 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
+
+from app.schemas.evidence_intelligence import EvidenceReviewEventRead
 
 
 class RTIComponent(BaseModel):
@@ -28,3 +32,12 @@ class ResearchTrustIndexRead(BaseModel):
     limitations: list[str]
     recommended_actions: list[str]
     methodology_version: str = "rti-v2"
+
+
+class ProjectGovernanceSnapshotRead(BaseModel):
+    project_id: int
+    project_title: str
+    project_status: str
+    generated_at: datetime
+    trust_index: ResearchTrustIndexRead
+    review_history: list[EvidenceReviewEventRead] = Field(default_factory=list)
