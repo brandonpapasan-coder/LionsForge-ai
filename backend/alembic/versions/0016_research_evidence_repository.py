@@ -1,6 +1,6 @@
 """add research evidence repository
 
-Revision ID: 0016_research_evidence_repository
+Revision ID: 0016_research_evidence
 Revises: 0015_research_planning
 Create Date: 2026-07-14 00:00:00.000000
 """
@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0016_research_evidence_repository"
+revision: str = "0016_research_evidence"
 down_revision: str | None = "0015_research_planning"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
