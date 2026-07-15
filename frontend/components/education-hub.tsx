@@ -32,7 +32,7 @@ export function EducationHub() {
     async function load() {
       try {
         const response = await fetch("/api/education", { cache: "no-store", signal: controller.signal });
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !mounted.current || loadRequest.current !== controller) return;
         if (response.status === 401) {
           window.location.href = "/login";
           return;
@@ -42,9 +42,9 @@ export function EducationHub() {
           return;
         }
         const nextData = (await response.json()) as EducationHubData;
-        if (!controller.signal.aborted && mounted.current) setData(nextData);
+        if (!controller.signal.aborted && mounted.current && loadRequest.current === controller) setData(nextData);
       } catch (requestError) {
-        if (!isAbortError(requestError) && mounted.current) {
+        if (!isAbortError(requestError) && mounted.current && loadRequest.current === controller) {
           setError("The education service is unavailable.");
         }
       } finally {
@@ -78,15 +78,15 @@ export function EducationHub() {
         body: JSON.stringify({ status, score: status === "completed" ? 100 : null }),
         signal: controller.signal,
       });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !mounted.current || lessonRequest.current !== controller) return;
       if (!response.ok) {
         setError(response.status === 409 ? "Complete the prerequisite lessons before starting this lesson." : "Lesson progress could not be saved.");
         return;
       }
       const nextData = (await response.json()) as EducationHubData;
-      if (!controller.signal.aborted && mounted.current) setData(nextData);
+      if (!controller.signal.aborted && mounted.current && lessonRequest.current === controller) setData(nextData);
     } catch (requestError) {
-      if (!isAbortError(requestError) && mounted.current) setError("The education service is unavailable.");
+      if (!isAbortError(requestError) && mounted.current && lessonRequest.current === controller) setError("The education service is unavailable.");
     } finally {
       if (lessonRequest.current === controller) {
         lessonRequest.current = null;
@@ -105,7 +105,7 @@ export function EducationHub() {
     setError(null);
     try {
       const response = await fetch("/api/education/assessment", { cache: "no-store", signal: controller.signal });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !mounted.current || assessmentRequest.current !== controller) return;
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -115,9 +115,9 @@ export function EducationHub() {
         return;
       }
       const nextAssessment = (await response.json()) as AdaptiveAssessment;
-      if (!controller.signal.aborted && mounted.current) setAssessment(nextAssessment);
+      if (!controller.signal.aborted && mounted.current && assessmentRequest.current === controller) setAssessment(nextAssessment);
     } catch (requestError) {
-      if (!isAbortError(requestError) && mounted.current) setError("The education service is unavailable.");
+      if (!isAbortError(requestError) && mounted.current && assessmentRequest.current === controller) setError("The education service is unavailable.");
     } finally {
       if (assessmentRequest.current === controller) {
         assessmentRequest.current = null;
@@ -143,20 +143,20 @@ export function EducationHub() {
         }),
         signal: controller.signal,
       });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !mounted.current || assessmentRequest.current !== controller) return;
       if (!response.ok) {
         setError("The assessment response could not be scored.");
         return;
       }
       const result = (await response.json()) as AssessmentResult;
-      if (!controller.signal.aborted && mounted.current) {
+      if (!controller.signal.aborted && mounted.current && assessmentRequest.current === controller) {
         setAssessmentResult(result);
         setData(result.education_hub);
         setAssessment(null);
         setSelectedOption(null);
       }
     } catch (requestError) {
-      if (!isAbortError(requestError) && mounted.current) setError("The education service is unavailable.");
+      if (!isAbortError(requestError) && mounted.current && assessmentRequest.current === controller) setError("The education service is unavailable.");
     } finally {
       if (assessmentRequest.current === controller) {
         assessmentRequest.current = null;
