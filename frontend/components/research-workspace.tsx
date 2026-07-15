@@ -18,6 +18,7 @@ export function ResearchWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
+  const mounted = useRef(false);
   const projectsRequest = useRef<AbortController | null>(null);
   const sessionsRequest = useRef<AbortController | null>(null);
   const projectCreateRequest = useRef<AbortController | null>(null);
@@ -33,18 +34,18 @@ export function ResearchWorkspace() {
         cache: "no-store",
         signal: controller.signal,
       });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !mounted.current || sessionsRequest.current !== controller) return;
       if (!response.ok) {
         setError("Research sessions could not be loaded.");
         return;
       }
       const payload = (await response.json()) as ResearchSession[];
-      if (controller.signal.aborted || sessionsRequest.current !== controller) return;
+      if (controller.signal.aborted || !mounted.current || sessionsRequest.current !== controller) return;
       setSessions(payload);
       setActiveSession(payload[0] ?? null);
     } catch (requestError) {
       if (isAbortError(requestError)) return;
-      if (!controller.signal.aborted && sessionsRequest.current === controller) {
+      if (!controller.signal.aborted && mounted.current && sessionsRequest.current === controller) {
         setError("Research sessions could not be loaded.");
       }
     } finally {
@@ -71,6 +72,7 @@ export function ResearchWorkspace() {
   }
 
   useEffect(() => {
+    mounted.current = true;
     const controller = new AbortController();
     projectsRequest.current = controller;
 
@@ -80,7 +82,7 @@ export function ResearchWorkspace() {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !mounted.current || projectsRequest.current !== controller) return;
         if (response.status === 401) {
           window.location.href = "/login";
           return;
@@ -90,12 +92,14 @@ export function ResearchWorkspace() {
           return;
         }
         const payload = (await response.json()) as ResearchProject[];
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !mounted.current || projectsRequest.current !== controller) return;
         setProjects(payload);
         if (payload[0]) selectProject(payload[0]);
       } catch (requestError) {
         if (isAbortError(requestError)) return;
-        if (!controller.signal.aborted) setError("Research projects could not be loaded.");
+        if (!controller.signal.aborted && mounted.current && projectsRequest.current === controller) {
+          setError("Research projects could not be loaded.");
+        }
       } finally {
         if (projectsRequest.current === controller) projectsRequest.current = null;
       }
@@ -103,6 +107,7 @@ export function ResearchWorkspace() {
 
     void loadProjects();
     return () => {
+      mounted.current = false;
       controller.abort();
       projectsRequest.current = null;
       sessionsRequest.current?.abort();
@@ -136,13 +141,13 @@ export function ResearchWorkspace() {
         }),
         signal: controller.signal,
       });
-      if (controller.signal.aborted || projectCreateRequest.current !== controller) return;
+      if (controller.signal.aborted || !mounted.current || projectCreateRequest.current !== controller) return;
       if (!response.ok) {
         setError("The research project could not be created.");
         return;
       }
       const project = (await response.json()) as ResearchProject;
-      if (controller.signal.aborted || projectCreateRequest.current !== controller) return;
+      if (controller.signal.aborted || !mounted.current || projectCreateRequest.current !== controller) return;
       sessionsRequest.current?.abort();
       sessionCreateRequest.current?.abort();
       sessionCreateRequest.current = null;
@@ -153,13 +158,13 @@ export function ResearchWorkspace() {
       setActiveSession(null);
       form.reset();
     } catch (requestError) {
-      if (!isAbortError(requestError) && !controller.signal.aborted && projectCreateRequest.current === controller) {
+      if (!isAbortError(requestError) && !controller.signal.aborted && mounted.current && projectCreateRequest.current === controller) {
         setError("The research service is unavailable.");
       }
     } finally {
       if (projectCreateRequest.current === controller) {
         projectCreateRequest.current = null;
-        setCreatingProject(false);
+        if (mounted.current) setCreatingProject(false);
       }
     }
   }
@@ -188,24 +193,24 @@ export function ResearchWorkspace() {
         }),
         signal: controller.signal,
       });
-      if (controller.signal.aborted || sessionCreateRequest.current !== controller) return;
+      if (controller.signal.aborted || !mounted.current || sessionCreateRequest.current !== controller) return;
       if (!response.ok) {
         setError("The research session could not be created.");
         return;
       }
       const session = (await response.json()) as ResearchSession;
-      if (controller.signal.aborted || sessionCreateRequest.current !== controller) return;
+      if (controller.signal.aborted || !mounted.current || sessionCreateRequest.current !== controller) return;
       setSessions((current) => [session, ...current]);
       setActiveSession(session);
       form.reset();
     } catch (requestError) {
-      if (!isAbortError(requestError) && !controller.signal.aborted && sessionCreateRequest.current === controller) {
+      if (!isAbortError(requestError) && !controller.signal.aborted && mounted.current && sessionCreateRequest.current === controller) {
         setError("The research session service is unavailable.");
       }
     } finally {
       if (sessionCreateRequest.current === controller) {
         sessionCreateRequest.current = null;
-        setCreatingSession(false);
+        if (mounted.current) setCreatingSession(false);
       }
     }
   }
