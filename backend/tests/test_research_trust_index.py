@@ -34,6 +34,20 @@ def create_evidence(client, headers, project_id, index, stance="supports", key=N
     return response.json()
 
 
+def review_evidence(client, headers, evidence_id, status, notes):
+    response = client.patch(
+        f"/api/v1/evidence-intelligence/{evidence_id}/review",
+        headers=headers,
+        json={"validation_status": status, "reviewer_notes": notes},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def component(body, key):
+    return next(item for item in body["components"] if item["key"] == key)
+
+
 def test_project_rti_explains_components_and_recommendations(client):
     headers = auth_headers(client, email="rti@example.com")
     project = create_project(client, headers)
@@ -42,12 +56,7 @@ def test_project_rti_explains_components_and_recommendations(client):
     for index in range(2, 6):
         create_evidence(client, headers, project["id"], index, key="mission-outcome")
 
-    review = client.patch(
-        f"/api/v1/evidence-intelligence/{first['id']}/review",
-        headers=headers,
-        json={"validation_status": "approved", "reviewer_notes": "Reviewed against source"},
-    )
-    assert review.status_code == 200
+    review_evidence(client, headers, first["id"], "approved", "Reviewed against source")
 
     response = client.get(
         f"/api/v1/research-trust-index/projects/{project['id']}",
@@ -59,18 +68,50 @@ def test_project_rti_explains_components_and_recommendations(client):
     assert body["evidence_count"] == 5
     assert body["supporting_count"] == 5
     assert body["approved_count"] == 1
-    assert body["methodology_version"] == "rti-v1"
+    assert body["review_event_count"] == 1
+    assert body["reviewed_evidence_count"] == 1
+    assert body["review_reversal_count"] == 0
+    assert body["methodology_version"] == "rti-v2"
     assert 0 <= body["overall_score"] <= 100
-    assert len(body["components"]) == 6
+    assert len(body["components"]) == 7
     assert {item["key"] for item in body["components"]} == {
         "evidence_quality",
         "source_diversity",
         "corroboration",
         "freshness",
         "human_validation",
+        "validation_stability",
         "completeness",
     }
+    assert component(body, "validation_stability")["score"] == 100
     assert body["recommended_actions"]
+
+
+def test_review_reversals_reduce_validation_stability(client):
+    headers = auth_headers(client, email="rti-reversal@example.com")
+    project = create_project(client, headers, "Reversal project")
+    evidence = create_evidence(client, headers, project["id"], 30)
+
+    review_evidence(client, headers, evidence["id"], "approved", "Initial approval")
+    stable = client.get(
+        f"/api/v1/research-trust-index/projects/{project['id']}",
+        headers=headers,
+    ).json()
+
+    review_evidence(client, headers, evidence["id"], "needs_review", "Methodology concern")
+    review_evidence(client, headers, evidence["id"], "approved", "Concern resolved")
+    reversed_body = client.get(
+        f"/api/v1/research-trust-index/projects/{project['id']}",
+        headers=headers,
+    ).json()
+
+    assert stable["review_event_count"] == 1
+    assert stable["review_reversal_count"] == 0
+    assert reversed_body["review_event_count"] == 3
+    assert reversed_body["reviewed_evidence_count"] == 1
+    assert reversed_body["review_reversal_count"] == 2
+    assert component(reversed_body, "validation_stability")["score"] < component(stable, "validation_stability")["score"]
+    assert any("reversal" in limitation.lower() for limitation in reversed_body["limitations"])
 
 
 def test_conflicts_reduce_corroboration_and_are_disclosed(client):
@@ -93,7 +134,8 @@ def test_conflicts_reduce_corroboration_and_are_disclosed(client):
 def test_project_rti_is_owner_isolated(client):
     owner_headers = auth_headers(client, email="rti-owner@example.com")
     project = create_project(client, owner_headers, "Private RTI")
-    create_evidence(client, owner_headers, project["id"], 20)
+    evidence = create_evidence(client, owner_headers, project["id"], 20)
+    review_evidence(client, owner_headers, evidence["id"], "approved", "Owner review")
 
     other_headers = auth_headers(client, email="rti-other@example.com")
     response = client.get(
