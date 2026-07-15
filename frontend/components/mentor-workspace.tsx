@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   MentorChatResponse,
@@ -21,6 +21,10 @@ type TranscriptItem = {
   response: MentorResponsePayload | null;
 };
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function MentorWorkspace({ researchProjectId, researchSessionId }: MentorWorkspaceProps) {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<MentorConversation[]>([]);
@@ -28,6 +32,9 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
   const [submitting, setSubmitting] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const historyRequest = useRef<AbortController | null>(null);
+  const conversationRequest = useRef<AbortController | null>(null);
+  const chatRequest = useRef<AbortController | null>(null);
 
   const activeContext = useMemo(() => ({
     goal: "Build evidence-based research and finance mastery",
@@ -36,31 +43,76 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
   }), [researchProjectId, researchSessionId]);
 
   async function refreshHistory() {
-    const response = await fetch("/api/mentor/conversations", { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (response.ok) {
-      setConversations((await response.json()) as MentorConversation[]);
+    historyRequest.current?.abort();
+    const controller = new AbortController();
+    historyRequest.current = controller;
+
+    try {
+      const response = await fetch("/api/mentor/conversations", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || historyRequest.current !== controller) return;
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (response.ok) {
+        const payload = (await response.json()) as MentorConversation[];
+        if (!controller.signal.aborted && historyRequest.current === controller) {
+          setConversations(payload);
+        }
+      }
+    } catch (requestError) {
+      if (!isAbortError(requestError) && !controller.signal.aborted) {
+        // History refresh failures remain non-blocking so the active conversation stays usable.
+      }
+    } finally {
+      if (historyRequest.current === controller) historyRequest.current = null;
     }
   }
 
   useEffect(() => {
     void refreshHistory();
+    return () => {
+      historyRequest.current?.abort();
+      conversationRequest.current?.abort();
+      chatRequest.current?.abort();
+      historyRequest.current = null;
+      conversationRequest.current = null;
+      chatRequest.current = null;
+    };
   }, []);
 
   function startNewConversation() {
+    conversationRequest.current?.abort();
+    chatRequest.current?.abort();
+    conversationRequest.current = null;
+    chatRequest.current = null;
+    setLoadingHistory(false);
+    setSubmitting(false);
     setConversationId(null);
     setTranscript([]);
     setError(null);
   }
 
   async function openConversation(id: number) {
+    conversationRequest.current?.abort();
+    chatRequest.current?.abort();
+    chatRequest.current = null;
+    setSubmitting(false);
+
+    const controller = new AbortController();
+    conversationRequest.current = controller;
     setLoadingHistory(true);
     setError(null);
+
     try {
-      const response = await fetch(`/api/mentor/conversations/${id}`, { cache: "no-store" });
+      const response = await fetch(`/api/mentor/conversations/${id}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || conversationRequest.current !== controller) return;
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -70,6 +122,7 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
         return;
       }
       const detail = (await response.json()) as MentorConversationDetail;
+      if (controller.signal.aborted || conversationRequest.current !== controller) return;
       setConversationId(detail.id);
       setTranscript(detail.messages.map((message) => ({
         id: `persisted-${message.id}`,
@@ -77,25 +130,34 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
         content: message.content,
         response: message.response_payload,
       })));
-    } catch {
-      setError("Conversation history is unavailable.");
+    } catch (requestError) {
+      if (!isAbortError(requestError) && !controller.signal.aborted && conversationRequest.current === controller) {
+        setError("Conversation history is unavailable.");
+      }
     } finally {
-      setLoadingHistory(false);
+      if (conversationRequest.current === controller) {
+        conversationRequest.current = null;
+        setLoadingHistory(false);
+      }
     }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
-    setError(null);
     const form = event.currentTarget;
     const data = new FormData(form);
     const message = String(data.get("message") ?? "").trim();
-    if (!message) {
-      setSubmitting(false);
-      return;
-    }
+    if (!message) return;
 
+    chatRequest.current?.abort();
+    conversationRequest.current?.abort();
+    conversationRequest.current = null;
+    setLoadingHistory(false);
+
+    const controller = new AbortController();
+    chatRequest.current = controller;
+    setSubmitting(true);
+    setError(null);
     setTranscript((current) => [
       ...current,
       { id: `user-${Date.now()}`, role: "user", content: message, response: null },
@@ -110,7 +172,9 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
           conversation_id: conversationId,
           context: activeContext,
         }),
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || chatRequest.current !== controller) return;
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -120,6 +184,7 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
         return;
       }
       const payload = (await response.json()) as MentorChatResponse;
+      if (controller.signal.aborted || chatRequest.current !== controller) return;
       setConversationId(payload.conversation_id);
       setTranscript((current) => [
         ...current,
@@ -131,11 +196,16 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
         },
       ]);
       form.reset();
-      await refreshHistory();
-    } catch {
-      setError("The mentor service is unavailable.");
+      void refreshHistory();
+    } catch (requestError) {
+      if (!isAbortError(requestError) && !controller.signal.aborted && chatRequest.current === controller) {
+        setError("The mentor service is unavailable.");
+      }
     } finally {
-      setSubmitting(false);
+      if (chatRequest.current === controller) {
+        chatRequest.current = null;
+        setSubmitting(false);
+      }
     }
   }
 
