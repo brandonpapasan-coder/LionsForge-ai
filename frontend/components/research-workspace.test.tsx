@@ -100,7 +100,7 @@ describe("ResearchWorkspace request lifecycle", () => {
     render(<ResearchWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /Advanced Materials Study/i }));
 
-    expect(await screen.findByText("Current materials session")).toBeInTheDocument();
+    expect(await screen.findAllByText("Current materials session")).toHaveLength(2);
     expect(staleSignal?.aborted).toBe(true);
 
     staleResponse.resolve(await response(firstSessions));
