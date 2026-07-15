@@ -78,16 +78,16 @@ def run_scenario(
         raise ValueError("steps must be between 1 and 5000")
 
     definition = SCENARIOS[scenario_name]
-    # Deterministic simulation replay requires a seeded PRNG. This generator is
-    # never used for secrets, authentication, cryptography, or live execution.
+    # Deterministic educational replay intentionally uses a seeded PRNG. None of
+    # these values protect secrets, authentication, cryptography, or live orders.
     rng = Random(_stable_seed(scenario_name, seed, initial_price, steps))  # nosec B311
     current_price = initial_price.quantize(PRICE, rounding=ROUND_HALF_UP)
     points: list[ScenarioPoint] = []
 
     for step in range(1, steps + 1):
-        normalized_noise = Decimal(str(rng.uniform(-1.0, 1.0)))
+        normalized_noise = Decimal(str(rng.uniform(-1.0, 1.0)))  # nosec B311
         return_rate = definition.drift + definition.volatility * normalized_noise
-        shock_applied = rng.random() < float(definition.shock_probability)
+        shock_applied = rng.random() < float(definition.shock_probability)  # nosec B311
         if shock_applied:
             return_rate += definition.shock_magnitude
 
