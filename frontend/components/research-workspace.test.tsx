@@ -108,6 +108,51 @@ describe("ResearchWorkspace request lifecycle", () => {
     expect(screen.getByRole("heading", { name: "Advanced Materials Study" })).toBeInTheDocument();
   });
 
+  it("aborts session creation when the selected project changes", async () => {
+    const staleCreateResponse = deferred<Awaited<ReturnType<typeof response>>>();
+    let staleCreateSignal: AbortSignal | undefined;
+    const staleCreatedSession: ResearchSession = {
+      id: 12,
+      project_id: 1,
+      title: "Late grid experiment",
+      objective: null,
+      summary: null,
+      status: "active",
+      context: {},
+      created_at: "2026-07-15T12:00:00Z",
+      updated_at: "2026-07-15T12:00:00Z",
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/research-projects") return response(projects);
+      if (url === "/api/research-projects/1/sessions" && init?.method === "POST") {
+        staleCreateSignal = init.signal ?? undefined;
+        return staleCreateResponse.promise;
+      }
+      if (url === "/api/research-projects/1/sessions") return response([]);
+      if (url === "/api/research-projects/2/sessions") return response(secondSessions);
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ResearchWorkspace />);
+    await screen.findByRole("heading", { name: "Grid Storage Study" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Session title" }), {
+      target: { value: "Late grid experiment" },
+    });
+    fireEvent.submit(screen.getByRole("button", { name: "Create session" }).closest("form")!);
+    await waitFor(() => expect(staleCreateSignal).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: /Advanced Materials Study/i }));
+    expect(staleCreateSignal?.aborted).toBe(true);
+    expect(await screen.findAllByText("Current materials session")).toHaveLength(2);
+
+    staleCreateResponse.resolve(await response(staleCreatedSession));
+    await waitFor(() => expect(screen.queryByText("Late grid experiment")).not.toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "Advanced Materials Study" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled();
+  });
+
   it("aborts project discovery when unmounted", async () => {
     const projectResponse = deferred<Awaited<ReturnType<typeof response>>>();
     let projectSignal: AbortSignal | undefined;
