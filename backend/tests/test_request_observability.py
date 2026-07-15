@@ -52,7 +52,8 @@ def test_operational_metrics_report_request_and_exception_counts(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["request_count"] >= 3
+    # The endpoint snapshots metrics before middleware records the metrics request itself.
+    assert payload["request_count"] >= 2
     assert payload["application_exception_count"] == 1
     assert payload["exceptions_by_type"] == {"ValueError": 1}
     assert payload["last_exception"]["request_id"] == "22222222-2222-2222-2222-222222222222"
