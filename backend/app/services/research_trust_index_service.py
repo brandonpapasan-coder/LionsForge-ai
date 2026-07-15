@@ -4,14 +4,15 @@ from urllib.parse import urlparse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.evidence import EvidenceRecord
+from app.models.evidence import EvidenceRecord, EvidenceReviewEvent
 
 RTI_WEIGHTS = {
-    "evidence_quality": 0.25,
-    "source_diversity": 0.15,
-    "corroboration": 0.20,
+    "evidence_quality": 0.22,
+    "source_diversity": 0.13,
+    "corroboration": 0.18,
     "freshness": 0.10,
-    "human_validation": 0.15,
+    "human_validation": 0.12,
+    "validation_stability": 0.10,
     "completeness": 0.15,
 }
 
@@ -51,6 +52,20 @@ def calculate_project_rti(db: Session, owner_id: int, project_id: int) -> dict:
         ).all()
     )
 
+    evidence_ids = [item.id for item in evidence]
+    review_events = (
+        list(
+            db.scalars(
+                select(EvidenceReviewEvent).where(
+                    EvidenceReviewEvent.owner_id == owner_id,
+                    EvidenceReviewEvent.evidence_id.in_(evidence_ids),
+                )
+            ).all()
+        )
+        if evidence_ids
+        else []
+    )
+
     evidence_count = len(evidence)
     supporting = [item for item in evidence if item.stance == "supports"]
     contradicting = [item for item in evidence if item.stance == "contradicts"]
@@ -63,11 +78,26 @@ def calculate_project_rti(db: Session, owner_id: int, project_id: int) -> dict:
             conflict_keys.setdefault(item.contradiction_key, set()).add(item.stance)
     conflict_count = sum(1 for stances in conflict_keys.values() if {"supports", "contradicts"}.issubset(stances))
 
+    review_counts = Counter(event.evidence_id for event in review_events)
+    reversal_count = sum(
+        1
+        for event in review_events
+        if event.previous_status != event.validation_status and event.previous_status != "unverified"
+    )
+    reviewed_evidence_count = len(review_counts)
+    stable_review_count = sum(1 for count in review_counts.values() if count == 1)
+
     avg_confidence = sum(item.confidence_score for item in evidence) / evidence_count if evidence else 0.0
     avg_freshness = sum(item.freshness_score for item in evidence) / evidence_count if evidence else 0.0
     source_diversity = min(len(unique_sources) / 5, 1.0) if evidence else 0.0
     validation_ratio = len(approved) / evidence_count if evidence else 0.0
     completeness = min(evidence_count / 8, 1.0)
+
+    if reviewed_evidence_count:
+        review_stability = stable_review_count / reviewed_evidence_count
+        review_stability = max(review_stability - min(reversal_count * 0.15, 0.60), 0.0)
+    else:
+        review_stability = 0.0
 
     if supporting:
         support_sources = {_source_identity(item) for item in supporting}
@@ -114,6 +144,13 @@ def calculate_project_rti(db: Session, owner_id: int, project_id: int) -> dict:
             [] if validation_ratio >= 0.75 else ["Review and approve high-impact evidence records."],
         ),
         _component(
+            "validation_stability",
+            "Validation Stability",
+            review_stability * 100,
+            f"{reviewed_evidence_count} evidence records have review history; {reversal_count} post-initial review reversals were detected.",
+            [] if review_stability >= 0.75 else ["Resolve frequently reversed evidence decisions and document the basis for the final status."],
+        ),
+        _component(
             "completeness",
             "Research Completeness",
             completeness * 100,
@@ -136,6 +173,8 @@ def calculate_project_rti(db: Session, owner_id: int, project_id: int) -> dict:
     limitations = [item["explanation"] for item in components if item["score"] < 60]
     if conflict_count:
         limitations.append(f"{conflict_count} unresolved evidence conflict groups reduce trust.")
+    if reversal_count:
+        limitations.append(f"{reversal_count} evidence review reversals reduce validation stability.")
 
     actions: list[str] = []
     for item in components:
@@ -151,9 +190,12 @@ def calculate_project_rti(db: Session, owner_id: int, project_id: int) -> dict:
         "contradicting_count": len(contradicting),
         "approved_count": len(approved),
         "conflict_count": conflict_count,
+        "review_event_count": len(review_events),
+        "reviewed_evidence_count": reviewed_evidence_count,
+        "review_reversal_count": reversal_count,
         "components": components,
         "strengths": strengths,
         "limitations": limitations,
         "recommended_actions": actions,
-        "methodology_version": "rti-v1",
+        "methodology_version": "rti-v2",
     }
