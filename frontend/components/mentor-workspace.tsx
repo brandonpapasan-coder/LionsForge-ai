@@ -35,6 +35,8 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
   const historyRequest = useRef<AbortController | null>(null);
   const conversationRequest = useRef<AbortController | null>(null);
   const chatRequest = useRef<AbortController | null>(null);
+  const contextKey = `${researchProjectId ?? "none"}:${researchSessionId ?? "none"}`;
+  const previousContextKey = useRef(contextKey);
 
   const activeContext = useMemo(() => ({
     goal: "Build evidence-based research and finance mastery",
@@ -83,6 +85,21 @@ export function MentorWorkspace({ researchProjectId, researchSessionId }: Mentor
       chatRequest.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (previousContextKey.current === contextKey) return;
+    previousContextKey.current = contextKey;
+
+    conversationRequest.current?.abort();
+    chatRequest.current?.abort();
+    conversationRequest.current = null;
+    chatRequest.current = null;
+    setLoadingHistory(false);
+    setSubmitting(false);
+    setConversationId(null);
+    setTranscript([]);
+    setError(null);
+  }, [contextKey]);
 
   function startNewConversation() {
     conversationRequest.current?.abort();
