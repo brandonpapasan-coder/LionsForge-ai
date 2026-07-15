@@ -9,7 +9,11 @@ from app.db.session import get_db
 from app.models.evidence import EvidenceRecord, EvidenceReviewEvent
 from app.models.research_project import ResearchProject
 from app.models.user import User
-from app.schemas.research_trust_index import ProjectGovernanceSnapshotRead, ResearchTrustIndexRead
+from app.schemas.research_trust_index import (
+    GovernanceExecutiveSummary,
+    ProjectGovernanceSnapshotRead,
+    ResearchTrustIndexRead,
+)
 from app.services.research_trust_index_service import calculate_project_rti
 
 router = APIRouter()
@@ -25,6 +29,47 @@ def _owned_project(db: Session, owner_id: int, project_id: int) -> ResearchProje
     if project is None:
         raise HTTPException(status_code=404, detail="Research project not found")
     return project
+
+
+def _executive_summary(trust_index: ResearchTrustIndexRead) -> GovernanceExecutiveSummary:
+    if trust_index.overall_score >= 80:
+        trust_status = "strong"
+    elif trust_index.overall_score >= 60:
+        trust_status = "moderate"
+    else:
+        trust_status = "weak"
+
+    if trust_index.conflict_count or trust_index.review_reversal_count >= 3:
+        risk_level = "high"
+    elif trust_index.overall_score < 60 or trust_index.review_reversal_count:
+        risk_level = "elevated"
+    else:
+        risk_level = "controlled"
+
+    evidence_review_rate = (
+        trust_index.reviewed_evidence_count / trust_index.evidence_count
+        if trust_index.evidence_count
+        else 0.0
+    )
+    approval_rate = (
+        trust_index.approved_count / trust_index.evidence_count
+        if trust_index.evidence_count
+        else 0.0
+    )
+    headline = (
+        f"Research trust is {trust_status} with {risk_level} governance risk; "
+        f"{trust_index.reviewed_evidence_count} of {trust_index.evidence_count} evidence records have review history."
+    )
+    return GovernanceExecutiveSummary(
+        trust_status=trust_status,
+        risk_level=risk_level,
+        headline=headline,
+        evidence_review_rate=round(evidence_review_rate, 4),
+        approval_rate=round(approval_rate, 4),
+        key_strengths=trust_index.strengths[:3],
+        key_risks=trust_index.limitations[:3],
+        priority_actions=trust_index.recommended_actions[:5],
+    )
 
 
 @router.get("/projects/{project_id}", response_model=ResearchTrustIndexRead)
@@ -56,11 +101,13 @@ def get_project_governance_snapshot(
             .order_by(EvidenceReviewEvent.created_at.asc(), EvidenceReviewEvent.id.asc())
         ).all()
     )
+    trust_index = ResearchTrustIndexRead(**calculate_project_rti(db, current_user.id, project_id))
     return ProjectGovernanceSnapshotRead(
         project_id=project.id,
         project_title=project.title,
         project_status=project.status,
         generated_at=datetime.utcnow(),
-        trust_index=ResearchTrustIndexRead(**calculate_project_rti(db, current_user.id, project_id)),
+        executive_summary=_executive_summary(trust_index),
+        trust_index=trust_index,
         review_history=review_history,
     )
