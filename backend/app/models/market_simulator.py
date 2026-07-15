@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -44,3 +44,18 @@ class SimulatedTrade(Base):
     execution_price: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     notional: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     executed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MarketLearningSession(Base):
+    __tablename__ = "market_learning_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("simulation_accounts.id"), index=True, nullable=False)
+    scenario_name: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    steps: Mapped[int] = mapped_column(nullable=False)
+    seed: Mapped[int] = mapped_column(nullable=False)
+    risk_tier: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    projected_return: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
+    learner_reflection: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="completed", index=True, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
