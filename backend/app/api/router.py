@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_quality, market, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_orchestration, research_planning, research_projects, research_sessions, research_trust_index, system, watchlists
+from app.api.routes import advanced_alerts, alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_quality, market, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_orchestration, research_planning, research_projects, research_sessions, research_trust_index, system, watchlists
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -30,6 +30,7 @@ api_router.include_router(watchlists.router, prefix="/watchlists", tags=["watchl
 api_router.include_router(portfolios.router, prefix="/portfolios", tags=["portfolios"])
 api_router.include_router(autonomous_portfolios.router, prefix="/portfolios", tags=["portfolio-intelligence"])
 api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+api_router.include_router(advanced_alerts.router, prefix="/advanced-alerts", tags=["advanced-alerts"])
 api_router.include_router(companies.router, prefix="/companies", tags=["companies"])
 api_router.include_router(factors.router, prefix="/factors", tags=["factors"])
 api_router.include_router(events.router, prefix="/events", tags=["events"])
