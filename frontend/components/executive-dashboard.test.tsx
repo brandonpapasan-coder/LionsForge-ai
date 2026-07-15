@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ExecutiveDashboard } from "@/components/executive-dashboard";
@@ -73,5 +73,21 @@ describe("ExecutiveDashboard request lifecycle", () => {
     unmount();
 
     expect(dashboardSignal?.aborted).toBe(true);
+  });
+
+  it("ignores a late unauthorized response after unmount", async () => {
+    const dashboardResponse = deferred<Awaited<ReturnType<typeof response>>>();
+    const navigationError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(() => dashboardResponse.promise));
+
+    const { unmount } = render(<ExecutiveDashboard />);
+    unmount();
+
+    await act(async () => {
+      dashboardResponse.resolve(await response(null, 401));
+      await dashboardResponse.promise;
+    });
+
+    expect(navigationError).not.toHaveBeenCalled();
   });
 });
