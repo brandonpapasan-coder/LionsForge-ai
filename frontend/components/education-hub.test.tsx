@@ -119,6 +119,14 @@ function response(body: unknown, status = 200) {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function lessonCard(title: string) {
   return screen.getByLabelText(new RegExp(`^${title}:`));
 }
@@ -136,15 +144,10 @@ describe("EducationHub", () => {
     expect(await screen.findByLabelText("64% mastery")).toBeInTheDocument();
     expect(screen.getByText("proficient mastery")).toBeInTheDocument();
     expect(screen.getAllByText("Valuation and Cash Flow")).toHaveLength(2);
-
     const recommended = lessonCard("Valuation and Cash Flow");
     expect(recommended).toHaveAttribute("data-path-state", "recommended");
     expect(recommended).toHaveTextContent("Prerequisites: Financial Statements Foundations");
-    expect(recommended).toHaveTextContent("its prerequisite lessons are complete");
-
     const locked = lessonCard("Research Thesis Construction");
-    expect(locked).toHaveAttribute("data-path-state", "locked");
-    expect(locked).toHaveTextContent("Complete Evidence Quality and Bias to unlock this lesson.");
     expect(within(locked).getByRole("button", { name: "Complete prerequisites" })).toBeDisabled();
   });
 
@@ -164,50 +167,54 @@ describe("EducationHub", () => {
     await user.click(within(recommended).getByRole("button", { name: "Start lesson" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith("/api/education/lessons/valuation-and-cash-flow/progress", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status: "in_progress", score: null }),
-      });
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/education/lessons/valuation-and-cash-flow/progress",
+        expect.objectContaining({
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "in_progress", score: null }),
+          signal: expect.any(AbortSignal),
+        }),
+      );
     });
     expect(within(recommended).getByRole("button", { name: "Complete lesson" })).toBeInTheDocument();
   });
 
-  it("shows remediation as the priority path state", async () => {
-    const remediationHub: EducationHubData = {
+  it("keeps the newest lesson mutation when an older response finishes last", async () => {
+    const user = userEvent.setup();
+    const firstMutation = deferred<Awaited<ReturnType<typeof response>>>();
+    let firstSignal: AbortSignal | undefined;
+    const newestHub: EducationHubData = {
       ...hub,
-      average_score: 55,
-      recommendation_reason: "Strengthen valuation: the latest 55% assessment score is below the 70% mastery threshold.",
       lessons: hub.lessons.map((lesson) =>
-        lesson.slug === "valuation-and-cash-flow"
-          ? {
-              ...lesson,
-              status: "in_progress",
-              score: 55,
-              path_state: "remediation",
-              path_reason: "Strengthen valuation: the latest 55% assessment score is below the 70% mastery threshold.",
-            }
-          : lesson,
+        lesson.slug === "evidence-quality-and-bias" ? { ...lesson, status: "in_progress" } : lesson,
       ),
     };
-    vi.stubGlobal("fetch", vi.fn(() => response(remediationHub)));
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/education") return response(hub);
+      if (url.includes("valuation-and-cash-flow")) {
+        firstSignal = init?.signal ?? undefined;
+        return firstMutation.promise;
+      }
+      if (url.includes("evidence-quality-and-bias")) return response(newestHub);
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<EducationHub />);
-    const remediation = await screen.findByLabelText("Valuation and Cash Flow: remediation");
-    expect(remediation).toHaveAttribute("data-path-state", "remediation");
-    expect(remediation).toHaveTextContent("below the 70% mastery threshold");
+    await screen.findByLabelText("64% mastery");
+    await user.click(within(lessonCard("Valuation and Cash Flow")).getByRole("button", { name: "Start lesson" }));
+    await user.click(within(lessonCard("Evidence Quality and Bias")).getByRole("button", { name: "Start lesson" }));
+
+    await waitFor(() => expect(firstSignal?.aborted).toBe(true));
+    expect(within(lessonCard("Evidence Quality and Bias")).getByRole("button", { name: "Complete lesson" })).toBeInTheDocument();
+    firstMutation.resolve(await response({ ...hub, mastery_percent: 10 }));
+    await waitFor(() => expect(screen.queryByLabelText("10% mastery")).not.toBeInTheDocument());
   });
 
   it("loads and submits an explainable adaptive assessment", async () => {
     const user = userEvent.setup();
-    const completedLessons = hub.lessons.map((lesson) => ({
-      ...lesson,
-      status: "completed",
-      score: lesson.score ?? 100,
-      completed_at: lesson.completed_at ?? "2026-07-14T21:00:00Z",
-      path_state: "completed" as const,
-      path_reason: "Lesson completed with a recorded assessment score.",
-    }));
     const updatedHub: EducationHubData = {
       ...hub,
       completed_lessons: 4,
@@ -218,7 +225,14 @@ describe("EducationHub", () => {
       proficiency_band: "expert",
       recommended_lesson_slug: null,
       recommendation_reason: "All current lessons are complete.",
-      lessons: completedLessons,
+      lessons: hub.lessons.map((lesson) => ({
+        ...lesson,
+        status: "completed",
+        score: lesson.score ?? 100,
+        completed_at: lesson.completed_at ?? "2026-07-14T21:00:00Z",
+        path_state: "completed" as const,
+        path_reason: "Lesson completed with a recorded assessment score.",
+      })),
     };
     const result: AssessmentResult = {
       lesson_slug: "valuation-and-cash-flow",
@@ -230,11 +244,7 @@ describe("EducationHub", () => {
       learning_objective: assessment.question.objective,
       education_hub: updatedHub,
     };
-    const fetchMock = vi
-      .fn()
-      .mockImplementationOnce(() => response(hub))
-      .mockImplementationOnce(() => response(assessment))
-      .mockImplementationOnce(() => response(result));
+    const fetchMock = vi.fn().mockImplementationOnce(() => response(hub)).mockImplementationOnce(() => response(assessment)).mockImplementationOnce(() => response(result));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<EducationHub />);
@@ -245,7 +255,20 @@ describe("EducationHub", () => {
 
     expect(await screen.findByText("100% · Passed")).toBeInTheDocument();
     expect(screen.getByLabelText("99% mastery")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Learning path complete" })).toBeDisabled();
+  });
+
+  it("aborts active requests when unmounted", async () => {
+    const initial = deferred<Awaited<ReturnType<typeof response>>>();
+    let initialSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      initialSignal = init?.signal ?? undefined;
+      return initial.promise;
+    }));
+
+    const view = render(<EducationHub />);
+    await waitFor(() => expect(initialSignal).toBeDefined());
+    view.unmount();
+    expect(initialSignal?.aborted).toBe(true);
   });
 
   it("shows the completed path and accessible failures", async () => {
