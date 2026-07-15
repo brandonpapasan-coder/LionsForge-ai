@@ -7,6 +7,7 @@ import type { ResearchProject } from "@/lib/research";
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 const label = (value: string) => value.replaceAll("_", " ");
+const isAbortError = (error: unknown) => error instanceof DOMException && error.name === "AbortError";
 
 export function KnowledgeQualityDashboard() {
   const [data, setData] = useState<KnowledgeQualityDashboardData | null>(null);
@@ -14,6 +15,7 @@ export function KnowledgeQualityDashboard() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("organization");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const mounted = useRef(false);
   const dashboardRequest = useRef<AbortController | null>(null);
   const projectsRequest = useRef<AbortController | null>(null);
 
@@ -22,14 +24,16 @@ export function KnowledgeQualityDashboard() {
     const controller = new AbortController();
     dashboardRequest.current = controller;
 
-    setLoading(true);
-    setError(null);
+    if (mounted.current) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const path = projectId === "organization"
         ? "/api/knowledge-quality"
         : `/api/knowledge-quality/projects/${projectId}`;
       const response = await fetch(path, { cache: "no-store", signal: controller.signal });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !mounted.current) return;
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -44,19 +48,21 @@ export function KnowledgeQualityDashboard() {
         return;
       }
       const nextData = (await response.json()) as KnowledgeQualityDashboardData;
-      if (!controller.signal.aborted) setData(nextData);
+      if (!controller.signal.aborted && mounted.current) setData(nextData);
     } catch (requestError) {
-      if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-      if (!controller.signal.aborted) setError("The knowledge quality service is unavailable.");
+      if (!isAbortError(requestError) && !controller.signal.aborted && mounted.current) {
+        setError("The knowledge quality service is unavailable.");
+      }
     } finally {
       if (dashboardRequest.current === controller) {
         dashboardRequest.current = null;
-        setLoading(false);
+        if (mounted.current) setLoading(false);
       }
     }
   }
 
   useEffect(() => {
+    mounted.current = true;
     const controller = new AbortController();
     projectsRequest.current = controller;
 
@@ -66,26 +72,27 @@ export function KnowledgeQualityDashboard() {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !mounted.current) return;
         if (response.status === 401) {
           window.location.href = "/login";
           return;
         }
         if (response.ok) {
           const nextProjects = (await response.json()) as ResearchProject[];
-          if (!controller.signal.aborted) setProjects(nextProjects);
+          if (!controller.signal.aborted && mounted.current) setProjects(nextProjects);
         }
       } catch (requestError) {
-        if (!(requestError instanceof DOMException && requestError.name === "AbortError")) {
+        if (!isAbortError(requestError)) {
           // Project discovery is supplemental; the organization dashboard remains usable without it.
         }
       } finally {
-        if (!controller.signal.aborted) await loadDashboard("organization");
+        if (!controller.signal.aborted && mounted.current) await loadDashboard("organization");
       }
     }
 
     void initialize();
     return () => {
+      mounted.current = false;
       controller.abort();
       projectsRequest.current = null;
       dashboardRequest.current?.abort();
