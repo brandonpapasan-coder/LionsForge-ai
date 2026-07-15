@@ -91,6 +91,42 @@ describe("MentorWorkspace request lifecycle", () => {
     expect(screen.getByText("Current assumption analysis")).toBeInTheDocument();
   });
 
+  it("aborts and clears an active mentor request when research context changes", async () => {
+    const chatResponse = deferred<Awaited<ReturnType<typeof response>>>();
+    let chatSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/mentor/conversations") return response(conversations);
+      if (url === "/api/mentor/chat") {
+        chatSignal = init?.signal ?? undefined;
+        return chatResponse.promise;
+      }
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { rerender } = render(<MentorWorkspace researchProjectId="7" researchSessionId="70" />);
+    await screen.findByRole("button", { name: /Evidence review/i });
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask the mentor" }), {
+      target: { value: "Challenge this project's evidence." },
+    });
+    fireEvent.submit(screen.getByRole("textbox", { name: "Ask the mentor" }).closest("form")!);
+
+    expect(await screen.findByText("Challenge this project's evidence.")).toBeInTheDocument();
+    await waitFor(() => expect(chatSignal).toBeDefined());
+
+    rerender(<MentorWorkspace researchProjectId="8" researchSessionId="80" />);
+
+    expect(chatSignal?.aborted).toBe(true);
+    expect(screen.queryByText("Challenge this project's evidence.")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review the active research" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send question" })).toBeEnabled();
+
+    chatResponse.resolve(await response(null, 500));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
   it("aborts the initial history request when unmounted", async () => {
     const historyResponse = deferred<Awaited<ReturnType<typeof response>>>();
     let historySignal: AbortSignal | undefined;
