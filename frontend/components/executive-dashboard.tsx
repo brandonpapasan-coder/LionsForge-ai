@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
@@ -9,8 +9,10 @@ import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboa
 export function ExecutiveDashboard() {
   const [data, setData] = useState<ExecutiveDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(false);
 
   useEffect(() => {
+    mounted.current = true;
     const controller = new AbortController();
 
     async function load() {
@@ -19,7 +21,7 @@ export function ExecutiveDashboard() {
           cache: "no-store",
           signal: controller.signal,
         });
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !mounted.current) return;
         if (response.status === 401) {
           window.location.href = "/login";
           return;
@@ -29,15 +31,18 @@ export function ExecutiveDashboard() {
           return;
         }
         const payload = (await response.json()) as ExecutiveDashboardData;
-        if (!controller.signal.aborted) setData(payload);
+        if (!controller.signal.aborted && mounted.current) setData(payload);
       } catch (requestError) {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-        if (!controller.signal.aborted) setError("The dashboard service is unavailable.");
+        if (!controller.signal.aborted && mounted.current) setError("The dashboard service is unavailable.");
       }
     }
 
     void load();
-    return () => controller.abort();
+    return () => {
+      mounted.current = false;
+      controller.abort();
+    };
   }, []);
 
   if (error) {
