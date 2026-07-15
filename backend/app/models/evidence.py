@@ -35,3 +35,18 @@ class EvidenceRecord(Base):
     provenance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class EvidenceReviewEvent(Base):
+    __tablename__ = "evidence_review_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    evidence_id: Mapped[int] = mapped_column(
+        ForeignKey("evidence_records.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    reviewer_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    previous_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    validation_status: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
+    reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

@@ -52,6 +52,19 @@ class EvidenceReview(BaseModel):
     reviewer_notes: str | None = None
 
 
+class EvidenceReviewEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    evidence_id: int
+    owner_id: int
+    reviewer_id: int
+    previous_status: str
+    validation_status: str
+    reviewer_notes: str | None
+    created_at: datetime
+
+
 class EvidenceConflictGroup(BaseModel):
     contradiction_key: str
     supporting: list[EvidenceRead]

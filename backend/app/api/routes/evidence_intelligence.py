@@ -4,11 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.evidence import EvidenceRecord
+from app.models.evidence import EvidenceRecord, EvidenceReviewEvent
 from app.models.knowledge_graph import KnowledgeEntity
 from app.models.research_project import ResearchProject
 from app.models.user import User
-from app.schemas.evidence_intelligence import EvidenceConflictGroup, EvidenceCreate, EvidenceRead, EvidenceReview
+from app.schemas.evidence_intelligence import (
+    EvidenceConflictGroup,
+    EvidenceCreate,
+    EvidenceRead,
+    EvidenceReview,
+    EvidenceReviewEventRead,
+)
 from app.services.evidence_intelligence_service import build_evidence_record, conflict_groups, find_duplicate
 
 router = APIRouter()
@@ -84,11 +90,38 @@ def review_evidence(
     db: Session = Depends(get_db),
 ) -> EvidenceRecord:
     item = _owned_evidence(db, current_user.id, evidence_id)
+    event = EvidenceReviewEvent(
+        evidence_id=item.id,
+        owner_id=current_user.id,
+        reviewer_id=current_user.id,
+        previous_status=item.validation_status,
+        validation_status=payload.validation_status,
+        reviewer_notes=payload.reviewer_notes,
+    )
     item.validation_status = payload.validation_status
     item.reviewer_notes = payload.reviewer_notes
+    db.add(event)
     db.commit()
     db.refresh(item)
     return item
+
+
+@router.get("/{evidence_id}/reviews", response_model=list[EvidenceReviewEventRead])
+def list_evidence_reviews(
+    evidence_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[EvidenceReviewEvent]:
+    _owned_evidence(db, current_user.id, evidence_id)
+    statement = (
+        select(EvidenceReviewEvent)
+        .where(
+            EvidenceReviewEvent.evidence_id == evidence_id,
+            EvidenceReviewEvent.owner_id == current_user.id,
+        )
+        .order_by(EvidenceReviewEvent.created_at, EvidenceReviewEvent.id)
+    )
+    return list(db.scalars(statement).all())
 
 
 @router.get("/analysis/conflicts", response_model=list[EvidenceConflictGroup])
