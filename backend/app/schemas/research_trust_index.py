@@ -34,10 +34,22 @@ class ResearchTrustIndexRead(BaseModel):
     methodology_version: str = "rti-v2"
 
 
+class GovernanceExecutiveSummary(BaseModel):
+    trust_status: str
+    risk_level: str
+    headline: str
+    evidence_review_rate: float = Field(ge=0, le=1)
+    approval_rate: float = Field(ge=0, le=1)
+    key_strengths: list[str] = Field(default_factory=list)
+    key_risks: list[str] = Field(default_factory=list)
+    priority_actions: list[str] = Field(default_factory=list)
+
+
 class ProjectGovernanceSnapshotRead(BaseModel):
     project_id: int
     project_title: str
     project_status: str
     generated_at: datetime
+    executive_summary: GovernanceExecutiveSummary
     trust_index: ResearchTrustIndexRead
     review_history: list[EvidenceReviewEventRead] = Field(default_factory=list)
