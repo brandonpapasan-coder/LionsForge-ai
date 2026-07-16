@@ -32,7 +32,7 @@ def test_learning_roadmap_orders_unresolved_then_unsubmitted_then_coverage(clien
         "The simulated exercise suggested concentration increased modeled downside under the selected assumptions.",
     )
     review = client.patch(
-        f"/api/v1/evidence-intelligence/evidence/{evidence['evidence']['id']}/review",
+        f"/api/v1/evidence-intelligence/{evidence['evidence']['id']}/review",
         headers=headers,
         json={"validation_status": "needs_review", "reviewer_notes": "Compare another scenario."},
     )
