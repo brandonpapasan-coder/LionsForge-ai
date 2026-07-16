@@ -69,6 +69,11 @@ class ResearchReviewAction(Base):
     action_text: Mapped[str] = mapped_column(Text, nullable=False)
     supporting_event_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="open", index=True, nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), default="normal", index=True, nullable=False)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, index=True, nullable=True)
+    owner_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
