@@ -90,7 +90,7 @@ describe("MarketLearningPortfolioPanel", () => {
         "0 immutable review events",
       ],
       recent_claims: [],
-    }))));
+    })));
 
     render(<MarketLearningPortfolioPanel />);
 
