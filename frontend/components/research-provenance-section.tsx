@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 
 import { ResearchProvenancePanel } from "@/components/research-provenance-panel";
 import type { ResearchProject } from "@/lib/research";
@@ -11,11 +11,28 @@ const safeFilename = (title: string, projectId: number) => {
   return `${slug}-evidence-audit-packet.json`;
 };
 
+const readFileAsText = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onerror = () => reject(reader.error ?? new Error("File could not be read."));
+  reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+  reader.readAsText(file);
+});
+
+type VerificationCheck = { code: string; passed: boolean; message: string };
+type VerificationResult = {
+  valid: boolean;
+  computed_sha256: string;
+  checks: VerificationCheck[];
+  disclaimer: string;
+};
+
 export function ResearchProvenanceSection() {
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +80,31 @@ export function ResearchProvenanceSection() {
     }
   }
 
+  async function verifyAuditPacket(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setVerifying(true);
+    setVerification(null);
+    setError(null);
+    try {
+      const packet = JSON.parse(await readFileAsText(file)) as unknown;
+      const response = await fetch("/api/research-evidence-audit-packet/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(packet),
+      });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      if (!response.ok) { setError("The selected audit packet could not be verified."); return; }
+      setVerification((await response.json()) as VerificationResult);
+    } catch {
+      setError("The selected file is not a valid audit packet JSON document.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   if (loading) return <section className="dashboard-state" aria-live="polite">Loading provenance projects…</section>;
   if (error && !projectId) return <section className="dashboard-state" role="alert">{error}</section>;
   if (!projectId) return null;
@@ -81,9 +123,33 @@ export function ResearchProvenanceSection() {
           <button type="button" onClick={downloadAuditPacket} disabled={downloading}>
             {downloading ? "Preparing packet…" : "Download audit packet"}
           </button>
+          <label>
+            <span>{verifying ? "Verifying packet…" : "Verify audit packet"}</span>
+            <input aria-label="Verify audit packet" type="file" accept="application/json,.json" onChange={verifyAuditPacket} disabled={verifying} />
+          </label>
         </div>
       </div>
       {error ? <p role="alert" className="form-message">{error}</p> : null}
+      {verification ? (
+        <section className="dashboard-panel" aria-labelledby="audit-verification-title">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">AUDIT PACKET VERIFICATION</p>
+              <h3 id="audit-verification-title">{verification.valid ? "Packet passed verification" : "Packet requires review"}</h3>
+              <p className="muted">{verification.disclaimer}</p>
+            </div>
+          </div>
+          <div className="activity-list">
+            {verification.checks.map((check) => (
+              <article className="activity-card" key={check.code}>
+                <span>{check.passed ? "PASS" : "FAIL"}</span>
+                <div><strong>{check.code.replaceAll("_", " ")}</strong><p>{check.message}</p></div>
+              </article>
+            ))}
+          </div>
+          <p className="muted"><strong>Computed SHA-256:</strong> {verification.computed_sha256}</p>
+        </section>
+      ) : null}
       <ResearchProvenancePanel projectId={projectId} />
     </section>
   );
