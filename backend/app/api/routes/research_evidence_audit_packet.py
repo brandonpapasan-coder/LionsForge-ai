@@ -12,11 +12,18 @@ from app.db.session import get_db
 from app.models.evidence import EvidenceRecord, EvidenceReviewEvent
 from app.models.research_project import ResearchProject
 from app.models.user import User
-from app.schemas.research_evidence_audit_packet import AuditPacketProject, ResearchEvidenceAuditPacket
+from app.schemas.research_evidence_audit_packet import (
+    AuditPacketProject,
+    AuditPacketVerificationCheck,
+    ResearchEvidenceAuditPacket,
+    ResearchEvidenceAuditPacketVerification,
+)
 from app.schemas.research_evidence_provenance import ProvenanceLedgerEntry, ProvenanceLedgerSummary
 
 router = APIRouter()
 DISCLAIMER = "This packet records origin and review history. It does not certify that a claim is correct or complete."
+VERIFICATION_DISCLAIMER = "Packet verification confirms structural consistency and integrity only. It does not certify that any claim is true."
+SUPPORTED_SCHEMA_VERSION = "1.0"
 
 
 def _warning(record: EvidenceRecord) -> str | None:
@@ -25,6 +32,21 @@ def _warning(record: EvidenceRecord) -> str | None:
     if record.source_type != "user" and not record.source_url:
         return "Source URL is missing for non-user evidence."
     return None
+
+
+def _stable_packet_payload(packet: ResearchEvidenceAuditPacket) -> dict:
+    return {
+        "schema_version": packet.schema_version,
+        "project": packet.project.model_dump(mode="json"),
+        "summary": packet.summary.model_dump(mode="json"),
+        "entries": [item.model_dump(mode="json") for item in packet.entries],
+        "disclaimer": packet.disclaimer,
+    }
+
+
+def _packet_digest(packet: ResearchEvidenceAuditPacket) -> str:
+    canonical = json.dumps(_stable_packet_payload(packet), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 @router.get("/projects/{project_id}/audit-packet", response_model=ResearchEvidenceAuditPacket)
@@ -57,6 +79,62 @@ def get_audit_packet(project_id: int, current_user: User = Depends(get_current_u
     counts = Counter(record.contradiction_key for record in records if record.contradiction_key and record.validation_status not in {"approved", "rejected"})
     summary = ProvenanceLedgerSummary(total_evidence=len(records), total_events=len(entries), unresolved_contradictions=sum(1 for count in counts.values() if count > 1), superseded_claims=superseded, missing_source_metadata=missing)
     project_snapshot = AuditPacketProject.model_validate(project, from_attributes=True)
-    stable = {"schema_version": "1.0", "project": project_snapshot.model_dump(mode="json"), "summary": summary.model_dump(mode="json"), "entries": [item.model_dump(mode="json") for item in entries], "disclaimer": DISCLAIMER}
-    digest = hashlib.sha256(json.dumps(stable, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return ResearchEvidenceAuditPacket(generated_at=datetime.utcnow(), project=project_snapshot, summary=summary, entries=entries, disclaimer=DISCLAIMER, content_sha256=digest)
+    packet = ResearchEvidenceAuditPacket(generated_at=datetime.utcnow(), project=project_snapshot, summary=summary, entries=entries, disclaimer=DISCLAIMER, content_sha256="")
+    packet.content_sha256 = _packet_digest(packet)
+    return packet
+
+
+@router.post("/audit-packet/verify", response_model=ResearchEvidenceAuditPacketVerification)
+def verify_audit_packet(
+    packet: ResearchEvidenceAuditPacket,
+    current_user: User = Depends(get_current_user),
+) -> ResearchEvidenceAuditPacketVerification:
+    del current_user
+    computed_sha256 = _packet_digest(packet)
+    integrity_matches = computed_sha256 == packet.content_sha256
+    schema_version_supported = packet.schema_version == SUPPORTED_SCHEMA_VERSION
+
+    ordered_entries = sorted(packet.entries, key=lambda item: (item.occurred_at, item.event_id))
+    chronology_valid = [item.event_id for item in packet.entries] == [item.event_id for item in ordered_entries]
+
+    evidence_ids = {item.evidence_id for item in packet.entries if item.event_type == "evidence_created"}
+    broken_supersession_ids = sorted({
+        item.supersedes_evidence_id
+        for item in packet.entries
+        if item.supersedes_evidence_id is not None and item.supersedes_evidence_id not in evidence_ids
+    })
+    supersession_references_valid = not broken_supersession_ids
+
+    checks = [
+        AuditPacketVerificationCheck(
+            code="schema_version",
+            passed=schema_version_supported,
+            message="Schema version is supported." if schema_version_supported else f"Unsupported schema version: {packet.schema_version}.",
+        ),
+        AuditPacketVerificationCheck(
+            code="integrity_sha256",
+            passed=integrity_matches,
+            message="Integrity digest matches the canonical packet content." if integrity_matches else "Integrity digest does not match the canonical packet content.",
+        ),
+        AuditPacketVerificationCheck(
+            code="event_chronology",
+            passed=chronology_valid,
+            message="Events are in deterministic chronological order." if chronology_valid else "Events are not in deterministic chronological order.",
+        ),
+        AuditPacketVerificationCheck(
+            code="supersession_references",
+            passed=supersession_references_valid,
+            message="Supersession references resolve within the packet." if supersession_references_valid else f"Missing superseded evidence IDs: {broken_supersession_ids}.",
+        ),
+    ]
+
+    return ResearchEvidenceAuditPacketVerification(
+        valid=all(check.passed for check in checks),
+        schema_version_supported=schema_version_supported,
+        integrity_matches=integrity_matches,
+        chronology_valid=chronology_valid,
+        supersession_references_valid=supersession_references_valid,
+        computed_sha256=computed_sha256,
+        checks=checks,
+        disclaimer=VERIFICATION_DISCLAIMER,
+    )
