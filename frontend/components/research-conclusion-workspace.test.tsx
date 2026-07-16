@@ -47,11 +47,12 @@ describe("ResearchConclusionWorkspace", () => {
 
   it("requires explicit confirmation before finalizing", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/research-projects") return response(projects);
       if (url.includes("readiness")) return response(readiness);
       if (url.includes("evidence")) return response(evidence);
+      void init;
       return response(workspace);
     });
     vi.stubGlobal("fetch", fetchMock);
