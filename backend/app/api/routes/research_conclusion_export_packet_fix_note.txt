@@ -1,1 +1,0 @@
-Temporary note: readiness export conversion must use readiness.model_dump() before validating against ConclusionPacketReadiness.
