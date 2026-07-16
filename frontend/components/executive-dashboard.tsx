@@ -7,6 +7,7 @@ import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashbo
 import { MarketLearningEvidencePanel } from "@/components/market-learning-evidence-panel";
 import { MarketLearningPortfolioPanel } from "@/components/market-learning-portfolio-panel";
 import { MarketLearningProgressPanel } from "@/components/market-learning-progress-panel";
+import { MarketLearningRoadmapPanel } from "@/components/market-learning-roadmap-panel";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
 export function ExecutiveDashboard() {
@@ -78,25 +79,19 @@ export function ExecutiveDashboard() {
 
       <KnowledgeQualityDashboard />
       <MarketLearningProgressPanel />
+      <MarketLearningRoadmapPanel />
       <MarketLearningEvidencePanel />
       <MarketLearningPortfolioPanel />
 
       <div className="dashboard-grid">
         <section className="dashboard-panel">
           <div className="panel-heading">
-            <div>
-              <p className="eyebrow">NEXT BEST ACTIONS</p>
-              <h2>Focus your effort</h2>
-            </div>
+            <div><p className="eyebrow">NEXT BEST ACTIONS</p><h2>Focus your effort</h2></div>
           </div>
           <div className="action-list">
             {data.next_actions.map((action) => (
               <Link href={action.href} className="action-card" key={`${action.title}-${action.href}`}>
-                <div>
-                  <span className={`priority priority-${action.priority}`}>{action.priority}</span>
-                  <h3>{action.title}</h3>
-                  <p>{action.reason}</p>
-                </div>
+                <div><span className={`priority priority-${action.priority}`}>{action.priority}</span><h3>{action.title}</h3><p>{action.reason}</p></div>
                 <span aria-hidden="true">→</span>
               </Link>
             ))}
@@ -104,20 +99,11 @@ export function ExecutiveDashboard() {
         </section>
 
         <section className="dashboard-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">RECENT ACTIVITY</p>
-              <h2>Resume where you left off</h2>
-            </div>
-          </div>
+          <div className="panel-heading"><div><p className="eyebrow">RECENT ACTIVITY</p><h2>Resume where you left off</h2></div></div>
           <div className="activity-list">
             {data.recent_activity.length ? data.recent_activity.map((activity) => (
               <Link href={activity.href} className="activity-card" key={`${activity.kind}-${activity.href}`}>
-                <span>{activity.kind}</span>
-                <div>
-                  <strong>{activity.title}</strong>
-                  <p>{activity.summary ?? "Continue this activity."}</p>
-                </div>
+                <span>{activity.kind}</span><div><strong>{activity.title}</strong><p>{activity.summary ?? "Continue this activity."}</p></div>
               </Link>
             )) : <p className="muted">Your research and mentor activity will appear here.</p>}
           </div>
