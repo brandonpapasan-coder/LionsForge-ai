@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { ResearchProvenanceSection } from "@/components/research-provenance-section";
 import { ResearchWorkspace } from "@/components/research-workspace";
 import "./research.css";
 import "./sessions.css";
@@ -12,5 +13,10 @@ export default async function ResearchPage() {
     redirect("/login");
   }
 
-  return <ResearchWorkspace />;
+  return (
+    <>
+      <ResearchWorkspace />
+      <ResearchProvenanceSection />
+    </>
+  );
 }
