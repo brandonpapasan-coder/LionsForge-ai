@@ -46,7 +46,7 @@ describe("ResearchProvenanceSection audit packet", () => {
 
     await waitFor(() => expect(click).toHaveBeenCalled());
     expect(downloadAnchor).not.toBeNull();
-    expect(downloadAnchor?.download).toBe("climate-review-2026-draft-evidence-audit-packet.json");
+    expect((downloadAnchor as HTMLAnchorElement).download).toBe("climate-review-2026-draft-evidence-audit-packet.json");
     expect(createObjectURL).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:audit");
   });
