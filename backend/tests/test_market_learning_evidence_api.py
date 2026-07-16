@@ -152,5 +152,4 @@ def test_learning_evidence_does_not_mutate_simulation_portfolio(client):
     assert created.status_code == 201
     after = client.get(f"/api/v1/market-simulator/accounts/{account['id']}", headers=headers)
     assert after.status_code == 200
-    assert after.json()["cash_balance"] == before.json()["cash_balance"]
-    assert after.json()["positions"] == before.json()["positions"]
+    assert after.json() == before.json()
