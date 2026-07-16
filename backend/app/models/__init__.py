@@ -12,6 +12,7 @@ from app.models.mentor import MentorConversation, MentorMessage
 from app.models.mission import Mission, MissionStep
 from app.models.portfolio import Portfolio, PortfolioHolding
 from app.models.research_conclusion import ResearchConclusion, ResearchConclusionRevision
+from app.models.research_conclusion_defense import ResearchConclusionDefense, ResearchConclusionDefenseRevision
 from app.models.research_evidence import ResearchEvidence
 from app.models.research_planning import ResearchPlanRecommendation, ResearchPlanRevision
 from app.models.research_project import ResearchProject
@@ -43,6 +44,8 @@ __all__ = [
     "Portfolio",
     "PortfolioHolding",
     "ResearchConclusion",
+    "ResearchConclusionDefense",
+    "ResearchConclusionDefenseRevision",
     "ResearchConclusionRevision",
     "ResearchEvidence",
     "ResearchPlanRecommendation",
