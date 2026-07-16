@@ -25,7 +25,7 @@ class DefensePacketRevision(BaseModel):
 
 class DefensePacketContent(BaseModel):
     status: DefensePacketStatus
-    conclusion_revision_number: int | None
+    conclusion_revision_number: int | None = None
     evidence_ids: list[int] = Field(default_factory=list)
     evidence_coverage: str = ""
     strongest_counterargument: str = ""
