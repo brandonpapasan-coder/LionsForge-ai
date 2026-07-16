@@ -109,7 +109,16 @@ class ResearchEvidenceChangeImpactAssessment(BaseModel):
     disclaimer: str
 
 
-ReviewActionStatus = Literal["open", "acknowledged", "deferred", "resolved"]
+ReviewActionStatus = Literal[
+    "open",
+    "acknowledged",
+    "in_progress",
+    "blocked",
+    "deferred",
+    "resolved",
+    "dismissed",
+]
+ReviewActionPriority = Literal["low", "normal", "high", "urgent"]
 
 
 class ResearchReviewActionGenerateRequest(BaseModel):
@@ -136,6 +145,11 @@ class ResearchReviewActionItem(BaseModel):
     action_text: str
     supporting_event_ids: list[str]
     status: ReviewActionStatus
+    priority: ReviewActionPriority = "normal"
+    due_at: datetime | None = None
+    owner_notes: str | None = None
+    resolution_notes: str | None = None
+    resolved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     history: list[ResearchReviewActionHistoryItem] = []
@@ -153,3 +167,7 @@ class ResearchReviewActionTransitionRequest(BaseModel):
     status: ReviewActionStatus
     confirmed: bool
     note: str | None = None
+    priority: ReviewActionPriority | None = None
+    due_at: datetime | None = None
+    owner_notes: str | None = None
+    resolution_notes: str | None = None
