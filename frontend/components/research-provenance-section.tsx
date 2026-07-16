@@ -20,29 +20,12 @@ const readFileAsText = (file: File) => new Promise<string>((resolve, reject) => 
 type VerificationCheck = { code: string; passed: boolean; message: string };
 type VerificationResult = { valid: boolean; computed_sha256: string; checks: VerificationCheck[]; disclaimer: string };
 type PacketChange = { event_id: string; classification: "added" | "removed" | "changed" | "unchanged"; event_type: string; evidence_id: number; changed_fields: string[]; explanation: string };
-type ComparisonResult = {
-  comparable: boolean;
-  summary: { added: number; removed: number; changed: number; unchanged: number; project_changed: boolean; summary_changed: boolean };
-  changes: PacketChange[];
-  project_changes: string[];
-  summary_changes: string[];
-  disclaimer: string;
-};
-type ImpactItem = {
-  impact_level: "high_attention" | "review_required" | "informational";
-  evidence_id: number;
-  event_ids: string[];
-  rules: string[];
-  reasons: string[];
-  follow_up_actions: string[];
-};
-type ImpactAssessment = {
-  comparable: boolean;
-  summary: { high_attention: number; review_required: number; informational: number; material_change: boolean };
-  impacts: ImpactItem[];
-  global_actions: string[];
-  disclaimer: string;
-};
+type ComparisonResult = { comparable: boolean; summary: { added: number; removed: number; changed: number; unchanged: number; project_changed: boolean; summary_changed: boolean }; changes: PacketChange[]; project_changes: string[]; summary_changes: string[]; disclaimer: string };
+type ImpactItem = { impact_level: "high_attention" | "review_required" | "informational"; evidence_id: number; event_ids: string[]; rules: string[]; reasons: string[]; follow_up_actions: string[] };
+type ImpactAssessment = { comparable: boolean; summary: { high_attention: number; review_required: number; informational: number; material_change: boolean }; impacts: ImpactItem[]; global_actions: string[]; disclaimer: string };
+type ActionStatus = "open" | "acknowledged" | "deferred" | "resolved";
+type ReviewAction = { id: number; project_id: number; evidence_id: number; impact_level: "high_attention" | "review_required" | "informational"; governing_rule: string; reason: string; action_text: string; supporting_event_ids: string[]; status: ActionStatus; history: { id: number; previous_status: ActionStatus; new_status: ActionStatus; note: string | null; created_at: string }[] };
+type ReviewActionPlan = { project_id: number; generated: number; existing: number; actions: ReviewAction[]; disclaimer: string };
 
 export function ResearchProvenanceSection() {
   const [projects, setProjects] = useState<ResearchProject[]>([]);
@@ -52,11 +35,14 @@ export function ResearchProvenanceSection() {
   const [verifying, setVerifying] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [assessing, setAssessing] = useState(false);
+  const [generatingActions, setGeneratingActions] = useState(false);
   const [verification, setVerification] = useState<VerificationResult | null>(null);
   const [baselinePacket, setBaselinePacket] = useState<unknown | null>(null);
   const [currentPacket, setCurrentPacket] = useState<unknown | null>(null);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [impact, setImpact] = useState<ImpactAssessment | null>(null);
+  const [actionPlan, setActionPlan] = useState<ReviewActionPlan | null>(null);
+  const [actionFilter, setActionFilter] = useState<"all" | ActionStatus | "high_attention" | "review_required" | "informational">("all");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,36 +54,43 @@ export function ResearchProvenanceSection() {
         if (response.status === 401) { window.location.href = "/login"; return; }
         if (!response.ok) { setError("Research projects could not be loaded for provenance review."); return; }
         const payload = (await response.json()) as ResearchProject[];
-        setProjects(payload);
-        setProjectId(payload[0]?.id ?? null);
+        setProjects(payload); setProjectId(payload[0]?.id ?? null);
       } catch (requestError) {
         if (!isAbortError(requestError) && !controller.signal.aborted) setError("The provenance project selector is unavailable.");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
+      } finally { if (!controller.signal.aborted) setLoading(false); }
     }
-    void load();
-    return () => controller.abort();
+    void load(); return () => controller.abort();
   }, []);
 
-  async function downloadAuditPacket() {
+  useEffect(() => {
     if (!projectId) return;
-    setDownloading(true); setError(null);
+    const controller = new AbortController();
+    async function loadActions() {
+      try {
+        const response = await fetch(`/api/research-evidence-review-actions/projects/${projectId}`, { cache: "no-store", signal: controller.signal });
+        if (response.status === 401) { window.location.href = "/login"; return; }
+        if (response.ok && !controller.signal.aborted) setActionPlan((await response.json()) as ReviewActionPlan);
+      } catch (requestError) {
+        if (!isAbortError(requestError) && !controller.signal.aborted) setError("The review action queue could not be loaded.");
+      }
+    }
+    void loadActions(); return () => controller.abort();
+  }, [projectId]);
+
+  async function downloadAuditPacket() {
+    if (!projectId) return; setDownloading(true); setError(null);
     try {
       const response = await fetch(`/api/research-evidence-audit-packet/${projectId}`, { cache: "no-store" });
       if (response.status === 401) { window.location.href = "/login"; return; }
       if (!response.ok) { setError("The evidence audit packet could not be generated."); return; }
-      const packet = await response.json();
-      const url = URL.createObjectURL(new Blob([JSON.stringify(packet, null, 2)], { type: "application/json" }));
-      const anchor = document.createElement("a");
-      const project = projects.find((item) => item.id === projectId);
+      const packet = await response.json(); const url = URL.createObjectURL(new Blob([JSON.stringify(packet, null, 2)], { type: "application/json" }));
+      const anchor = document.createElement("a"); const project = projects.find((item) => item.id === projectId);
       anchor.href = url; anchor.download = safeFilename(project?.title ?? `project-${projectId}`, projectId); anchor.click(); URL.revokeObjectURL(url);
     } catch { setError("The evidence audit packet service is unavailable."); } finally { setDownloading(false); }
   }
 
   async function verifyAuditPacket(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-    setVerifying(true); setVerification(null); setError(null);
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; setVerifying(true); setVerification(null); setError(null);
     try {
       const packet = JSON.parse(await readFileAsText(file)) as unknown;
       const response = await fetch("/api/research-evidence-audit-packet/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(packet) });
@@ -108,17 +101,13 @@ export function ResearchProvenanceSection() {
   }
 
   async function selectComparisonPacket(event: ChangeEvent<HTMLInputElement>, side: "baseline" | "current") {
-    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-    setComparison(null); setImpact(null); setError(null);
-    try {
-      const packet = JSON.parse(await readFileAsText(file)) as unknown;
-      if (side === "baseline") setBaselinePacket(packet); else setCurrentPacket(packet);
-    } catch { setError(`The selected ${side} file is not valid JSON.`); }
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; setComparison(null); setImpact(null); setError(null);
+    try { const packet = JSON.parse(await readFileAsText(file)) as unknown; if (side === "baseline") setBaselinePacket(packet); else setCurrentPacket(packet); }
+    catch { setError(`The selected ${side} file is not valid JSON.`); }
   }
 
   async function comparePackets() {
-    if (!baselinePacket || !currentPacket) return;
-    setComparing(true); setComparison(null); setImpact(null); setError(null);
+    if (!baselinePacket || !currentPacket) return; setComparing(true); setComparison(null); setImpact(null); setError(null);
     try {
       const response = await fetch("/api/research-evidence-audit-packet/compare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseline: baselinePacket, current: currentPacket }) });
       if (response.status === 401) { window.location.href = "/login"; return; }
@@ -128,8 +117,7 @@ export function ResearchProvenanceSection() {
   }
 
   async function assessImpact() {
-    if (!baselinePacket || !currentPacket) return;
-    setAssessing(true); setImpact(null); setError(null);
+    if (!baselinePacket || !currentPacket) return; setAssessing(true); setImpact(null); setError(null);
     try {
       const response = await fetch("/api/research-evidence-audit-packet/impact-assessment", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseline: baselinePacket, current: currentPacket }) });
       if (response.status === 401) { window.location.href = "/login"; return; }
@@ -138,34 +126,38 @@ export function ResearchProvenanceSection() {
     } catch { setError("The research impact assessment service is unavailable."); } finally { setAssessing(false); }
   }
 
+  async function generateReviewActions() {
+    if (!baselinePacket || !currentPacket) return; setGeneratingActions(true); setError(null);
+    try {
+      const response = await fetch("/api/research-evidence-review-actions/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseline: baselinePacket, current: currentPacket }) });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      if (!response.ok) { setError("Review actions could not be generated from these packets."); return; }
+      setActionPlan((await response.json()) as ReviewActionPlan);
+    } catch { setError("The review action service is unavailable."); } finally { setGeneratingActions(false); }
+  }
+
+  async function transitionAction(action: ReviewAction, status: ActionStatus) {
+    const confirmed = window.confirm(`Change this action from ${action.status} to ${status}?`); if (!confirmed) return; setError(null);
+    const note = window.prompt("Optional audit note for this transition:") ?? undefined;
+    const response = await fetch(`/api/research-evidence-review-actions/${action.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, confirmed: true, note }) });
+    if (response.status === 401) { window.location.href = "/login"; return; }
+    if (!response.ok) { setError("The action state could not be changed."); return; }
+    const updated = (await response.json()) as ReviewAction;
+    setActionPlan((current) => current ? { ...current, actions: current.actions.map((item) => item.id === updated.id ? updated : item) } : current);
+  }
+
   if (loading) return <section className="dashboard-state" aria-live="polite">Loading provenance projects…</section>;
   if (error && !projectId) return <section className="dashboard-state" role="alert">{error}</section>;
   if (!projectId) return null;
+  const filteredActions = actionPlan?.actions.filter((item) => actionFilter === "all" || item.status === actionFilter || item.impact_level === actionFilter) ?? [];
 
-  return (
-    <section className="research-provenance-section">
-      <div className="research-section-heading">
-        <div><p className="eyebrow">PROJECT EVIDENCE TRAIL</p><h2>Provenance ledger</h2></div>
-        <div>
-          <label>Research project<select aria-label="Provenance research project" value={projectId} onChange={(event) => setProjectId(Number(event.target.value))}>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
-          <button type="button" onClick={downloadAuditPacket} disabled={downloading}>{downloading ? "Preparing packet…" : "Download audit packet"}</button>
-          <label><span>{verifying ? "Verifying packet…" : "Verify audit packet"}</span><input aria-label="Verify audit packet" type="file" accept="application/json,.json" onChange={verifyAuditPacket} disabled={verifying} /></label>
-        </div>
-      </div>
-      {error ? <p role="alert" className="form-message">{error}</p> : null}
-      {verification ? <section className="dashboard-panel" aria-labelledby="audit-verification-title"><div className="panel-heading"><div><p className="eyebrow">AUDIT PACKET VERIFICATION</p><h3 id="audit-verification-title">{verification.valid ? "Packet passed verification" : "Packet requires review"}</h3><p className="muted">{verification.disclaimer}</p></div></div><div className="activity-list">{verification.checks.map((check) => <article className="activity-card" key={check.code}><span>{check.passed ? "PASS" : "FAIL"}</span><div><strong>{check.code.replaceAll("_", " ")}</strong><p>{check.message}</p></div></article>)}</div><p className="muted"><strong>Computed SHA-256:</strong> {verification.computed_sha256}</p></section> : null}
-      <section className="dashboard-panel" aria-labelledby="audit-comparison-title">
-        <div className="panel-heading"><div><p className="eyebrow">AUDIT PACKET COMPARISON</p><h3 id="audit-comparison-title">Compare evidence history</h3><p className="muted">Select a baseline packet and a current packet. Files are verified and processed transiently; they are not imported or stored.</p></div></div>
-        <div className="form-grid">
-          <label>Baseline packet<input aria-label="Baseline audit packet" type="file" accept="application/json,.json" onChange={(event) => void selectComparisonPacket(event, "baseline")} /></label>
-          <label>Current packet<input aria-label="Current audit packet" type="file" accept="application/json,.json" onChange={(event) => void selectComparisonPacket(event, "current")} /></label>
-        </div>
-        <button type="button" onClick={comparePackets} disabled={!baselinePacket || !currentPacket || comparing}>{comparing ? "Comparing packets…" : "Compare packets"}</button>
-        <button type="button" onClick={assessImpact} disabled={!baselinePacket || !currentPacket || assessing}>{assessing ? "Assessing impact…" : "Assess change impact"}</button>
-        {comparison ? <div><p className="muted">{comparison.disclaimer}</p><div className="metric-grid"><article><strong>{comparison.summary.added}</strong><span>Added</span></article><article><strong>{comparison.summary.removed}</strong><span>Removed</span></article><article><strong>{comparison.summary.changed}</strong><span>Changed</span></article><article><strong>{comparison.summary.unchanged}</strong><span>Unchanged</span></article></div><p><strong>{comparison.comparable ? "Packets verified and comparable." : "One or both packets require verification review."}</strong></p>{comparison.project_changes.length ? <p>Project fields changed: {comparison.project_changes.join(", ")}</p> : null}{comparison.summary_changes.length ? <p>Summary fields changed: {comparison.summary_changes.join(", ")}</p> : null}<div className="activity-list">{comparison.changes.filter((change) => change.classification !== "unchanged").map((change) => <article className="activity-card" key={change.event_id}><span>{change.classification.toUpperCase()}</span><div><strong>{change.event_type.replaceAll("_", " ")} · evidence {change.evidence_id}</strong><p>{change.explanation}</p></div></article>)}</div></div> : null}
-      </section>
-      {impact ? <section className="dashboard-panel" aria-labelledby="impact-assessment-title"><div className="panel-heading"><div><p className="eyebrow">CHANGE IMPACT ASSESSMENT</p><h3 id="impact-assessment-title">{impact.summary.material_change ? "Research changes require attention" : "No material provenance change"}</h3><p className="muted">{impact.disclaimer}</p></div></div><div className="metric-grid"><article><strong>{impact.summary.high_attention}</strong><span>High attention</span></article><article><strong>{impact.summary.review_required}</strong><span>Review required</span></article><article><strong>{impact.summary.informational}</strong><span>Informational</span></article></div><div className="activity-list">{impact.impacts.map((item) => <article className="activity-card" key={`${item.evidence_id}-${item.event_ids.join("-")}`}><span>{item.impact_level.replaceAll("_", " ").toUpperCase()}</span><div><strong>Evidence {item.evidence_id}</strong><p>{item.reasons.join(" ")}</p><p><strong>Rules:</strong> {item.rules.join(", ")}</p><p><strong>Next:</strong> {item.follow_up_actions.join(" ")}</p></div></article>)}</div>{impact.global_actions.map((action) => <p key={action}>{action}</p>)}</section> : null}
-      <ResearchProvenancePanel projectId={projectId} />
-    </section>
-  );
+  return <section className="research-provenance-section">
+    <div className="research-section-heading"><div><p className="eyebrow">PROJECT EVIDENCE TRAIL</p><h2>Provenance ledger</h2></div><div><label>Research project<select aria-label="Provenance research project" value={projectId} onChange={(event) => setProjectId(Number(event.target.value))}>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label><button type="button" onClick={downloadAuditPacket} disabled={downloading}>{downloading ? "Preparing packet…" : "Download audit packet"}</button><label><span>{verifying ? "Verifying packet…" : "Verify audit packet"}</span><input aria-label="Verify audit packet" type="file" accept="application/json,.json" onChange={verifyAuditPacket} disabled={verifying} /></label></div></div>
+    {error ? <p role="alert" className="form-message">{error}</p> : null}
+    {verification ? <section className="dashboard-panel" aria-labelledby="audit-verification-title"><div className="panel-heading"><div><p className="eyebrow">AUDIT PACKET VERIFICATION</p><h3 id="audit-verification-title">{verification.valid ? "Packet passed verification" : "Packet requires review"}</h3><p className="muted">{verification.disclaimer}</p></div></div><div className="activity-list">{verification.checks.map((check) => <article className="activity-card" key={check.code}><span>{check.passed ? "PASS" : "FAIL"}</span><div><strong>{check.code.replaceAll("_", " ")}</strong><p>{check.message}</p></div></article>)}</div><p className="muted"><strong>Computed SHA-256:</strong> {verification.computed_sha256}</p></section> : null}
+    <section className="dashboard-panel" aria-labelledby="audit-comparison-title"><div className="panel-heading"><div><p className="eyebrow">AUDIT PACKET COMPARISON</p><h3 id="audit-comparison-title">Compare evidence history</h3><p className="muted">Select a baseline packet and a current packet. Files are verified transiently; only user-created review actions and their state history are persisted.</p></div></div><div className="form-grid"><label>Baseline packet<input aria-label="Baseline audit packet" type="file" accept="application/json,.json" onChange={(event) => void selectComparisonPacket(event, "baseline")} /></label><label>Current packet<input aria-label="Current audit packet" type="file" accept="application/json,.json" onChange={(event) => void selectComparisonPacket(event, "current")} /></label></div><button type="button" onClick={comparePackets} disabled={!baselinePacket || !currentPacket || comparing}>{comparing ? "Comparing packets…" : "Compare packets"}</button><button type="button" onClick={assessImpact} disabled={!baselinePacket || !currentPacket || assessing}>{assessing ? "Assessing impact…" : "Assess change impact"}</button><button type="button" onClick={generateReviewActions} disabled={!baselinePacket || !currentPacket || generatingActions}>{generatingActions ? "Creating review plan…" : "Create review action plan"}</button>{comparison ? <div><p className="muted">{comparison.disclaimer}</p><div className="metric-grid"><article><strong>{comparison.summary.added}</strong><span>Added</span></article><article><strong>{comparison.summary.removed}</strong><span>Removed</span></article><article><strong>{comparison.summary.changed}</strong><span>Changed</span></article><article><strong>{comparison.summary.unchanged}</strong><span>Unchanged</span></article></div><p><strong>{comparison.comparable ? "Packets verified and comparable." : "One or both packets require verification review."}</strong></p></div> : null}</section>
+    {impact ? <section className="dashboard-panel" aria-labelledby="impact-assessment-title"><div className="panel-heading"><div><p className="eyebrow">CHANGE IMPACT ASSESSMENT</p><h3 id="impact-assessment-title">{impact.summary.material_change ? "Research changes require attention" : "No material provenance change"}</h3><p className="muted">{impact.disclaimer}</p></div></div><div className="metric-grid"><article><strong>{impact.summary.high_attention}</strong><span>High attention</span></article><article><strong>{impact.summary.review_required}</strong><span>Review required</span></article><article><strong>{impact.summary.informational}</strong><span>Informational</span></article></div><div className="activity-list">{impact.impacts.map((item) => <article className="activity-card" key={`${item.evidence_id}-${item.event_ids.join("-")}`}><span>{item.impact_level.replaceAll("_", " ").toUpperCase()}</span><div><strong>Evidence {item.evidence_id}</strong><p>{item.reasons.join(" ")}</p><p><strong>Rules:</strong> {item.rules.join(", ")}</p><p><strong>Next:</strong> {item.follow_up_actions.join(" ")}</p></div></article>)}</div></section> : null}
+    <section className="dashboard-panel" aria-labelledby="review-action-title"><div className="panel-heading"><div><p className="eyebrow">RESEARCH REVIEW QUEUE</p><h3 id="review-action-title">User-controlled evidence actions</h3><p className="muted">{actionPlan?.disclaimer ?? "Create an action plan from two verified packets. Evidence records remain unchanged."}</p></div><label>Filter<select aria-label="Review action filter" value={actionFilter} onChange={(event) => setActionFilter(event.target.value as typeof actionFilter)}><option value="all">All actions</option><option value="high_attention">High attention</option><option value="review_required">Review required</option><option value="informational">Informational</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="deferred">Deferred</option><option value="resolved">Resolved</option></select></label></div>{actionPlan ? <p>{actionPlan.generated} created · {actionPlan.existing} already existed</p> : null}<div className="activity-list">{filteredActions.map((action) => <article className="activity-card" key={action.id}><span>{action.status.toUpperCase()}</span><div><strong>{action.impact_level.replaceAll("_", " ")} · evidence {action.evidence_id}</strong><p>{action.reason}</p><p><strong>Action:</strong> {action.action_text}</p><p><strong>Rule:</strong> {action.governing_rule} · <strong>Events:</strong> {action.supporting_event_ids.join(", ")}</p><div><button type="button" onClick={() => void transitionAction(action, "acknowledged")}>Acknowledge</button><button type="button" onClick={() => void transitionAction(action, "deferred")}>Defer</button><button type="button" onClick={() => void transitionAction(action, "resolved")}>Resolve</button>{action.status !== "open" ? <button type="button" onClick={() => void transitionAction(action, "open")}>Reopen</button> : null}</div>{action.history.length ? <details><summary>Action history ({action.history.length})</summary>{action.history.map((event) => <p key={event.id}>{event.previous_status} → {event.new_status}{event.note ? ` · ${event.note}` : ""}</p>)}</details> : null}</div></article>)}</div></section>
+    <ResearchProvenancePanel projectId={projectId} />
+  </section>;
 }

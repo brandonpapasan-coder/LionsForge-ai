@@ -50,3 +50,36 @@ class EvidenceReviewEvent(Base):
     validation_status: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
     reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ResearchReviewAction(Base):
+    __tablename__ = "research_review_actions"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "action_key", name="uq_research_review_action_owner_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True, nullable=False)
+    evidence_id: Mapped[int] = mapped_column(index=True, nullable=False)
+    action_key: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    impact_level: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
+    governing_rule: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    action_text: Mapped[str] = mapped_column(Text, nullable=False)
+    supporting_event_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="open", index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ResearchReviewActionHistory(Base):
+    __tablename__ = "research_review_action_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    action_id: Mapped[int] = mapped_column(ForeignKey("research_review_actions.id", ondelete="CASCADE"), index=True, nullable=False)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    previous_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    new_status: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
