@@ -179,7 +179,7 @@ export function MarketLearningEvidencePanel() {
                 <span>1</span>
                 <div>
                   <strong>Learning session</strong>
-                  <select required value={selectedSessionId} onChange={(event) => setSelectedSessionId(event.target.value)}>
+                  <select aria-label="Learning session" required value={selectedSessionId} onChange={(event) => setSelectedSessionId(event.target.value)}>
                     <option value="">Select a completed session</option>
                     {eligibleSessions.map((session) => (
                       <option value={session.id} key={session.id}>
@@ -193,7 +193,7 @@ export function MarketLearningEvidencePanel() {
                 <span>2</span>
                 <div>
                   <strong>Research project</strong>
-                  <select required value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>
+                  <select aria-label="Research project" required value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>
                     <option value="">Select an active project</option>
                     {projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}
                   </select>
@@ -203,14 +203,14 @@ export function MarketLearningEvidencePanel() {
                 <span>3</span>
                 <div>
                   <strong>Learner claim</strong>
-                  <textarea required minLength={20} maxLength={1000} value={claim} onChange={(event) => setClaim(event.target.value)} placeholder="Describe what the simulation demonstrated about risk, diversification, or scenario behavior." />
+                  <textarea aria-label="Learner claim" required minLength={20} maxLength={1000} value={claim} onChange={(event) => setClaim(event.target.value)} placeholder="Describe what the simulation demonstrated about risk, diversification, or scenario behavior." />
                 </div>
               </label>
               <label className="activity-card">
                 <span>4</span>
                 <div>
                   <strong>Contradiction key (optional)</strong>
-                  <input maxLength={160} value={contradictionKey} onChange={(event) => setContradictionKey(event.target.value)} placeholder="Example: concentration-downside" />
+                  <input aria-label="Contradiction key (optional)" maxLength={160} value={contradictionKey} onChange={(event) => setContradictionKey(event.target.value)} placeholder="Example: concentration-downside" />
                 </div>
               </label>
               <button className="primary-link" type="submit" disabled={submitting}>{submitting ? "Submitting…" : "Submit simulated evidence"}</button>
