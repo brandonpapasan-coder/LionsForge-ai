@@ -104,7 +104,7 @@ def get_conclusion_export_packet(
         evidence_ids=evidence_ids,
         evidence=evidence,
         revisions=revisions,
-        readiness=ConclusionPacketReadiness.model_validate(readiness),
+        readiness=ConclusionPacketReadiness.model_validate(readiness.model_dump()),
         disclaimer=DISCLAIMER,
     )
     return ResearchConclusionExportPacket(
