@@ -1,4 +1,5 @@
 from collections import Counter
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -12,6 +13,16 @@ from app.models.user import User
 from app.schemas.market_learning_mastery import MarketLearningMasteryDimension, MarketLearningMasteryRead
 
 router = APIRouter()
+DimensionKey = Literal[
+    "scenario_breadth",
+    "risk_tier_comparison",
+    "evidence_discipline",
+    "review_follow_through",
+    "contradiction_handling",
+    "reflection_quality",
+]
+DimensionStatus = Literal["not_started", "developing", "met"]
+Readiness = Literal["not_started", "foundational", "developing", "evidence_informed"]
 DISCLAIMER = (
     "This assessment summarizes simulated educational practice only. It is not investment-performance evidence, "
     "predictive validation, accreditation, professional certification, employability validation, or financial advice."
@@ -25,7 +36,7 @@ CRITERIA = [
 
 
 def _dimension(
-    key: str,
+    key: DimensionKey,
     title: str,
     count: int,
     target: int,
@@ -33,7 +44,7 @@ def _dimension(
     next_action: str,
     developing_at: int = 1,
 ) -> MarketLearningMasteryDimension:
-    status = "met" if count >= target else ("developing" if count >= developing_at else "not_started")
+    status: DimensionStatus = "met" if count >= target else ("developing" if count >= developing_at else "not_started")
     unmet = [] if status == "met" else [f"Current evidence: {count}; target: {target}."]
     return MarketLearningMasteryDimension(
         key=key,
@@ -150,6 +161,7 @@ def get_market_learning_mastery(
         ),
     ]
     met = sum(1 for dimension in dimensions if dimension.status == "met")
+    readiness: Readiness
     if not sessions:
         readiness = "not_started"
     elif met >= 5:
