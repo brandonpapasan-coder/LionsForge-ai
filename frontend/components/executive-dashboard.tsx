@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
 import { MarketLearningEvidencePanel } from "@/components/market-learning-evidence-panel";
+import { MarketLearningMasteryPanel } from "@/components/market-learning-mastery-panel";
 import { MarketLearningPortfolioPanel } from "@/components/market-learning-portfolio-panel";
 import { MarketLearningProgressPanel } from "@/components/market-learning-progress-panel";
 import { MarketLearningRoadmapPanel } from "@/components/market-learning-roadmap-panel";
@@ -80,6 +81,7 @@ export function ExecutiveDashboard() {
       <KnowledgeQualityDashboard />
       <MarketLearningProgressPanel />
       <MarketLearningRoadmapPanel />
+      <MarketLearningMasteryPanel />
       <MarketLearningEvidencePanel />
       <MarketLearningPortfolioPanel />
 
