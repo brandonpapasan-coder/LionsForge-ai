@@ -39,8 +39,9 @@ describe("ResearchConclusionWorkspace", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<ResearchConclusionWorkspace />);
-    fireEvent.change(await screen.findByLabelText("Conclusion text"), { target: { value: "My conclusion" } });
-    fireEvent.click(screen.getByText(/Evidence 4:/));
+    const evidenceControl = await screen.findByText(/Evidence 4:/);
+    fireEvent.change(screen.getByLabelText("Conclusion text"), { target: { value: "My conclusion" } });
+    fireEvent.click(evidenceControl);
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT" && String(init.body).includes("My conclusion") && String(init.body).includes("4"))).toBe(true));
   });
