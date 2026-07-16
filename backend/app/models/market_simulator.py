@@ -59,3 +59,24 @@ class MarketLearningSession(Base):
     learner_reflection: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="completed", index=True, nullable=False)
     completed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MarketLearningEvidenceLink(Base):
+    __tablename__ = "market_learning_evidence_links"
+    __table_args__ = (
+        UniqueConstraint("session_id", name="uq_market_learning_evidence_session"),
+        UniqueConstraint("evidence_id", name="uq_market_learning_evidence_record"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("market_learning_sessions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    evidence_id: Mapped[int] = mapped_column(
+        ForeignKey("evidence_records.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("research_projects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
