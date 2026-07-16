@@ -19,8 +19,17 @@ afterEach(() => {
 
 describe("ResearchProvenanceSection audit packet", () => {
   it("downloads formatted JSON with a safe filename", async () => {
+    const originalCreateElement = document.createElement.bind(document);
     const click = vi.fn();
-    vi.spyOn(document, "createElement").mockReturnValue({ href: "", download: "", click } as unknown as HTMLAnchorElement);
+    let downloadAnchor: HTMLAnchorElement | null = null;
+    vi.spyOn(document, "createElement").mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      const element = originalCreateElement(tagName, options);
+      if (tagName.toLowerCase() === "a") {
+        downloadAnchor = element as HTMLAnchorElement;
+        vi.spyOn(downloadAnchor, "click").mockImplementation(click);
+      }
+      return element;
+    }) as typeof document.createElement);
     const createObjectURL = vi.fn(() => "blob:audit");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
@@ -36,8 +45,8 @@ describe("ResearchProvenanceSection audit packet", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Download audit packet" }));
 
     await waitFor(() => expect(click).toHaveBeenCalled());
-    const anchor = vi.mocked(document.createElement).mock.results.at(-1)?.value as HTMLAnchorElement;
-    expect(anchor.download).toBe("climate-review-2026-draft-evidence-audit-packet.json");
+    expect(downloadAnchor).not.toBeNull();
+    expect(downloadAnchor?.download).toBe("climate-review-2026-draft-evidence-audit-packet.json");
     expect(createObjectURL).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:audit");
   });
