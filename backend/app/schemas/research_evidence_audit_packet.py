@@ -77,3 +77,33 @@ class ResearchEvidenceAuditPacketComparison(BaseModel):
     project_changes: list[str]
     summary_changes: list[str]
     disclaimer: str
+
+
+class ResearchEvidenceChangeImpactRequest(BaseModel):
+    baseline: ResearchEvidenceAuditPacket
+    current: ResearchEvidenceAuditPacket
+
+
+class ResearchEvidenceImpactItem(BaseModel):
+    impact_level: Literal["high_attention", "review_required", "informational"]
+    evidence_id: int
+    event_ids: list[str]
+    rules: list[str]
+    reasons: list[str]
+    follow_up_actions: list[str]
+
+
+class ResearchEvidenceChangeImpactSummary(BaseModel):
+    high_attention: int
+    review_required: int
+    informational: int
+    material_change: bool
+
+
+class ResearchEvidenceChangeImpactAssessment(BaseModel):
+    comparable: bool
+    summary: ResearchEvidenceChangeImpactSummary
+    impacts: list[ResearchEvidenceImpactItem]
+    global_actions: list[str]
+    comparison: ResearchEvidenceAuditPacketComparison
+    disclaimer: str
