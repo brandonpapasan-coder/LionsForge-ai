@@ -14,6 +14,7 @@ type IntegrityResult = {
 
 type PacketInput = { content_sha256: string; content: Record<string, unknown> };
 
+// Prefer the modern File.text API while retaining a FileReader fallback for older browsers and test environments.
 function readFileText(file: File): Promise<string> {
   if (typeof file.text === "function") return file.text();
 
