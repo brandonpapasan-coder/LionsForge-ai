@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import advanced_alerts, alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_quality, market, market_learning, market_learning_evidence, market_learning_mastery, market_learning_portfolio, market_learning_progress, market_learning_roadmap, market_mentor, market_simulator, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_conclusion_readiness, research_conclusion_workspace, research_evidence, research_evidence_audit_packet, research_evidence_provenance, research_follow_up_tracker, research_governance_dashboard, research_governance_digest, research_orchestration, research_planning, research_projects, research_sessions, research_trust_index, system, watchlists
+from app.api.routes import advanced_alerts, alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_quality, market, market_learning, market_learning_evidence, market_learning_mastery, market_learning_portfolio, market_learning_progress, market_learning_roadmap, market_mentor, market_simulator, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_conclusion_export_packet, research_conclusion_readiness, research_conclusion_workspace, research_evidence, research_evidence_audit_packet, research_evidence_provenance, research_follow_up_tracker, research_governance_dashboard, research_governance_digest, research_orchestration, research_planning, research_projects, research_sessions, research_trust_index, system, watchlists
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -19,6 +19,7 @@ api_router.include_router(research_evidence_audit_packet.router, prefix="/resear
 api_router.include_router(research_follow_up_tracker.router, prefix="/research-follow-up", tags=["research-follow-up"])
 api_router.include_router(research_conclusion_readiness.router, prefix="/research-conclusion-readiness", tags=["research-conclusion-readiness"])
 api_router.include_router(research_conclusion_workspace.router, prefix="/research-conclusions", tags=["research-conclusions"])
+api_router.include_router(research_conclusion_export_packet.router, prefix="/research-conclusion-export", tags=["research-conclusion-export"])
 api_router.include_router(research_governance_dashboard.router, prefix="/research-governance-dashboard", tags=["research-governance-dashboard"])
 api_router.include_router(research_governance_digest.router, prefix="/research-governance-digest", tags=["research-governance-digest"])
 api_router.include_router(research_trust_index.router, prefix="/research-trust-index", tags=["research-trust-index"])
