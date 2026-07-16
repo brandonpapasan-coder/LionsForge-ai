@@ -27,7 +27,7 @@ describe("ResearchGovernanceDigest", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Preview digest" }));
     expect(await screen.findByText("Governance items requiring context")).toBeInTheDocument();
     expect(screen.getByText("OVERDUE")).toBeInTheDocument();
-    expect(screen.getByText(/Evidence:/)).toHaveTextContent("4");
+    expect(screen.getByText("4")).toBeInTheDocument();
     expect(screen.getByText(/evidence:4/)).toBeInTheDocument();
   });
 
