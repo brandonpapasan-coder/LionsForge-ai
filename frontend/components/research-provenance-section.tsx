@@ -11,6 +11,13 @@ const safeFilename = (title: string, projectId: number) => {
   return `${slug}-evidence-audit-packet.json`;
 };
 
+const readFileAsText = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onerror = () => reject(reader.error ?? new Error("File could not be read."));
+  reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+  reader.readAsText(file);
+});
+
 type VerificationCheck = { code: string; passed: boolean; message: string };
 type VerificationResult = {
   valid: boolean;
@@ -82,7 +89,7 @@ export function ResearchProvenanceSection() {
     setVerification(null);
     setError(null);
     try {
-      const packet = JSON.parse(await file.text()) as unknown;
+      const packet = JSON.parse(await readFileAsText(file)) as unknown;
       const response = await fetch("/api/research-evidence-audit-packet/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
