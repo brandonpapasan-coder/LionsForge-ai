@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import advanced_alerts, alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_quality, market, market_learning, market_learning_evidence, market_learning_mastery, market_learning_portfolio, market_learning_progress, market_learning_roadmap, market_mentor, market_simulator, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_evidence, research_orchestration, research_planning, research_projects, research_sessions, research_trust_index, system, watchlists
+from app.api.routes import advanced_alerts, alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_quality, market, market_learning, market_learning_evidence, market_learning_mastery, market_learning_portfolio, market_learning_progress, market_learning_roadmap, market_mentor, market_simulator, mentor, missions, multi_agent_consensus, news, portfolios, research, research_agent, research_evidence, research_evidence_provenance, research_orchestration, research_planning, research_projects, research_sessions, research_trust_index, system, watchlists
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -14,6 +14,7 @@ api_router.include_router(knowledge_federation.router, prefix="/knowledge-federa
 api_router.include_router(knowledge_quality.router, prefix="/knowledge-quality", tags=["knowledge-quality"])
 api_router.include_router(research_planning.router, prefix="/research-planning", tags=["research-planning"])
 api_router.include_router(evidence_intelligence.router, prefix="/evidence-intelligence", tags=["evidence-intelligence"])
+api_router.include_router(research_evidence_provenance.router, prefix="/research-evidence-provenance", tags=["research-evidence-provenance"])
 api_router.include_router(research_trust_index.router, prefix="/research-trust-index", tags=["research-trust-index"])
 api_router.include_router(multi_agent_consensus.router, prefix="/multi-agent-consensus", tags=["multi-agent-consensus"])
 api_router.include_router(research_orchestration.router, prefix="/research-orchestration", tags=["research-orchestration"])
