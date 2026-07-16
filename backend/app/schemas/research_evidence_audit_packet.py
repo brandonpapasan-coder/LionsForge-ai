@@ -23,3 +23,20 @@ class ResearchEvidenceAuditPacket(BaseModel):
     entries: list[ProvenanceLedgerEntry]
     disclaimer: str
     content_sha256: str
+
+
+class AuditPacketVerificationCheck(BaseModel):
+    code: str
+    passed: bool
+    message: str
+
+
+class ResearchEvidenceAuditPacketVerification(BaseModel):
+    valid: bool
+    schema_version_supported: bool
+    integrity_matches: bool
+    chronology_valid: bool
+    supersession_references_valid: bool
+    computed_sha256: str
+    checks: list[AuditPacketVerificationCheck]
+    disclaimer: str
