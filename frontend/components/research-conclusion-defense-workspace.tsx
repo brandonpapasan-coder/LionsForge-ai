@@ -55,6 +55,7 @@ export function ResearchConclusionDefenseWorkspace() {
   }, []);
 
   async function load(id: number) {
+    setDefense(null);
     const [defenseResponse, conclusionResponse, evidenceResponse] = await Promise.all([
       fetch(`/api/research-conclusion-defense/${id}`, { cache: "no-store" }),
       fetch(`/api/research-conclusion-workspace/${id}`, { cache: "no-store" }),
@@ -90,7 +91,7 @@ export function ResearchConclusionDefenseWorkspace() {
     <div className="research-section-heading"><div><p className="eyebrow">RESEARCH WORKSPACE</p><h1>Conclusion defense review</h1><p className="muted">Critically examine your own conclusion. LionsForge records your reflection but does not grade or certify it.</p></div></div>
     {error ? <p role="alert" className="form-message">{error}</p> : null}
     <section className="dashboard-panel"><label>Project<select aria-label="Defense project" value={projectId} onChange={(event) => setProjectId(Number(event.target.value))}>{projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label></section>
-    <section className="dashboard-panel" aria-label="Defense completeness"><h2>Completeness: {defense?.status ?? "incomplete"}</h2>{defense?.missing_sections.length ? <p>Missing: {defense.missing_sections.map((item) => LABELS[item as keyof Fields] ?? item).join(", ")}</p> : <p>All reflection sections are supplied.</p>}<p className="muted">Completeness reflects supplied fields only.</p></section>
+    <section className="dashboard-panel" aria-label="Defense completeness">{defense ? <><h2>Completeness: {defense.status}</h2>{defense.missing_sections.length ? <p>Missing: {defense.missing_sections.map((item) => LABELS[item as keyof Fields] ?? item).join(", ")}</p> : <p>All reflection sections are supplied.</p>}<p className="muted">Completeness reflects supplied fields only.</p></> : <p>Loading defense review…</p>}</section>
     <section className="dashboard-panel"><label>Conclusion revision<select aria-label="Conclusion revision" value={revisionNumber ?? ""} onChange={(event) => setRevisionNumber(event.target.value ? Number(event.target.value) : null)}><option value="">No revision selected</option>{conclusion?.revisions.map((revision) => <option key={revision.revision_number} value={revision.revision_number}>Revision {revision.revision_number} · {revision.status}</option>)}</select></label></section>
     <section className="dashboard-panel"><h2>Evidence reviewed</h2>{evidence.map((item) => <label key={item.id}><input type="checkbox" checked={selectedEvidence.includes(item.id)} onChange={(event) => setSelectedEvidence(event.target.checked ? [...selectedEvidence, item.id] : selectedEvidence.filter((id) => id !== item.id))} /> Evidence {item.id}: {item.source_title} — {item.claim} ({item.validation_status})</label>)}{!evidence.length ? <p>No evidence records are available.</p> : null}</section>
     <section className="dashboard-panel">{(Object.keys(LABELS) as (keyof Fields)[]).map((key) => <label key={key}>{LABELS[key]}<textarea aria-label={LABELS[key]} rows={5} maxLength={10000} value={fields[key]} onChange={(event) => setFields({ ...fields, [key]: event.target.value })} /></label>)}<label>Revision note<input aria-label="Defense revision note" maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} /></label></section>
