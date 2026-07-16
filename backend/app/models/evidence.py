@@ -83,3 +83,35 @@ class ResearchReviewActionHistory(Base):
     new_status: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ResearchGovernanceDigestPreference(Base):
+    __tablename__ = "research_governance_digest_preferences"
+    __table_args__ = (
+        UniqueConstraint("owner_id", name="uq_research_governance_digest_preference_owner"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    project_ids: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    impact_levels: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    window_days: Mapped[int] = mapped_column(default=30, nullable=False)
+    cadence: Mapped[str] = mapped_column(String(24), default="weekly", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ResearchGovernanceDigestSnapshot(Base):
+    __tablename__ = "research_governance_digest_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    preference_id: Mapped[int | None] = mapped_column(
+        ForeignKey("research_governance_digest_preferences.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True, nullable=False)
+    window_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    item_count: Mapped[int] = mapped_column(nullable=False)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
