@@ -9,8 +9,10 @@ DigestCadence = Literal["daily", "weekly", "monthly"]
 
 
 class ResearchGovernanceDigestPreferenceInput(BaseModel):
-    project_ids: list[int] = []
-    impact_levels: list[ImpactLevel] = ["high_attention", "review_required", "informational"]
+    project_ids: list[int] = Field(default_factory=list)
+    impact_levels: list[ImpactLevel] = Field(
+        default_factory=lambda: ["high_attention", "review_required", "informational"]
+    )
     window_days: int = Field(default=30, ge=1, le=365)
     cadence: DigestCadence = "weekly"
 
