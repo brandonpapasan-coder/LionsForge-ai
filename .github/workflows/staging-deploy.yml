@@ -70,13 +70,16 @@ jobs:
         env:
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           STAGING_JWT_SECRET_KEY: ${{ secrets.STAGING_JWT_SECRET_KEY }}
+          STAGING_OPENAI_API_KEY: ${{ secrets.STAGING_OPENAI_API_KEY }}
         run: |
           test -n "${STAGING_DATABASE_URL}"
           test -n "${STAGING_JWT_SECRET_KEY}"
+          test -n "${STAGING_OPENAI_API_KEY}"
           kubectl create namespace lionsforge-staging --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n lionsforge-staging create secret generic lionsforge-backend-secrets \
             --from-literal=DATABASE_URL="${STAGING_DATABASE_URL}" \
             --from-literal=JWT_SECRET_KEY="${STAGING_JWT_SECRET_KEY}" \
+            --from-literal=OPENAI_API_KEY="${STAGING_OPENAI_API_KEY}" \
             --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -k infra/k8s/overlays/staging
           kubectl -n lionsforge-staging set image deployment/lionsforge-backend backend="${IMAGE}"
