@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
+import { MarketLearningEvidencePanel } from "@/components/market-learning-evidence-panel";
 import { MarketLearningProgressPanel } from "@/components/market-learning-progress-panel";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
@@ -76,6 +77,7 @@ export function ExecutiveDashboard() {
 
       <KnowledgeQualityDashboard />
       <MarketLearningProgressPanel />
+      <MarketLearningEvidencePanel />
 
       <div className="dashboard-grid">
         <section className="dashboard-panel">
