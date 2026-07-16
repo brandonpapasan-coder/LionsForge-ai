@@ -107,3 +107,49 @@ class ResearchEvidenceChangeImpactAssessment(BaseModel):
     global_actions: list[str]
     comparison: ResearchEvidenceAuditPacketComparison
     disclaimer: str
+
+
+ReviewActionStatus = Literal["open", "acknowledged", "deferred", "resolved"]
+
+
+class ResearchReviewActionGenerateRequest(BaseModel):
+    baseline: ResearchEvidenceAuditPacket
+    current: ResearchEvidenceAuditPacket
+
+
+class ResearchReviewActionHistoryItem(BaseModel):
+    id: int
+    previous_status: ReviewActionStatus
+    new_status: ReviewActionStatus
+    note: str | None
+    created_at: datetime
+
+
+class ResearchReviewActionItem(BaseModel):
+    id: int
+    project_id: int
+    evidence_id: int
+    action_key: str
+    impact_level: Literal["high_attention", "review_required", "informational"]
+    governing_rule: str
+    reason: str
+    action_text: str
+    supporting_event_ids: list[str]
+    status: ReviewActionStatus
+    created_at: datetime
+    updated_at: datetime
+    history: list[ResearchReviewActionHistoryItem] = []
+
+
+class ResearchReviewActionPlan(BaseModel):
+    project_id: int
+    generated: int
+    existing: int
+    actions: list[ResearchReviewActionItem]
+    disclaimer: str
+
+
+class ResearchReviewActionTransitionRequest(BaseModel):
+    status: ReviewActionStatus
+    confirmed: bool
+    note: str | None = None
