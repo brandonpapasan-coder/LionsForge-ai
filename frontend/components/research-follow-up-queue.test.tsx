@@ -19,7 +19,8 @@ describe("ResearchFollowUpQueue", () => {
     expect(await screen.findByText("OVERDUE")).toBeInTheDocument();
     expect(screen.getByText(/evidence 4/)).toBeInTheDocument();
     expect(screen.getByText(/evidence:4/)).toBeInTheDocument();
-    expect(screen.getByText("1", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("Total")).toBeInTheDocument();
+    expect(screen.getByText("Blocked")).toBeInTheDocument();
   });
 
   it("applies queue filters", async () => {
