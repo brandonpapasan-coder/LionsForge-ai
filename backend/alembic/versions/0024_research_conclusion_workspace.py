@@ -1,6 +1,6 @@
 """add research conclusion workspace
 
-Revision ID: 0024_research_conclusion_workspace
+Revision ID: 0024_research_conclusion
 Revises: 0023_research_follow_up_tracker
 Create Date: 2026-07-16 00:00:00.000000
 """
@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0024_research_conclusion_workspace"
+revision: str = "0024_research_conclusion"
 down_revision: str | None = "0023_research_follow_up_tracker"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
