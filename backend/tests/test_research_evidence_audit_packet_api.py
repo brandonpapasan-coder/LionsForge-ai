@@ -1,3 +1,6 @@
+import hashlib
+import json
+
 from tests.conftest import auth_headers
 
 
@@ -29,6 +32,17 @@ def create_evidence(client, headers, project_id, *, title, claim, stance="suppor
     )
     assert response.status_code == 201
     return response.json()
+
+
+def packet_digest(packet):
+    stable = {
+        "schema_version": packet["schema_version"],
+        "project": packet["project"],
+        "summary": packet["summary"],
+        "entries": packet["entries"],
+        "disclaimer": packet["disclaimer"],
+    }
+    return hashlib.sha256(json.dumps(stable, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def test_audit_packet_exports_project_evidence_and_integrity_hash(client):
@@ -83,3 +97,58 @@ def test_audit_packet_is_project_and_owner_scoped(client):
     assert packet.json()["summary"]["total_evidence"] == 1
     assert packet.json()["entries"][0]["claim"] == "Included claim"
     assert hidden.status_code == 404
+
+
+def test_audit_packet_verifier_accepts_an_unchanged_export(client):
+    headers = auth_headers(client, email="audit-verify-valid@example.com")
+    project = create_project(client, headers)
+    create_evidence(client, headers, project["id"], title="Source", claim="Reviewed claim", source_url="https://example.com/source")
+    packet = client.get(f"/api/v1/research-evidence-audit/projects/{project['id']}/audit-packet", headers=headers).json()
+
+    response = client.post("/api/v1/research-evidence-audit/audit-packet/verify", headers=headers, json=packet)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert body["integrity_matches"] is True
+    assert body["chronology_valid"] is True
+    assert body["supersession_references_valid"] is True
+    assert "does not certify" in body["disclaimer"]
+
+
+def test_audit_packet_verifier_detects_changed_content(client):
+    headers = auth_headers(client, email="audit-verify-tampered@example.com")
+    project = create_project(client, headers)
+    create_evidence(client, headers, project["id"], title="Source", claim="Original claim", source_url="https://example.com/source")
+    packet = client.get(f"/api/v1/research-evidence-audit/projects/{project['id']}/audit-packet", headers=headers).json()
+    packet["entries"][0]["claim"] = "Changed claim"
+
+    body = client.post("/api/v1/research-evidence-audit/audit-packet/verify", headers=headers, json=packet).json()
+    assert body["valid"] is False
+    assert body["integrity_matches"] is False
+    assert next(check for check in body["checks"] if check["code"] == "integrity_sha256")["passed"] is False
+
+
+def test_audit_packet_verifier_detects_order_and_broken_supersession(client):
+    headers = auth_headers(client, email="audit-verify-structure@example.com")
+    project = create_project(client, headers)
+    first = create_evidence(client, headers, project["id"], title="First", claim="First claim", source_url="https://example.com/first")
+    create_evidence(
+        client,
+        headers,
+        project["id"],
+        title="Second",
+        claim="Second claim",
+        provenance={"supersedes_evidence_id": first["id"]},
+        source_url="https://example.com/second",
+    )
+    packet = client.get(f"/api/v1/research-evidence-audit/projects/{project['id']}/audit-packet", headers=headers).json()
+    packet["entries"] = list(reversed(packet["entries"]))
+    supersession = next(entry for entry in packet["entries"] if entry["event_type"] == "claim_superseded")
+    supersession["supersedes_evidence_id"] = 999999
+    packet["content_sha256"] = packet_digest(packet)
+
+    body = client.post("/api/v1/research-evidence-audit/audit-packet/verify", headers=headers, json=packet).json()
+    assert body["integrity_matches"] is True
+    assert body["chronology_valid"] is False
+    assert body["supersession_references_valid"] is False
+    assert body["valid"] is False
