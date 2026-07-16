@@ -7,6 +7,7 @@ from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
 from app.models.knowledge_federation import KnowledgeFederationLink, KnowledgeFederationRevision
 from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
+from app.models.market_simulator import MarketLearningEvidenceLink, MarketLearningSession, SimulatedTrade, SimulationAccount, VirtualPosition
 from app.models.mentor import MentorConversation, MentorMessage
 from app.models.mission import Mission, MissionStep
 from app.models.portfolio import Portfolio, PortfolioHolding
@@ -32,6 +33,8 @@ __all__ = [
     "KnowledgeMemoryRevision",
     "KnowledgeRelationship",
     "LessonProgress",
+    "MarketLearningEvidenceLink",
+    "MarketLearningSession",
     "MentorConversation",
     "MentorMessage",
     "Mission",
@@ -43,6 +46,9 @@ __all__ = [
     "ResearchPlanRevision",
     "ResearchProject",
     "ResearchSession",
+    "SimulatedTrade",
+    "SimulationAccount",
     "User",
+    "VirtualPosition",
     "Watchlist",
 ]
