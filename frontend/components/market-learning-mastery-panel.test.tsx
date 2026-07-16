@@ -58,7 +58,7 @@ describe("MarketLearningMasteryPanel", () => {
 
     render(<MarketLearningMasteryPanel />);
 
-    expect(await screen.findByText("developing")).toBeInTheDocument();
+    expect(await screen.findByText("developing", { selector: ".panel-heading strong" })).toBeInTheDocument();
     expect(screen.getByText("3 of 6 dimensions met")).toBeInTheDocument();
     expect(screen.getByText("Scenario breadth")).toBeInTheDocument();
     expect(screen.getByText("Current evidence: 2; target: 3.")).toBeInTheDocument();
