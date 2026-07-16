@@ -145,11 +145,11 @@ class ResearchReviewActionItem(BaseModel):
     action_text: str
     supporting_event_ids: list[str]
     status: ReviewActionStatus
-    priority: ReviewActionPriority
-    due_at: datetime | None
-    owner_notes: str | None
-    resolution_notes: str | None
-    resolved_at: datetime | None
+    priority: ReviewActionPriority = "normal"
+    due_at: datetime | None = None
+    owner_notes: str | None = None
+    resolution_notes: str | None = None
+    resolved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     history: list[ResearchReviewActionHistoryItem] = []
