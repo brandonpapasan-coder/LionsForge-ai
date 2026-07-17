@@ -12,20 +12,29 @@ export async function PUT(
   if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
 
   const { lessonSlug } = await context.params;
-  const response = await fetch(
-    `${backendUrl}/api/v1/education/lessons/${encodeURIComponent(lessonSlug)}/progress`,
-    {
-      method: "PUT",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
+
+  try {
+    const response = await fetch(
+      `${backendUrl}/api/v1/education/lessons/${encodeURIComponent(lessonSlug)}/progress`,
+      {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: await request.text(),
+        cache: "no-store",
       },
-      body: await request.text(),
-      cache: "no-store",
-    },
-  );
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+    );
+
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Lesson progress service is unavailable" },
+      { status: 503 },
+    );
+  }
 }
