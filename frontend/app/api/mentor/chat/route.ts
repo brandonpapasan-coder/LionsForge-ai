@@ -7,6 +7,10 @@ function unavailable() {
   return NextResponse.json({ detail: "Mentor service is unavailable" }, { status: 503 });
 }
 
+function invalidRequestBody() {
+  return NextResponse.json({ detail: "Invalid request body" }, { status: 400 });
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const token = cookieStore.get("lionsforge_session")?.value;
@@ -14,9 +18,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
+  let body: string;
   try {
-    const body = await request.text();
-    const response = await fetch(`${backendUrl}/api/v1/mentor/chat`, {
+    body = await request.text();
+  } catch {
+    return invalidRequestBody();
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}/api/v1/mentor/chat`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
@@ -25,12 +36,19 @@ export async function POST(request: Request) {
       body,
       cache: "no-store",
     });
-
-    return new NextResponse(await response.text(), {
-      status: response.status,
-      headers: { "content-type": "application/json" },
-    });
   } catch {
     return unavailable();
   }
+
+  let responseBody: string;
+  try {
+    responseBody = await response.text();
+  } catch {
+    return unavailable();
+  }
+
+  return new NextResponse(responseBody, {
+    status: response.status,
+    headers: { "content-type": "application/json" },
+  });
 }
