@@ -53,6 +53,16 @@ API documentation is available locally at:
 http://127.0.0.1:8000/docs
 ```
 
+## Legacy finance compatibility
+
+Legacy market, simulator, watchlist, portfolio, alert, company, factor, event, and decision routes are disabled by default. A controlled migration or compatibility environment may explicitly enable them with:
+
+```text
+ENABLE_LEGACY_FINANCE_MODULES=true
+```
+
+Leave this setting unset or `false` for the current LionsForge AI research, validation, knowledge, and education product direction. Enabling compatibility mode does not authorize live trading, brokerage integration, order routing, individualized financial advice, or security-selection recommendations.
+
 ## Frontend quick start
 
 ```bash
