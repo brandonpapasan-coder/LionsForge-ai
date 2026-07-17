@@ -101,15 +101,16 @@ def test_key_order_does_not_change_receipt(client: TestClient):
     content = payload["content"]
     assert isinstance(content, dict)
     payload["content"] = dict(reversed(list(content.items())))
+    headers = auth_headers(client)
 
     first = client.post(
         ENDPOINT,
-        headers=auth_headers(client),
+        headers=headers,
         json=payload,
     )
     second = client.post(
         ENDPOINT,
-        headers=auth_headers(client),
+        headers=headers,
         json=request_body(),
     )
 
