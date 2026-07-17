@@ -71,17 +71,15 @@ describe("research packet comparison report API route", () => {
     await expect(response.json()).resolves.toEqual({ detail: "invalid report" });
   });
 
-  it("returns a stable 503 when reading the request body fails", async () => {
+  it("returns a controlled 400 when reading the request body fails", async () => {
     getCookie.mockReturnValue({ value: "session-token" });
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const request = { text: vi.fn().mockRejectedValue(new Error("request read failed")) } as unknown as Request;
 
     const response = await POST(request);
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      detail: "Comparison report export service is temporarily unavailable",
-    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ detail: "Invalid request body" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
