@@ -5,6 +5,8 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({ get: getCookie })),
 }));
 
+process.env.BACKEND_URL = "http://backend:8000";
+
 const { GET } = await import(
   "../app/api/research-evidence-review-actions/projects/[projectId]/route"
 );
