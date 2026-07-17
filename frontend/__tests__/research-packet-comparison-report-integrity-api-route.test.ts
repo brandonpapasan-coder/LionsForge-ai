@@ -62,9 +62,11 @@ describe("research packet comparison report integrity proxy", () => {
 
   it("uses JSON content type when upstream omits it", async () => {
     getCookie.mockReturnValue({ value: "session-token" });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 200 }),
-    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      status: 200,
+      headers: new Headers(),
+      text: vi.fn().mockResolvedValue("{}"),
+    } as unknown as Response);
 
     const response = await POST(requestWithBody());
 
