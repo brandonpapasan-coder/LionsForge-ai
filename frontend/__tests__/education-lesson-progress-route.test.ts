@@ -85,6 +85,22 @@ describe("education lesson progress route", () => {
     expect(await response.json()).toEqual({ detail: "Invalid progress state" });
   });
 
+  it("returns 400 when reading the request body fails", async () => {
+    getCookie.mockReturnValue({ value: "session-token" });
+    const request = {
+      text: vi.fn().mockRejectedValue(new Error("request stream failed")),
+    } as unknown as Request;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const response = await PUT(request, {
+      params: Promise.resolve({ lessonSlug: "test" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ detail: "Invalid request body" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("returns a stable non-sensitive 503 when the service is unavailable", async () => {
     getCookie.mockReturnValue({ value: "session-token" });
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
