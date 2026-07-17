@@ -106,6 +106,24 @@ describe("research governance digest proxy", () => {
     expect(await response.text()).toBe('{"detail":"conflict"}');
   });
 
+  it.each([POST, PUT])("returns controlled 400 when a request body cannot be read", async (handler) => {
+    getCookie.mockReturnValue({ value: "session-token" });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const request = {
+      method: handler === POST ? "POST" : "PUT",
+      url: "http://localhost/api/research-governance-digest/settings",
+      text: vi.fn().mockRejectedValue(new Error("stream failure")),
+    } as unknown as Request;
+
+    const response = await handler(request, context(["settings"]));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ detail: "Invalid research governance digest request body" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain("stream failure");
+  });
+
   it("returns controlled 503 when the backend request fails", async () => {
     getCookie.mockReturnValue({ value: "session-token" });
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("backend failure"));

@@ -7,6 +7,11 @@ const unavailable = () =>
     { detail: "Research governance digest service is temporarily unavailable" },
     { status: 503 },
   );
+const invalidBody = () =>
+  NextResponse.json(
+    { detail: "Invalid research governance digest request body" },
+    { status: 400 },
+  );
 
 async function forward(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const token = (await cookies()).get("lionsforge_session")?.value;
@@ -23,7 +28,7 @@ async function forward(request: Request, context: { params: Promise<{ path: stri
     try {
       body = await request.text();
     } catch {
-      return unavailable();
+      return invalidBody();
     }
   }
 
