@@ -10,6 +10,13 @@ function serviceUnavailable() {
   );
 }
 
+function invalidRequestBody() {
+  return NextResponse.json(
+    { detail: "Invalid request body" },
+    { status: 400 },
+  );
+}
+
 export async function POST(request: Request) {
   const token = (await cookies()).get("lionsforge_session")?.value;
   if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
@@ -18,7 +25,7 @@ export async function POST(request: Request) {
   try {
     body = await request.text();
   } catch {
-    return serviceUnavailable();
+    return invalidRequestBody();
   }
 
   let response: Response;
