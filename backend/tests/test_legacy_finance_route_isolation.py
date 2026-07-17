@@ -20,7 +20,11 @@ def route_paths(*, enabled: bool) -> set[str]:
         _env_file=None,
         enable_legacy_finance_modules=enabled,
     )
-    return {route.path for route in build_api_router(settings).routes}
+    return {
+        path
+        for route in build_api_router(settings).routes
+        if isinstance((path := getattr(route, "path", None)), str)
+    }
 
 
 def test_legacy_finance_routes_are_disabled_by_default():
