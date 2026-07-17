@@ -4,7 +4,11 @@ import json
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user
-from app.api.routes.research_packet_comparison import SUPPORTED_SCHEMA_VERSIONS, _canonical_sha256, _diff_values
+from app.api.routes.research_packet_comparison import (
+    SUPPORTED_SCHEMA_VERSIONS,
+    _canonical_sha256,
+    _diff_values,
+)
 from app.models.user import User
 from app.schemas.research_packet_comparison_report import (
     ResearchPacketComparisonReportContent,
@@ -15,13 +19,18 @@ from app.schemas.research_packet_comparison_report import (
 
 router = APIRouter()
 DISCLAIMER = (
-    "This report records structural content differences only. It does not judge or certify truth, quality, authorship, "
-    "approval, or publication status."
+    "This report records structural content differences only. It does not judge or "
+    "certify truth, quality, authorship, approval, or publication status."
 )
 
 
 def _report_sha256(content: ResearchPacketComparisonReportContent) -> str:
-    payload = json.dumps(content.model_dump(), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    payload = json.dumps(
+        content.model_dump(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -39,18 +48,36 @@ def export_research_packet_comparison_report(
     left_matches = left_hash == request.left.content_sha256.lower()
     right_matches = right_hash == request.right.content_sha256.lower()
 
-    unsupported = left_schema not in SUPPORTED_SCHEMA_VERSIONS or right_schema not in SUPPORTED_SCHEMA_VERSIONS
-    differences = [] if unsupported else _diff_values(request.left.content, request.right.content)
-    report_differences = [ResearchPacketReportDifference(path=item.path, kind=item.kind) for item in differences]
+    unsupported = (
+        left_schema not in SUPPORTED_SCHEMA_VERSIONS
+        or right_schema not in SUPPORTED_SCHEMA_VERSIONS
+    )
+    differences = (
+        []
+        if unsupported
+        else _diff_values(request.left.content, request.right.content)
+    )
+    report_differences = [
+        ResearchPacketReportDifference(path=item.path, kind=item.kind)
+        for item in differences
+    ]
     added_count = sum(item.kind == "added" for item in report_differences)
     removed_count = sum(item.kind == "removed" for item in report_differences)
     changed_count = sum(item.kind == "changed" for item in report_differences)
 
-    status = "unsupported" if unsupported else ("identical" if not report_differences else "different")
+    status = (
+        "unsupported"
+        if unsupported
+        else ("identical" if not report_differences else "different")
+    )
     detail = (
         "One or both packet schema versions are unsupported."
         if unsupported
-        else ("The packet content is structurally identical." if not report_differences else "The packet content contains structural differences.")
+        else (
+            "The packet content is structurally identical."
+            if not report_differences
+            else "The packet content contains structural differences."
+        )
     )
     content = ResearchPacketComparisonReportContent(
         status=status,
@@ -70,4 +97,7 @@ def export_research_packet_comparison_report(
         detail=detail,
         disclaimer=DISCLAIMER,
     )
-    return ResearchPacketComparisonReportResult(report_sha256=_report_sha256(content), content=content)
+    return ResearchPacketComparisonReportResult(
+        report_sha256=_report_sha256(content),
+        content=content,
+    )
