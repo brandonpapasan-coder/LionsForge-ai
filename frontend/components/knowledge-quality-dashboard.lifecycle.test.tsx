@@ -173,7 +173,11 @@ describe("KnowledgeQualityDashboard mounted-state ownership", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Institutional knowledge quality could not be loaded.")).not.toBeInTheDocument();
+    expect(screen.queryByText("The knowledge quality service is unavailable.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("That research project could not be found or is not available to this account."),
+    ).not.toBeInTheDocument();
     const finalHealthCard = screen.getByText("Health score").closest("article");
     expect(finalHealthCard).not.toBeNull();
     expect(within(finalHealthCard!).getByText("91%")).toBeInTheDocument();
