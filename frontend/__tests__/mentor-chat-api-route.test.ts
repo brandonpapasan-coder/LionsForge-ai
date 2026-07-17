@@ -63,18 +63,16 @@ describe("mentor chat API route", () => {
     expect(await response.text()).toBe('{"detail":"invalid"}');
   });
 
-  it("returns a stable 503 when reading the request body fails", async () => {
+  it("returns a stable 400 when reading the request body fails", async () => {
     cookieGet.mockReturnValue({ value: "session-token" });
     const request = { text: vi.fn().mockRejectedValue(new Error("request stream failed")) } as unknown as Request;
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const { POST } = await loadRoute();
 
     const response = await POST(request);
-    const text = await response.text();
 
-    expect(response.status).toBe(503);
-    expect(text).toContain("Mentor service is unavailable");
-    expect(text).not.toContain("request stream failed");
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ detail: "Invalid request body" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
