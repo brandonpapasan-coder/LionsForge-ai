@@ -10,13 +10,20 @@ export async function GET() {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
-  const response = await fetch(`${backendUrl}/api/v1/mentor/conversations`, {
-    headers: { authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
+  try {
+    const response = await fetch(`${backendUrl}/api/v1/mentor/conversations`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
 
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Mentor conversation service is unavailable" },
+      { status: 503 },
+    );
+  }
 }
