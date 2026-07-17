@@ -8,34 +8,41 @@ async function sessionToken() {
   return cookieStore.get("lionsforge_session")?.value;
 }
 
-export async function GET() {
+async function proxyAssessment(request?: NextRequest) {
   const token = await sessionToken();
-  if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
+  if (!token) {
+    return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
+  }
 
-  const response = await fetch(`${backendUrl}/api/v1/education/assessment`, {
-    headers: { authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  try {
+    const response = await fetch(`${backendUrl}/api/v1/education/assessment`, {
+      method: request ? "POST" : "GET",
+      headers: request
+        ? {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          }
+        : { authorization: `Bearer ${token}` },
+      body: request ? await request.text() : undefined,
+      cache: "no-store",
+    });
+
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Education assessment service is unavailable" },
+      { status: 503 },
+    );
+  }
+}
+
+export async function GET() {
+  return proxyAssessment();
 }
 
 export async function POST(request: NextRequest) {
-  const token = await sessionToken();
-  if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
-
-  const response = await fetch(`${backendUrl}/api/v1/education/assessment`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-    },
-    body: await request.text(),
-  });
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  return proxyAssessment(request);
 }
