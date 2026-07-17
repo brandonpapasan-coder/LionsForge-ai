@@ -11,12 +11,30 @@ export async function GET(_request: Request, context: { params: Promise<{ projec
   const { projectId } = await context.params;
   if (!/^\d+$/.test(projectId)) return NextResponse.json({ detail: "Invalid project" }, { status: 400 });
 
-  const response = await fetch(`${backendUrl}/api/v1/research-evidence-audit-packet/${projectId}`, {
-    headers: { authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}/api/v1/research-evidence-audit-packet/${projectId}`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Research evidence audit packet service unavailable" },
+      { status: 503 },
+    );
+  }
 
-  return new NextResponse(await response.text(), {
+  let body: string;
+  try {
+    body = await response.text();
+  } catch {
+    return NextResponse.json(
+      { detail: "Research evidence audit packet response unavailable" },
+      { status: 503 },
+    );
+  }
+
+  return new NextResponse(body, {
     status: response.status,
     headers: { "content-type": "application/json" },
   });
