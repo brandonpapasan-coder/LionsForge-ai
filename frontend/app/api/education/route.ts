@@ -6,14 +6,24 @@ const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 export async function GET() {
   const cookieStore = await cookies();
   const token = cookieStore.get("lionsforge_session")?.value;
-  if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
+  if (!token) {
+    return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
+  }
 
-  const response = await fetch(`${backendUrl}/api/v1/education`, {
-    headers: { authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  try {
+    const response = await fetch(`${backendUrl}/api/v1/education`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Education service is temporarily unavailable" },
+      { status: 503 },
+    );
+  }
 }
