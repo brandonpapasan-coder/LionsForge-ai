@@ -14,23 +14,31 @@ async function proxy(
   }
 
   const { projectId } = await context.params;
-  const response = await fetch(
-    `${backendUrl}/api/v1/research-projects/${encodeURIComponent(projectId)}/sessions`,
-    {
-      method: request.method,
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: request.method === "GET" ? undefined : await request.text(),
-      cache: "no-store",
-    },
-  );
 
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  try {
+    const response = await fetch(
+      `${backendUrl}/api/v1/research-projects/${encodeURIComponent(projectId)}/sessions`,
+      {
+        method: request.method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: request.method === "GET" ? undefined : await request.text(),
+        cache: "no-store",
+      },
+    );
+
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Research sessions service is unavailable" },
+      { status: 503 },
+    );
+  }
 }
 
 export async function GET(
