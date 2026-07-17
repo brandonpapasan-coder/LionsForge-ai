@@ -10,6 +10,7 @@ if str(BACKEND_ROOT) not in sys.path:
 os.environ["DATABASE_URL"] = "sqlite:///./test_lionsforge.db"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key"
 os.environ["ENVIRONMENT"] = "test"
+os.environ["ENABLE_LEGACY_FINANCE_MODULES"] = "true"
 
 import pytest
 from fastapi.testclient import TestClient

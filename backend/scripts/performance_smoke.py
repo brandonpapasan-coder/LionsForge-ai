@@ -18,7 +18,6 @@ PUBLIC_ENDPOINTS = [
 ]
 
 PROTECTED_ENDPOINTS = [
-    "/api/v1/market/quotes/AAPL",
     "/api/v1/news/company/AAPL",
     "/api/v1/research/context/AAPL",
     "/api/v1/research/evidence/AAPL",
