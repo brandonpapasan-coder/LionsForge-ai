@@ -8,22 +8,30 @@ export async function GET(
   context: { params: Promise<{ projectId: string }> },
 ) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("lionsforge_session")?.value;
-  if (!token) {
+  const sessionValue = cookieStore.get("lionsforge_session")?.value;
+  if (!sessionValue) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
   const { projectId } = await context.params;
-  const response = await fetch(
-    `${backendUrl}/api/v1/research-conclusion-readiness/projects/${encodeURIComponent(projectId)}`,
-    {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    },
-  );
 
-  return new NextResponse(await response.text(), {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  try {
+    const response = await fetch(
+      `${backendUrl}/api/v1/research-conclusion-readiness/projects/${encodeURIComponent(projectId)}`,
+      {
+        headers: { authorization: `Bearer ${sessionValue}` },
+        cache: "no-store",
+      },
+    );
+
+    return new NextResponse(await response.text(), {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Conclusion readiness service is unavailable" },
+      { status: 503 },
+    );
+  }
 }
