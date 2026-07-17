@@ -1,29 +1,41 @@
 from app.api.router import build_api_router
 from app.core.config import Settings
 
-LEGACY_PREFIXES = (
-    "/market",
-    "/market-simulator",
-    "/watchlists",
-    "/portfolios",
-    "/alerts",
-    "/advanced-alerts",
-    "/companies",
-    "/factors",
-    "/events",
-    "/decisions",
-)
+LEGACY_TAGS = {
+    "market",
+    "market-simulator",
+    "market-simulator-mentor",
+    "market-simulator-learning",
+    "watchlists",
+    "portfolios",
+    "portfolio-intelligence",
+    "alerts",
+    "advanced-alerts",
+    "companies",
+    "factors",
+    "events",
+    "decisions",
+}
+
+CORE_TAGS = {
+    "research-projects",
+    "research-packet-integrity",
+    "education",
+    "mentor",
+    "system",
+}
 
 
-def route_paths(*, enabled: bool) -> set[str]:
+def route_tags(*, enabled: bool) -> set[str]:
     settings = Settings(
         _env_file=None,
         enable_legacy_finance_modules=enabled,
     )
     return {
-        path
+        tag
         for route in build_api_router(settings).routes
-        if isinstance((path := getattr(route, "path", None)), str)
+        for tag in getattr(route, "tags", [])
+        if isinstance(tag, str)
     }
 
 
@@ -31,26 +43,15 @@ def test_legacy_finance_routes_are_disabled_by_default():
     settings = Settings(_env_file=None, enable_legacy_finance_modules=False)
     assert settings.enable_legacy_finance_modules is False
 
-    paths = route_paths(enabled=False)
-    assert all(
-        not path.startswith(prefix)
-        for path in paths
-        for prefix in LEGACY_PREFIXES
-    )
+    tags = route_tags(enabled=False)
+    assert tags.isdisjoint(LEGACY_TAGS)
 
 
 def test_core_research_routes_remain_available_when_legacy_routes_are_disabled():
-    paths = route_paths(enabled=False)
-
-    assert any(path.startswith("/research-projects") for path in paths)
-    assert any(path.startswith("/research-packet-integrity") for path in paths)
-    assert any(path.startswith("/education") for path in paths)
-    assert any(path.startswith("/mentor") for path in paths)
-    assert any(path.startswith("/system") for path in paths)
+    tags = route_tags(enabled=False)
+    assert CORE_TAGS <= tags
 
 
 def test_legacy_finance_routes_require_explicit_opt_in():
-    paths = route_paths(enabled=True)
-
-    for prefix in LEGACY_PREFIXES:
-        assert any(path.startswith(prefix) for path in paths)
+    tags = route_tags(enabled=True)
+    assert LEGACY_TAGS <= tags
