@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
@@ -152,7 +152,8 @@ describe("KnowledgeQualityDashboard mounted-state ownership", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<KnowledgeQualityDashboard />);
-    await screen.findByText("82%");
+    const metrics = await screen.findByLabelText("Knowledge quality metrics");
+    expect(within(metrics).getAllByText("82%").length).toBeGreaterThan(0);
 
     const selector = screen.getByRole("combobox", { name: "Knowledge scope" });
     fireEvent.change(selector, { target: { value: "7" } });
