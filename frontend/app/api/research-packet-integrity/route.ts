@@ -7,6 +7,8 @@ const unavailableResponse = () =>
     { detail: "Research packet integrity service is unavailable" },
     { status: 503 },
   );
+const invalidRequestResponse = () =>
+  NextResponse.json({ detail: "Invalid request body" }, { status: 400 });
 
 export async function POST(request: Request) {
   const token = (await cookies()).get("lionsforge_session")?.value;
@@ -16,7 +18,7 @@ export async function POST(request: Request) {
   try {
     body = await request.text();
   } catch {
-    return unavailableResponse();
+    return invalidRequestResponse();
   }
 
   let response: Response;
