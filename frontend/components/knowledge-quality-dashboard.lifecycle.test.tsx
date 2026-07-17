@@ -152,14 +152,20 @@ describe("KnowledgeQualityDashboard mounted-state ownership", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<KnowledgeQualityDashboard />);
-    const metrics = await screen.findByLabelText("Knowledge quality metrics");
-    expect(within(metrics).getAllByText("82%").length).toBeGreaterThan(0);
+    const initialHealthLabel = await screen.findByText("Health score");
+    const initialHealthCard = initialHealthLabel.closest("article");
+    expect(initialHealthCard).not.toBeNull();
+    expect(within(initialHealthCard!).getByText("82%")).toBeInTheDocument();
 
     const selector = screen.getByRole("combobox", { name: "Knowledge scope" });
     fireEvent.change(selector, { target: { value: "7" } });
     fireEvent.change(selector, { target: { value: "8" } });
 
-    expect(await screen.findByText("91%")).toBeInTheDocument();
+    await waitFor(() => {
+      const healthCard = screen.getByText("Health score").closest("article");
+      expect(healthCard).not.toBeNull();
+      expect(within(healthCard!).getByText("91%")).toBeInTheDocument();
+    });
     expect(screen.getByText(/Project: Advanced Materials Study/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("Refreshing knowledge health…")).not.toBeInTheDocument());
 
@@ -168,7 +174,9 @@ describe("KnowledgeQualityDashboard mounted-state ownership", () => {
     await Promise.resolve();
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByText("91%")).toBeInTheDocument();
+    const finalHealthCard = screen.getByText("Health score").closest("article");
+    expect(finalHealthCard).not.toBeNull();
+    expect(within(finalHealthCard!).getByText("91%")).toBeInTheDocument();
     expect(screen.queryByText("Refreshing knowledge health…")).not.toBeInTheDocument();
   });
 });
