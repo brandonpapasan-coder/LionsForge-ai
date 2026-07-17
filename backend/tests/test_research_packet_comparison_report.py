@@ -9,22 +9,41 @@ ENDPOINT = "/api/v1/research-packet-comparison-report/export"
 
 
 def canonical_sha256(content: dict[str, object]) -> str:
-    payload = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    payload = json.dumps(
+        content,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
-def packet(content: dict[str, object], supplied_hash: str | None = None) -> dict[str, object]:
-    return {"content_sha256": supplied_hash or canonical_sha256(content), "content": content}
+def packet(
+    content: dict[str, object],
+    supplied_hash: str | None = None,
+) -> dict[str, object]:
+    return {
+        "content_sha256": supplied_hash or canonical_sha256(content),
+        "content": content,
+    }
 
 
 def report_sha256(content: dict[str, object]) -> str:
-    payload = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    payload = json.dumps(
+        content,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
 def test_requires_authentication(client: TestClient):
     content = {"schema_version": "1.0"}
-    response = client.post(ENDPOINT, json={"left": packet(content), "right": packet(content)})
+    response = client.post(
+        ENDPOINT,
+        json={"left": packet(content), "right": packet(content)},
+    )
     assert response.status_code == 401
 
 
@@ -32,7 +51,11 @@ def test_exports_deterministic_identical_report(client: TestClient):
     headers = auth_headers(client)
     left = {"schema_version": "1.0", "nested": {"b": 2, "a": 1}}
     right = {"nested": {"a": 1, "b": 2}, "schema_version": "1.0"}
-    response = client.post(ENDPOINT, headers=headers, json={"left": packet(left), "right": packet(right)})
+    response = client.post(
+        ENDPOINT,
+        headers=headers,
+        json={"left": packet(left), "right": packet(right)},
+    )
     body = response.json()
     assert response.status_code == 200
     assert body["content"]["status"] == "identical"
@@ -44,9 +67,23 @@ def test_exports_deterministic_identical_report(client: TestClient):
 
 def test_exports_added_removed_and_changed_paths(client: TestClient):
     headers = auth_headers(client)
-    left = {"schema_version": "1.0", "title": "Old", "items": [1, 2], "removed": True}
-    right = {"schema_version": "1.0", "title": "New", "items": [1, 3, 4], "added": True}
-    response = client.post(ENDPOINT, headers=headers, json={"left": packet(left), "right": packet(right)})
+    left = {
+        "schema_version": "1.0",
+        "title": "Old",
+        "items": [1, 2],
+        "removed": True,
+    }
+    right = {
+        "schema_version": "1.0",
+        "title": "New",
+        "items": [1, 3, 4],
+        "added": True,
+    }
+    response = client.post(
+        ENDPOINT,
+        headers=headers,
+        json={"left": packet(left), "right": packet(right)},
+    )
     body = response.json()
     assert response.status_code == 200
     assert body["content"]["status"] == "different"
