@@ -79,6 +79,21 @@ describe("conclusion-defense API proxy", () => {
     await expect(response.json()).resolves.toEqual({ detail: "Conflict" });
   });
 
+  it("returns 400 when a PUT request body cannot be read", async () => {
+    getCookie.mockReturnValue({ value: "session-value" });
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const request = new Request("http://localhost", { method: "PUT", body: "{}" });
+    vi.spyOn(request, "text").mockRejectedValue(new Error("body read failed"));
+
+    const response = await PUT(request, context("project-1"));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      detail: "Unable to read conclusion defense request body",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["GET", (request: Request) => GET(request, context("project-1"))],
     ["PUT", (request: Request) => PUT(request, context("project-1"))],
@@ -99,5 +114,19 @@ describe("conclusion-defense API proxy", () => {
     expect(responseBody).toEqual({ detail: "Conclusion defense service is unavailable" });
     expect(JSON.stringify(responseBody)).not.toContain("internal-backend");
     expect(JSON.stringify(responseBody)).not.toContain("secret-session-value");
+  });
+
+  it("returns a stable 503 when the upstream body cannot be read", async () => {
+    getCookie.mockReturnValue({ value: "session-value" });
+    const upstream = new Response(JSON.stringify({ score: 0.8 }), { status: 200 });
+    vi.spyOn(upstream, "text").mockRejectedValue(new Error("response read failed"));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(upstream);
+
+    const response = await GET(new Request("http://localhost"), context("project-1"));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      detail: "Conclusion defense service is unavailable",
+    });
   });
 });

@@ -9,8 +9,21 @@ async function proxy(request: Request, projectId: string) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
+  let body: string | undefined;
+  if (request.method !== "GET") {
+    try {
+      body = await request.text();
+    } catch {
+      return NextResponse.json(
+        { detail: "Unable to read conclusion defense request body" },
+        { status: 400 },
+      );
+    }
+  }
+
+  let response: Response;
   try {
-    const response = await fetch(
+    response = await fetch(
       `${backendUrl}/api/v1/research-conclusion-defense/projects/${encodeURIComponent(projectId)}`,
       {
         method: request.method,
@@ -18,21 +31,31 @@ async function proxy(request: Request, projectId: string) {
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
         },
-        body: request.method === "GET" ? undefined : await request.text(),
+        body,
         cache: "no-store",
       },
     );
-
-    return new NextResponse(await response.text(), {
-      status: response.status,
-      headers: { "content-type": "application/json" },
-    });
   } catch {
     return NextResponse.json(
       { detail: "Conclusion defense service is unavailable" },
       { status: 503 },
     );
   }
+
+  let responseBody: string;
+  try {
+    responseBody = await response.text();
+  } catch {
+    return NextResponse.json(
+      { detail: "Conclusion defense service is unavailable" },
+      { status: 503 },
+    );
+  }
+
+  return new NextResponse(responseBody, {
+    status: response.status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 export async function GET(
