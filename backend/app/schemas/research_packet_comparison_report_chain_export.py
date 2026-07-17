@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 from app.schemas.research_packet_comparison_report_chain import (
