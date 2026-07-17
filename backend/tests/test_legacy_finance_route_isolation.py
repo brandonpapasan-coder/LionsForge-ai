@@ -1,57 +1,61 @@
+from fastapi import FastAPI
+
 from app.api.router import build_api_router
 from app.core.config import Settings
 
-LEGACY_TAGS = {
-    "market",
-    "market-simulator",
-    "market-simulator-mentor",
-    "market-simulator-learning",
-    "watchlists",
-    "portfolios",
-    "portfolio-intelligence",
-    "alerts",
-    "advanced-alerts",
-    "companies",
-    "factors",
-    "events",
-    "decisions",
-}
+LEGACY_PREFIXES = (
+    "/api/v1/market",
+    "/api/v1/market-simulator",
+    "/api/v1/watchlists",
+    "/api/v1/portfolios",
+    "/api/v1/alerts",
+    "/api/v1/advanced-alerts",
+    "/api/v1/companies",
+    "/api/v1/factors",
+    "/api/v1/events",
+    "/api/v1/decisions",
+)
 
-CORE_TAGS = {
-    "research-projects",
-    "research-packet-integrity",
-    "education",
-    "mentor",
-    "system",
-}
+CORE_PREFIXES = (
+    "/api/v1/research-projects",
+    "/api/v1/research-packet-integrity",
+    "/api/v1/education",
+    "/api/v1/mentor",
+    "/api/v1/system",
+)
 
 
-def route_tags(*, enabled: bool) -> set[str]:
+def openapi_paths(*, enabled: bool) -> set[str]:
     settings = Settings(
         _env_file=None,
         enable_legacy_finance_modules=enabled,
     )
-    return {
-        tag
-        for route in build_api_router(settings).routes
-        for tag in getattr(route, "tags", [])
-        if isinstance(tag, str)
-    }
+    app = FastAPI()
+    app.include_router(build_api_router(settings), prefix="/api/v1")
+    return set(app.openapi()["paths"])
 
 
 def test_legacy_finance_routes_are_disabled_by_default():
     settings = Settings(_env_file=None, enable_legacy_finance_modules=False)
     assert settings.enable_legacy_finance_modules is False
 
-    tags = route_tags(enabled=False)
-    assert tags.isdisjoint(LEGACY_TAGS)
+    paths = openapi_paths(enabled=False)
+    assert all(
+        not path.startswith(prefix)
+        for path in paths
+        for prefix in LEGACY_PREFIXES
+    )
 
 
 def test_core_research_routes_remain_available_when_legacy_routes_are_disabled():
-    tags = route_tags(enabled=False)
-    assert CORE_TAGS <= tags
+    paths = openapi_paths(enabled=False)
+
+    for prefix in CORE_PREFIXES:
+        assert any(path.startswith(prefix) for path in paths)
 
 
 def test_legacy_finance_routes_require_explicit_opt_in():
-    tags = route_tags(enabled=True)
-    assert LEGACY_TAGS <= tags
+    paths = openapi_paths(enabled=True)
+
+    for prefix in LEGACY_PREFIXES:
+        assert any(path.startswith(prefix) for path in paths)
