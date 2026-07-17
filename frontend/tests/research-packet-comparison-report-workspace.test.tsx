@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, expect, test, vi } from "vitest";
 
 import { ResearchPacketComparisonReportWorkspace } from "../components/research-packet-comparison-report-workspace";
 
