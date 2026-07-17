@@ -73,7 +73,7 @@ describe("research packet comparison report integrity proxy", () => {
     expect(response.headers.get("content-type")).toContain("application/json");
   });
 
-  it("returns a controlled 503 when reading the request body fails", async () => {
+  it("returns a controlled 400 when reading the request body fails", async () => {
     getCookie.mockReturnValue({ value: "session-token" });
     const request = requestWithBody();
     vi.spyOn(request, "text").mockRejectedValue(new Error("body failure"));
@@ -81,11 +81,9 @@ describe("research packet comparison report integrity proxy", () => {
 
     const response = await POST(request);
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(400);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(await response.json()).toEqual({
-      detail: "Comparison report integrity service is temporarily unavailable",
-    });
+    expect(await response.json()).toEqual({ detail: "Invalid request body" });
   });
 
   it("returns a controlled 503 when the backend request fails", async () => {

@@ -7,6 +7,8 @@ const unavailable = () =>
     { detail: "Comparison report integrity service is temporarily unavailable" },
     { status: 503 },
   );
+const invalidRequest = () =>
+  NextResponse.json({ detail: "Invalid request body" }, { status: 400 });
 
 export async function POST(request: Request) {
   const session = (await cookies()).get("lionsforge_session")?.value;
@@ -18,7 +20,7 @@ export async function POST(request: Request) {
   try {
     body = await request.text();
   } catch {
-    return unavailable();
+    return invalidRequest();
   }
 
   let response: Response;
