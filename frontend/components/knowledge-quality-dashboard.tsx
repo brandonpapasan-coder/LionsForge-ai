@@ -18,12 +18,20 @@ export function KnowledgeQualityDashboard() {
   const [loading, setLoading] = useState(true);
   const mounted = useRef(false);
   const dashboardRequest = useRef<AbortController | null>(null);
+  const dashboardRequestToken = useRef(0);
   const projectsRequest = useRef<AbortController | null>(null);
 
   async function loadDashboard(projectId: string) {
     dashboardRequest.current?.abort();
     const controller = new AbortController();
+    const requestToken = ++dashboardRequestToken.current;
     dashboardRequest.current = controller;
+    const isCurrentRequest = () => (
+      mounted.current
+      && !controller.signal.aborted
+      && dashboardRequest.current === controller
+      && dashboardRequestToken.current === requestToken
+    );
 
     if (mounted.current) {
       setLoading(true);
@@ -34,7 +42,7 @@ export function KnowledgeQualityDashboard() {
         ? "/api/knowledge-quality"
         : `/api/knowledge-quality/projects/${projectId}`;
       const response = await fetch(path, { cache: "no-store", signal: controller.signal });
-      if (controller.signal.aborted || !mounted.current) return;
+      if (!isCurrentRequest()) return;
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -49,15 +57,15 @@ export function KnowledgeQualityDashboard() {
         return;
       }
       const nextData = (await response.json()) as KnowledgeQualityDashboardData;
-      if (!controller.signal.aborted && mounted.current) setData(nextData);
+      if (isCurrentRequest()) setData(nextData);
     } catch (requestError) {
-      if (!isAbortError(requestError) && !controller.signal.aborted && mounted.current) {
+      if (!isAbortError(requestError) && isCurrentRequest()) {
         setError("The knowledge quality service is unavailable.");
       }
     } finally {
-      if (dashboardRequest.current === controller) {
+      if (isCurrentRequest()) {
         dashboardRequest.current = null;
-        if (mounted.current) setLoading(false);
+        setLoading(false);
       }
     }
   }
@@ -96,6 +104,7 @@ export function KnowledgeQualityDashboard() {
       mounted.current = false;
       controller.abort();
       projectsRequest.current = null;
+      dashboardRequestToken.current += 1;
       dashboardRequest.current?.abort();
       dashboardRequest.current = null;
     };
