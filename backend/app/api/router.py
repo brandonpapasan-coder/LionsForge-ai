@@ -30,7 +30,7 @@ api_router.include_router(research_packet_comparison_report_chain.router, prefix
 api_router.include_router(research_packet_comparison_report_chain_export.router, prefix="/research-packet-comparison-report-chain-export", tags=["research-packet-comparison-report-chain-export"])
 api_router.include_router(research_packet_comparison_report_chain_export_integrity.router, prefix="/research-packet-comparison-report-chain-export-integrity", tags=["research-packet-comparison-report-chain-export-integrity"])
 api_router.include_router(research_packet_comparison_report_chain_export_integrity_receipt.router, prefix="/research-packet-comparison-report-chain-export-integrity-receipt", tags=["research-packet-comparison-report-chain-export-integrity-receipt"])
-api_router.include_router(research_packet_comparison_report_chain_export_integrity_receipt_integrity.router, prefix="/research-packet-comparison-report-chain-export-integrity-receipt-integrity", tags=["research-packet-comparison-report-chain-export-integrity-receipt-integrity"])
+api_router.include_router(research_packet_comparison_report_chain_export_integrity_receipt_integrity.router, prefix="/research-packet-comparison-report-chain-export-integrity-receipt-check", tags=["research-packet-comparison-report-chain-export-integrity-receipt-check"])
 api_router.include_router(research_governance_dashboard.router, prefix="/research-governance-dashboard", tags=["research-governance-dashboard"])
 api_router.include_router(research_governance_digest.router, prefix="/research-governance-digest", tags=["research-governance-digest"])
 api_router.include_router(research_trust_index.router, prefix="/research-trust-index", tags=["research-trust-index"])
