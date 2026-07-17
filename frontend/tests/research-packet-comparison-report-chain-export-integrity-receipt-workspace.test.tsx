@@ -44,12 +44,16 @@ test("exports, displays, and downloads a deterministic integrity receipt", async
       { status: 200, headers: { "content-type": "application/json" } },
     ),
   );
-  const createObjectURL = vi
-    .spyOn(URL, "createObjectURL")
-    .mockReturnValue("blob:receipt");
-  const revokeObjectURL = vi
-    .spyOn(URL, "revokeObjectURL")
-    .mockImplementation(() => undefined);
+  const createObjectURL = vi.fn(() => "blob:receipt");
+  const revokeObjectURL = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectURL,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeObjectURL,
+  });
   const click = vi
     .spyOn(HTMLAnchorElement.prototype, "click")
     .mockImplementation(() => undefined);
