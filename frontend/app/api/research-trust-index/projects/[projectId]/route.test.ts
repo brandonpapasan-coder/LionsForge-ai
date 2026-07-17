@@ -86,4 +86,19 @@ describe("project research-trust API proxy", () => {
     expect(body).toEqual({ detail: "Research trust service is unavailable" });
     expect(JSON.stringify(body)).not.toContain("connection failed");
   });
+
+  it("returns the same stable 503 when the upstream body cannot be read", async () => {
+    getCookie.mockReturnValue({ value: "session-value" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      status: 200,
+      text: vi.fn().mockRejectedValue(new Error("upstream body exposed secret-value")),
+    } as unknown as Response);
+
+    const response = await GET(new Request("http://localhost"), context("7"));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toEqual({ detail: "Research trust service is unavailable" });
+    expect(JSON.stringify(body)).not.toContain("secret-value");
+  });
 });
