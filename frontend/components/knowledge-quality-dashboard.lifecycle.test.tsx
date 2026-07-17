@@ -1,8 +1,9 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
+import type { KnowledgeQualityDashboard as KnowledgeQualityDashboardData } from "@/lib/knowledge-quality";
 
 function response(body: unknown, status = 200) {
   return Promise.resolve({
@@ -19,6 +20,65 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+function dashboard(projectId: number | null, healthScore: number): KnowledgeQualityDashboardData {
+  return {
+    project_id: projectId,
+    methodology_version: "knowledge-quality-v1",
+    generated_at: "2026-07-17T12:00:00Z",
+    health_score: healthScore,
+    health_components: { validation: healthScore },
+    memories: {
+      total: 1,
+      validated: 1,
+      provisional: 0,
+      contested: 0,
+      superseded: 0,
+      archived: 0,
+      stale: 0,
+    },
+    evidence_total: 1,
+    evidence_approved: 1,
+    evidence_pending_review: 0,
+    evidence_coverage_ratio: 1,
+    average_confidence: healthScore,
+    median_confidence: healthScore,
+    contradiction_rate: 0,
+    unresolved_contradictions: 0,
+    federation_links: 0,
+    federation_coverage_ratio: 0,
+    missions: {},
+    planning: {},
+    knowledge_revision_velocity: 0,
+    review_backlog: 0,
+    top_risks: [],
+    top_priorities: [],
+    recent_activity: [],
+  };
+}
+
+const projects = [
+  {
+    id: 7,
+    title: "Grid Storage Study",
+    description: null,
+    objective: null,
+    status: "active",
+    context: {},
+    created_at: "2026-07-17T10:00:00Z",
+    updated_at: "2026-07-17T11:00:00Z",
+  },
+  {
+    id: 8,
+    title: "Advanced Materials Study",
+    description: null,
+    objective: null,
+    status: "active",
+    context: {},
+    created_at: "2026-07-17T10:00:00Z",
+    updated_at: "2026-07-17T11:00:00Z",
+  },
+];
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -77,5 +137,37 @@ describe("KnowledgeQualityDashboard mounted-state ownership", () => {
 
     expect(projectsSignal?.aborted).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the newest successful scope when a superseded request fails late", async () => {
+    const staleResponse = deferred<Awaited<ReturnType<typeof response>>>();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/research-projects") return response(projects);
+      if (url === "/api/knowledge-quality") return response(dashboard(null, 0.82));
+      if (url === "/api/knowledge-quality/projects/7") return staleResponse.promise;
+      if (url === "/api/knowledge-quality/projects/8") return response(dashboard(8, 0.91));
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<KnowledgeQualityDashboard />);
+    await screen.findByText("82%");
+
+    const selector = screen.getByRole("combobox", { name: "Knowledge scope" });
+    fireEvent.change(selector, { target: { value: "7" } });
+    fireEvent.change(selector, { target: { value: "8" } });
+
+    expect(await screen.findByText("91%")).toBeInTheDocument();
+    expect(screen.getByText(/Project: Advanced Materials Study/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Refreshing knowledge health…")).not.toBeInTheDocument());
+
+    staleResponse.resolve(await response(null, 500));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("91%")).toBeInTheDocument();
+    expect(screen.queryByText("Refreshing knowledge health…")).not.toBeInTheDocument();
   });
 });
