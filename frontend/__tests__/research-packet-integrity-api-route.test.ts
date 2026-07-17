@@ -65,17 +65,15 @@ describe("research packet integrity API route", () => {
     await expect(response.json()).resolves.toEqual({ detail: "invalid packet" });
   });
 
-  it("returns 503 when reading the request body fails", async () => {
+  it("returns 400 when reading the request body fails", async () => {
     getCookie.mockReturnValue({ value: "session-token" });
     const request = { text: vi.fn().mockRejectedValue(new Error("request read failed")) } as unknown as Request;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const response = await POST(request);
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      detail: "Research packet integrity service is unavailable",
-    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ detail: "Invalid request body" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
