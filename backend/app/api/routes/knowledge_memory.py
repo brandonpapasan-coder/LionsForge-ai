@@ -10,6 +10,7 @@ from app.models.mission import Mission
 from app.models.research_project import ResearchProject
 from app.models.user import User
 from app.schemas.knowledge_memory import (
+    KnowledgeMemoryControlSummary,
     KnowledgeMemoryPromotionResult,
     KnowledgeMemoryRead,
     KnowledgeMemorySynthesis,
@@ -27,6 +28,7 @@ from app.services.user_authored_memory_service import validate_user_authored_rev
 router = APIRouter()
 
 
+
 def _owned_project(db: Session, owner_id: int, project_id: int) -> ResearchProject:
     project = db.scalar(
         select(ResearchProject).where(
@@ -39,6 +41,7 @@ def _owned_project(db: Session, owner_id: int, project_id: int) -> ResearchProje
     return project
 
 
+
 def _owned_memory(db: Session, owner_id: int, memory_id: int) -> KnowledgeMemory:
     memory = db.scalar(
         select(KnowledgeMemory).where(
@@ -49,6 +52,7 @@ def _owned_memory(db: Session, owner_id: int, memory_id: int) -> KnowledgeMemory
     if memory is None:
         raise HTTPException(status_code=404, detail="Knowledge memory not found")
     return memory
+
 
 
 def _read(db: Session, memory: KnowledgeMemory) -> KnowledgeMemoryRead:
@@ -131,6 +135,44 @@ def get_knowledge_memories(
         query=query,
     )
     return [_read(db, memory) for memory in memories]
+
+
+@router.get("/controls/summary", response_model=KnowledgeMemoryControlSummary)
+def get_memory_control_summary(
+    project_id: int | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> KnowledgeMemoryControlSummary:
+    if project_id is not None:
+        _owned_project(db, current_user.id, project_id)
+
+    statement = select(KnowledgeMemory).where(KnowledgeMemory.owner_id == current_user.id)
+    if project_id is not None:
+        statement = statement.where(KnowledgeMemory.project_id == project_id)
+    memories = list(db.scalars(statement).all())
+
+    by_status: dict[str, int] = {}
+    by_category: dict[str, int] = {}
+    user_authored_count = 0
+    for memory in memories:
+        by_status[memory.status] = by_status.get(memory.status, 0) + 1
+        by_category[memory.category] = by_category.get(memory.category, 0) + 1
+        if memory.provenance.get("origin") == "user_authored":
+            user_authored_count += 1
+
+    archived_count = by_status.get("archived", 0)
+    return KnowledgeMemoryControlSummary(
+        project_id=project_id,
+        total_count=len(memories),
+        active_count=len(memories) - archived_count,
+        archived_count=archived_count,
+        user_authored_count=user_authored_count,
+        research_generated_count=len(memories) - user_authored_count,
+        revision_count=sum(memory.revision_number for memory in memories),
+        by_status=dict(sorted(by_status.items())),
+        by_category=dict(sorted(by_category.items())),
+        available_controls=["inspect", "revise", "archive", "restore", "delete", "supersede"],
+    )
 
 
 @router.get(

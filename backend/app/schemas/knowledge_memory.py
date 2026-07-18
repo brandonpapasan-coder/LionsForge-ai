@@ -76,6 +76,19 @@ class KnowledgeMemoryPromotionResult(BaseModel):
     reused_count: int
 
 
+class KnowledgeMemoryControlSummary(BaseModel):
+    project_id: int | None
+    total_count: int
+    active_count: int
+    archived_count: int
+    user_authored_count: int
+    research_generated_count: int
+    revision_count: int
+    by_status: dict[str, int]
+    by_category: dict[str, int]
+    available_controls: list[str]
+
+
 class KnowledgeMemorySynthesis(BaseModel):
     project_id: int
     validated: list[KnowledgeMemoryRead]
