@@ -11,7 +11,8 @@ function unavailable() {
 }
 
 async function proxy(
-  method: "GET" | "DELETE",
+  method: "GET" | "PATCH" | "DELETE",
+  request: Request,
   context: { params: Promise<{ memoryId: string }> },
 ) {
   const cookieStore = await cookies();
@@ -22,17 +23,22 @@ async function proxy(
 
   const { memoryId } = await context.params;
   try {
+    const body = method === "PATCH" ? await request.text() : undefined;
     const response = await fetch(
       `${backendUrl}/api/v1/knowledge-memory/${encodeURIComponent(memoryId)}`,
       {
         method,
-        headers: { authorization: `Bearer ${token}` },
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(method === "PATCH" ? { "content-type": "application/json" } : {}),
+        },
+        body,
         cache: "no-store",
       },
     );
     if (response.status === 204) return new NextResponse(null, { status: 204 });
-    const body = await response.text();
-    return new NextResponse(body, {
+    const responseBody = await response.text();
+    return new NextResponse(responseBody, {
       status: response.status,
       headers: { "content-type": "application/json" },
     });
@@ -42,15 +48,22 @@ async function proxy(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ memoryId: string }> },
 ) {
-  return proxy("GET", context);
+  return proxy("GET", request, context);
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ memoryId: string }> },
+) {
+  return proxy("PATCH", request, context);
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ memoryId: string }> },
 ) {
-  return proxy("DELETE", context);
+  return proxy("DELETE", request, context);
 }
