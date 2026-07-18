@@ -1,0 +1,147 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable release commit SHA validated by all required gates
+        required: true
+      rollback_image_tag:
+        description: Immutable previously deployed commit SHA for rollback
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: lionsforge-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Validate deployment inputs
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+        run: |
+          for value in "${IMAGE_TAG}" "${ROLLBACK_IMAGE_TAG}"; do
+            if ! printf '%s' "${value}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "release and rollback tags must be immutable 40-character lowercase commit SHAs" >&2
+              exit 1
+            fi
+          done
+          if [ "${IMAGE_TAG}" = "${ROLLBACK_IMAGE_TAG}" ]; then
+            echo "rollback_image_tag must identify the previously deployed release" >&2
+            exit 1
+          fi
+          case "${PRODUCTION_API_URL}" in
+            https://*) ;;
+            *) echo "PRODUCTION_API_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_tag }}
+          fetch-depth: 0
+
+      - name: Confirm release commit is on main
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${IMAGE_TAG}"
+          git merge-base --is-ancestor "${IMAGE_TAG}" origin/main
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable backend image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/backend:${IMAGE_TAG}"
+          docker build -t "${IMAGE}" backend
+          docker push "${IMAGE}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+
+      - name: Configure production kubectl
+        env:
+          KUBE_CONFIG_PRODUCTION: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+        run: |
+          test -n "${KUBE_CONFIG_PRODUCTION}"
+          mkdir -p "$HOME/.kube"
+          printf '%s' "${KUBE_CONFIG_PRODUCTION}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Apply production configuration
+        env:
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          PRODUCTION_JWT_SECRET_KEY: ${{ secrets.PRODUCTION_JWT_SECRET_KEY }}
+          PRODUCTION_OPENAI_API_KEY: ${{ secrets.PRODUCTION_OPENAI_API_KEY }}
+        run: |
+          test -n "${PRODUCTION_DATABASE_URL}"
+          test -n "${PRODUCTION_JWT_SECRET_KEY}"
+          test -n "${PRODUCTION_OPENAI_API_KEY}"
+          kubectl create namespace lionsforge-production --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n lionsforge-production create secret generic lionsforge-backend-secrets \
+            --from-literal=DATABASE_URL="${PRODUCTION_DATABASE_URL}" \
+            --from-literal=JWT_SECRET_KEY="${PRODUCTION_JWT_SECRET_KEY}" \
+            --from-literal=OPENAI_API_KEY="${PRODUCTION_OPENAI_API_KEY}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -k infra/k8s/overlays/production
+          kubectl -n lionsforge-production set image deployment/lionsforge-backend backend="${IMAGE}"
+          kubectl -n lionsforge-production rollout status deployment/lionsforge-backend --timeout=300s
+
+      - name: Verify deployed image and probes
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          kubectl -n lionsforge-production get deployment lionsforge-backend -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -F ":${IMAGE_TAG}"
+          kubectl -n lionsforge-production wait --for=condition=available deployment/lionsforge-backend --timeout=300s
+          kubectl -n lionsforge-production get pods -l app=lionsforge-backend
+
+      - name: Run authenticated production smoke test
+        env:
+          PRODUCTION_TEST_EMAIL: ${{ secrets.PRODUCTION_TEST_EMAIL }}
+          PRODUCTION_TEST_SECRET: ${{ secrets.PRODUCTION_TEST_SECRET }}
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+        run: |
+          test -n "${PRODUCTION_API_URL}"
+          test -n "${PRODUCTION_TEST_EMAIL}"
+          test -n "${PRODUCTION_TEST_SECRET}"
+          STAGING_TEST_EMAIL="${PRODUCTION_TEST_EMAIL}" \
+          STAGING_TEST_SECRET="${PRODUCTION_TEST_SECRET}" \
+          python scripts/staging_smoke.py --base-url "${PRODUCTION_API_URL}"
+
+      - name: Record release summary
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+        run: |
+          {
+            echo "## LionsForge AI production deployment"
+            echo "- Release SHA: \`${IMAGE_TAG}\`"
+            echo "- Rollback SHA: \`${ROLLBACK_IMAGE_TAG}\`"
+            echo "- Environment: production"
+            echo "- API: ${PRODUCTION_API_URL}"
+            echo "- Kubernetes rollout: passed"
+            echo "- Authenticated smoke test: passed"
+          } >> "$GITHUB_STEP_SUMMARY"
