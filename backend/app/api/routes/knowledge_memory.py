@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -194,6 +194,45 @@ def revise_knowledge_memory(
         )
     memory = update_memory(db, memory, changes)
     return _read(db, memory)
+
+
+@router.post("/{memory_id}/archive", response_model=KnowledgeMemoryRead)
+def archive_knowledge_memory(
+    memory_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> KnowledgeMemoryRead:
+    memory = _owned_memory(db, current_user.id, memory_id)
+    if memory.status == "superseded":
+        raise HTTPException(status_code=409, detail="Superseded memory cannot be archived")
+    if memory.status != "archived":
+        memory = update_memory(db, memory, {"status": "archived"})
+    return _read(db, memory)
+
+
+@router.post("/{memory_id}/restore", response_model=KnowledgeMemoryRead)
+def restore_knowledge_memory(
+    memory_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> KnowledgeMemoryRead:
+    memory = _owned_memory(db, current_user.id, memory_id)
+    if memory.status != "archived":
+        raise HTTPException(status_code=409, detail="Only archived memory can be restored")
+    memory = update_memory(db, memory, {"status": "provisional"})
+    return _read(db, memory)
+
+
+@router.delete("/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_knowledge_memory(
+    memory_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    memory = _owned_memory(db, current_user.id, memory_id)
+    db.delete(memory)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
