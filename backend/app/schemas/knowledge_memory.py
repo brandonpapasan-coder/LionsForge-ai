@@ -4,6 +4,24 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 MemoryStatus = Literal["provisional", "validated", "contested", "superseded", "archived"]
+UserAuthoredMemoryCategory = Literal[
+    "research_preference",
+    "research_context",
+    "learning_goal",
+    "mentor_preference",
+    "mastery_signal",
+    "misconception",
+]
+
+
+class KnowledgeMemoryCreate(BaseModel):
+    project_id: int
+    statement: str = Field(min_length=1, max_length=4000)
+    summary: str = Field(min_length=1, max_length=1000)
+    category: UserAuthoredMemoryCategory
+    confidence: float = Field(default=0.5, ge=0, le=1)
+    source_evidence_ids: list[int] = Field(default_factory=list)
+    provenance: dict = Field(default_factory=dict)
 
 
 class KnowledgeMemoryUpdate(BaseModel):
@@ -35,8 +53,8 @@ class KnowledgeMemoryRead(BaseModel):
 
     id: int
     project_id: int
-    mission_id: int
-    snapshot_id: int
+    mission_id: int | None
+    snapshot_id: int | None
     fingerprint: str
     statement: str
     summary: str
