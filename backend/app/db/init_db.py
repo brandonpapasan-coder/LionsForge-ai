@@ -1,31 +1,57 @@
-from app.db.session import Base, engine
-from app.models.alert import Alert
-from app.models.alert_automation_rule import AlertAutomationRule
-from app.models.alert_notification import AlertNotification
-from app.models.company import Company
-from app.models.portfolio import Portfolio, PortfolioHolding, PortfolioTransaction
-from app.models.research_report import ResearchReport
-from app.models.user import User
-from app.models.watchlist import Watchlist
+from importlib import import_module
 
-_models = (
-    User,
-    Watchlist,
-    Portfolio,
-    PortfolioHolding,
-    PortfolioTransaction,
-    Alert,
-    AlertNotification,
-    AlertAutomationRule,
+from app.db.session import Base, engine
+from app.models import (
     Company,
-    ResearchReport,
+    EvidenceRecord,
+    LessonProgress,
+    MentorConversation,
+    Mission,
+    ResearchProject,
+    ResearchSession,
+    User,
+)
+
+# Keep representative active model references so their metadata is registered before
+# development and test startup calls create_all(). Related active model modules are
+# imported by app.models as part of the supported research and education surface.
+_active_models = (
+    User,
+    Company,
+    EvidenceRecord,
+    LessonProgress,
+    MentorConversation,
+    Mission,
+    ResearchProject,
+    ResearchSession,
+)
+
+_COMPATIBILITY_MODEL_MODULES = (
+    "app.models.alert",
+    "app.models.alert_automation_rule",
+    "app.models.alert_notification",
+    "app.models.market_simulator",
+    "app.models.portfolio",
+    "app.models.research_report",
+    "app.models.watchlist",
 )
 
 
-def init_db() -> None:
+def _load_compatibility_models() -> None:
+    """Register historical finance metadata for controlled compatibility use."""
+    for module_name in _COMPATIBILITY_MODEL_MODULES:
+        import_module(module_name)
+
+
+def init_db(*, include_legacy_models: bool = False) -> None:
+    """Create active tables, optionally including historical compatibility tables."""
+    if include_legacy_models:
+        _load_compatibility_models()
     Base.metadata.create_all(bind=engine)
 
 
 if __name__ == "__main__":
-    init_db()
+    # Preserve the historical command-line initializer for migration and recovery
+    # workflows while normal application startup remains active-scope only.
+    init_db(include_legacy_models=True)
     print("Database initialized.")
