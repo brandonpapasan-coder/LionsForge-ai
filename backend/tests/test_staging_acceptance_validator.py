@@ -1,3 +1,4 @@
+import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -6,6 +7,7 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "validate_staging_acc
 SPEC = spec_from_file_location("validate_staging_acceptance", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 validate_record = MODULE.validate_record
 
