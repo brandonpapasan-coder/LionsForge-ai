@@ -26,6 +26,7 @@ PROTECTED_ENDPOINTS = [
 ]
 
 MAX_P95_SECONDS = 0.35
+WARMUP_REQUESTS_PER_ENDPOINT = 3
 REQUESTS_PER_ENDPOINT = 20
 
 
@@ -46,15 +47,19 @@ def get_auth_headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def measure(client: TestClient, endpoint: str, headers: dict[str, str] | None = None) -> dict[str, float]:
-    durations: list[float] = []
-    for _ in range(REQUESTS_PER_ENDPOINT):
-        start = time.perf_counter()
-        response = client.get(endpoint, headers=headers)
-        elapsed = time.perf_counter() - start
-        assert response.status_code == 200, f"{endpoint} returned {response.status_code}: {response.text}"
-        durations.append(elapsed)
+def request_endpoint(client: TestClient, endpoint: str, headers: dict[str, str] | None = None) -> float:
+    start = time.perf_counter()
+    response = client.get(endpoint, headers=headers)
+    elapsed = time.perf_counter() - start
+    assert response.status_code == 200, f"{endpoint} returned {response.status_code}: {response.text}"
+    return elapsed
 
+
+def measure(client: TestClient, endpoint: str, headers: dict[str, str] | None = None) -> dict[str, float]:
+    for _ in range(WARMUP_REQUESTS_PER_ENDPOINT):
+        request_endpoint(client, endpoint, headers=headers)
+
+    durations = [request_endpoint(client, endpoint, headers=headers) for _ in range(REQUESTS_PER_ENDPOINT)]
     p95 = statistics.quantiles(durations, n=20)[18]
     return {
         "min": min(durations),
