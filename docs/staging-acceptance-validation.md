@@ -33,8 +33,17 @@ Provide:
 - `record_path`: the repository-relative Markdown path, such as `docs/staging-acceptance-record.md`
 - `release_sha`: the exact 40-character lowercase commit SHA recorded in that file
 
-The workflow verifies that the release SHA exists, is an ancestor of `main`, exactly matches the record, and that the record path resolves safely inside the repository `docs/` directory. It then runs the same validator and writes the result to the GitHub job summary.
+The workflow verifies that the release SHA exists, is an ancestor of `main`, exactly matches the record, and that the record path resolves safely inside the repository `docs/` directory.
 
-Record the successful workflow run reference in the staging acceptance record. A successful run confirms internal record completeness and SHA consistency only. It does not independently prove that external infrastructure, tests, or evidence are genuine.
+It also queries GitHub Actions metadata for that exact SHA and requires successful completed runs for:
 
-The validator reads only the supplied Markdown file. It does not read environment variables, credentials, kubeconfig content, cloud APIs, or GitHub secrets. A successful validation confirms internal record completeness only; it does not independently prove that staging infrastructure or workflow evidence is genuine.
+- Backend CI
+- Frontend CI
+- Security Gate
+- Deployment Validation
+
+The workflow then runs the record validator and writes a non-sensitive evidence table to the GitHub job summary, including workflow status, conclusion, and run ID.
+
+Record the successful workflow run reference in the staging acceptance record. A successful run confirms exact-SHA CI evidence and internal record consistency. It does not independently prove that external staging infrastructure or manual acceptance evidence is genuine.
+
+The local validator reads only the supplied Markdown file. The GitHub Actions workflow additionally reads GitHub Actions run metadata through the workflow token with read-only permissions. Neither path reads staging credentials, kubeconfig content, cloud secrets, or sensitive user data.
