@@ -19,6 +19,7 @@ def valid_record(*, decision="GO", critical="0", high="0"):
         "Security Gate",
         "Deployment Validation",
         "Staging Deploy",
+        "Staging Frontend Deploy",
         "Authenticated smoke test",
         "OpenAI provider health",
         "Mentor schema validation",
@@ -49,11 +50,14 @@ def valid_record(*, decision="GO", critical="0", high="0"):
         "# Acceptance",
         "- Release candidate SHA: " + "a" * 40,
         "- Staging deploy workflow run: 12345",
+        "- Staging frontend deploy workflow run: 12346",
         "- Staging URL: https://staging.example.test",
         "- Acceptance date/time (UTC): 2026-07-18T18:00:00Z",
         "- Acceptance owner: Release Owner",
         "- Backend image digest: sha256:" + "c" * 64,
         "- Running backend image digest verified: Yes",
+        "- Frontend image digest: sha256:" + "d" * 64,
+        "- Running frontend image digest verified: Yes",
         "- Previous deployable image SHA: " + "b" * 40,
         "- Database migration revision before deploy: rev-before",
         "- Database migration revision after deploy: rev-after",
@@ -77,7 +81,7 @@ def valid_record(*, decision="GO", critical="0", high="0"):
             "- Decision timestamp (UTC): 2026-07-18T18:30:00Z",
             f"- Unresolved critical defects: {critical}",
             f"- Unresolved high-severity defects: {high}",
-            "> I verified that this decision is based on the exact release candidate SHA and backend image digest recorded above.",
+            "> I verified that this decision is based on the exact release candidate SHA and backend and frontend image digests recorded above.",
         ]
     )
     return "\n".join(lines)
@@ -98,10 +102,18 @@ def test_invalid_sha_and_pending_gate_fail():
     assert {"invalid-sha", "incomplete-check"}.issubset(codes(text))
 
 
-def test_invalid_or_unverified_image_digest_fails():
+def test_invalid_or_unverified_backend_digest_fails():
     text = valid_record().replace("sha256:" + "c" * 64, "latest", 1).replace(
         "- Running backend image digest verified: Yes",
         "- Running backend image digest verified: No",
+    )
+    assert {"invalid-image-digest", "image-provenance-unverified"}.issubset(codes(text))
+
+
+def test_invalid_or_unverified_frontend_digest_fails():
+    text = valid_record().replace("sha256:" + "d" * 64, "latest", 1).replace(
+        "- Running frontend image digest verified: Yes",
+        "- Running frontend image digest verified: No",
     )
     assert {"invalid-image-digest", "image-provenance-unverified"}.issubset(codes(text))
 
