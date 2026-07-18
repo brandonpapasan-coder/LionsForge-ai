@@ -231,7 +231,7 @@ export function PersonalMemoryControlCenter() {
       {memory ? (
         <article className="action-card" aria-label="Selected memory">
           {editing && draft ? (
-            <form aria-label="Knowledge record revision editor" onSubmit={(event) => { event.preventDefault(); void saveRevision(); }}>
+            <form noValidate aria-label="Knowledge record revision editor" onSubmit={(event) => { event.preventDefault(); void saveRevision(); }}>
               <label>Summary<input aria-label="Revision summary" value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} required /></label>
               <label>Statement<textarea aria-label="Revision statement" value={draft.statement} onChange={(event) => setDraft({ ...draft, statement: event.target.value })} required /></label>
               <label>Category<input aria-label="Revision category" value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} required /></label>
