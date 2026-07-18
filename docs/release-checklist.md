@@ -70,12 +70,13 @@ Secret values must never be committed, echoed, copied into issue comments, or st
 7. Verify the Mentor returns a complete evidence-first response without unsupported live-verification claims.
 8. Reopen the saved Mentor conversation and continue it.
 9. Open the Education Hub, start a lesson, and complete it.
-10. Open the market-learning command-center panels and confirm their educational disclaimers are visible.
+10. Create or review evidence and confirm knowledge-quality state updates are visible.
 11. Sign out and sign back in.
-12. Verify research, mentor, education, and market-learning state persists.
-13. Exercise the documented rollback procedure without crossing an unsafe migration boundary.
-14. Record both deployment workflow runs, both immutable image digests, and both running-image verifications in `docs/staging-acceptance-record.md`.
-15. Run `Staging Acceptance Validate` against the completed record and exact release SHA.
+12. Verify research, Mentor, education, evidence, and knowledge state persists.
+13. Confirm legacy finance and market-learning surfaces are absent from the default dashboard and remain disabled unless compatibility mode is intentionally enabled.
+14. Exercise the documented rollback procedure without crossing an unsafe migration boundary.
+15. Record both deployment workflow runs, both immutable image digests, and both running-image verifications in `docs/staging-acceptance-record.md`.
+16. Run `Staging Acceptance Validate` against the completed record and exact release SHA.
 
 ## Release decision
 

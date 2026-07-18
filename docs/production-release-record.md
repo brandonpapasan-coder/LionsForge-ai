@@ -58,6 +58,7 @@ Never paste the values of these settings into this record.
 - Mentor workflow: PASS / FAIL
 - Education and assessment workflow: PASS / FAIL
 - Evidence-validation workflow: PASS / FAIL
+- Knowledge-quality workflow: PASS / FAIL
 - Stable user-facing error handling: PASS / FAIL
 - No internal service details exposed: PASS / FAIL
 
@@ -65,7 +66,8 @@ Never paste the values of these settings into this record.
 
 - Release remains within the research-assistant, evidence-validation, knowledge-management, and education scope: PASS / FAIL
 - No live trading, brokerage, order routing, autonomous portfolio management, individualized financial advice, or personalized securities recommendations were introduced: PASS / FAIL
-- Educational market-learning features retain required disclaimers: PASS / FAIL
+- Legacy finance and market-learning surfaces are absent from the default production experience: PASS / FAIL
+- If compatibility mode is intentionally enabled, its scope, owner, migration purpose, access controls, and educational disclaimers are documented: PASS / FAIL / NOT ENABLED
 
 ## Rollback readiness
 

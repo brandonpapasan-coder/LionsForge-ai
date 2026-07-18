@@ -57,9 +57,10 @@ Allowed results: `Passed`, `Failed`, `Blocked`, `Not run`.
 | Receive complete evidence-first Mentor response | Pending | | |
 | Reopen and continue Mentor conversation | Pending | | |
 | Start and complete Education lesson | Pending | | |
-| Verify market-learning panels and disclaimers | Pending | | |
+| Create or review evidence and verify knowledge-quality update | Pending | | |
 | Sign out and sign back in | Pending | | |
-| Verify persisted research, mentor, education, and learning state | Pending | | |
+| Verify persisted research, Mentor, education, evidence, and knowledge state | Pending | | |
+| Verify legacy finance surfaces are absent by default | Pending | | Compatibility mode is not part of default acceptance. |
 | Execute rollback verification | Pending | | |
 
 ## Defects
