@@ -35,15 +35,17 @@ Provide:
 
 The workflow verifies that the release SHA exists, is an ancestor of `main`, exactly matches the record, and that the record path resolves safely inside the repository `docs/` directory.
 
-It also queries GitHub Actions metadata for that exact SHA and requires successful completed runs for:
+It also queries GitHub Actions metadata for that exact SHA and requires successful completed `push` runs from the `main` branch for:
 
 - Backend CI
 - Frontend CI
 - Security Gate
 - Deployment Validation
 
-The workflow then runs the record validator and writes a non-sensitive evidence table to the GitHub job summary, including workflow status, conclusion, and run ID.
+Pull-request, scheduled, manually dispatched, or non-`main` runs do not satisfy release acceptance, even when they completed successfully.
 
-Record the successful workflow run reference in the staging acceptance record. A successful run confirms exact-SHA CI evidence and internal record consistency. It does not independently prove that external staging infrastructure or manual acceptance evidence is genuine.
+The workflow then runs the record validator and writes a non-sensitive evidence table to the GitHub job summary, including workflow event, branch, status, conclusion, and run ID.
+
+Record the successful workflow run reference in the staging acceptance record. A successful run confirms exact-SHA main-push CI evidence and internal record consistency. It does not independently prove that external staging infrastructure or manual acceptance evidence is genuine.
 
 The local validator reads only the supplied Markdown file. The GitHub Actions workflow additionally reads GitHub Actions run metadata through the workflow token with read-only permissions. Neither path reads staging credentials, kubeconfig content, cloud secrets, or sensitive user data.
