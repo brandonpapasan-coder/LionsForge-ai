@@ -52,7 +52,7 @@ def create_memory(client, headers, project_id, evidence_ids):
     return response.json()
 
 
-def test_saved_record_evidence_trace_preserves_order_and_reports_missing(client):
+def test_saved_record_evidence_trace_preserves_record_order_and_reports_unavailable(client):
     headers = auth_headers(client, email="memory-evidence@example.com")
     project = create_project(client, headers, "Trace project")
     first = create_evidence(client, headers, project["id"])
@@ -76,13 +76,17 @@ def test_saved_record_evidence_trace_preserves_order_and_reports_missing(client)
 
     assert response.status_code == 200
     body = response.json()
+    expected_requested = list(dict.fromkeys(memory["source_evidence_ids"]))
     assert body["memory_id"] == memory["id"]
-    assert body["requested_evidence_ids"] == [second["id"], 999999, first["id"]]
-    assert [item["id"] for item in body["evidence"]] == [second["id"], first["id"]]
-    assert body["missing_evidence_ids"] == [999999]
-    assert body["evidence"][0]["source_title"] == "Primary source"
-    assert body["evidence"][0]["source_url"] == "https://example.org/second-source"
-    assert body["evidence"][0]["validation_status"] == "unverified"
+    assert body["requested_evidence_ids"] == expected_requested
+    assert [item["id"] for item in body["evidence"]] == [
+        evidence_id for evidence_id in expected_requested if evidence_id != 999999
+    ]
+    assert body["unavailable_evidence_ids"] == [999999]
+    source_by_id = {item["id"]: item for item in body["evidence"]}
+    assert source_by_id[second["id"]]["source_title"] == "Primary source"
+    assert source_by_id[second["id"]]["source_url"] == "https://example.org/second-source"
+    assert source_by_id[second["id"]]["validation_status"] == "unverified"
 
 
 def test_saved_record_evidence_trace_enforces_owner_isolation(client):
@@ -110,7 +114,7 @@ def test_saved_record_evidence_trace_enforces_owner_isolation(client):
     )
     assert trace.status_code == 200
     assert [item["id"] for item in trace.json()["evidence"]] == [owner_evidence["id"]]
-    assert trace.json()["missing_evidence_ids"] == [other_evidence["id"]]
+    assert trace.json()["unavailable_evidence_ids"] == [other_evidence["id"]]
 
     denied = client.get(
         f"/api/v1/knowledge-memory/{memory['id']}/evidence",
