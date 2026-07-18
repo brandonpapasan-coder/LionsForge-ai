@@ -9,6 +9,22 @@ vi.mock("@/components/knowledge-quality-dashboard", () => ({
   KnowledgeQualityDashboard: () => <div>Knowledge quality</div>,
 }));
 
+vi.mock("@/components/market-learning-progress-panel", () => ({
+  MarketLearningProgressPanel: () => <div>Legacy market learning progress</div>,
+}));
+vi.mock("@/components/market-learning-roadmap-panel", () => ({
+  MarketLearningRoadmapPanel: () => <div>Legacy market learning roadmap</div>,
+}));
+vi.mock("@/components/market-learning-mastery-panel", () => ({
+  MarketLearningMasteryPanel: () => <div>Legacy market learning mastery</div>,
+}));
+vi.mock("@/components/market-learning-evidence-panel", () => ({
+  MarketLearningEvidencePanel: () => <div>Legacy market learning evidence</div>,
+}));
+vi.mock("@/components/market-learning-portfolio-panel", () => ({
+  MarketLearningPortfolioPanel: () => <div>Legacy market learning portfolio</div>,
+}));
+
 const dashboard: ExecutiveDashboardData = {
   greeting: "Good morning, Brandon",
   briefing: "Your research and education systems are ready.",
@@ -43,7 +59,7 @@ afterEach(() => {
 });
 
 describe("ExecutiveDashboard request lifecycle", () => {
-  it("renders dashboard data from the active request", async () => {
+  it("renders dashboard data from the active request without legacy finance learning panels", async () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init).toEqual(expect.objectContaining({
         cache: "no-store",
@@ -57,6 +73,7 @@ describe("ExecutiveDashboard request lifecycle", () => {
 
     expect(await screen.findByRole("heading", { name: "Good morning, Brandon" })).toBeInTheDocument();
     expect(screen.getByText("Knowledge quality")).toBeInTheDocument();
+    expect(screen.queryByText(/Legacy market learning/)).not.toBeInTheDocument();
   });
 
   it("aborts dashboard loading when unmounted", async () => {
