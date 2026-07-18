@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 FollowUpStatus = Literal["open", "acknowledged", "in_progress", "blocked", "deferred", "resolved", "dismissed"]
 FollowUpPriority = Literal["low", "normal", "high", "urgent"]
+RemediationEscalationState = Literal["fresh", "aging", "overdue", "critical"]
 
 
 class FollowUpActionUpdate(BaseModel):
@@ -54,4 +55,33 @@ class FollowUpActionQueue(BaseModel):
     overdue: int
     blocked: int
     actions: list[FollowUpActionItem]
+    disclaimer: str
+
+
+class RemediationEscalationItem(BaseModel):
+    follow_up_id: int
+    project_id: int
+    evidence_id: int
+    action_key: str
+    governing_rule: str
+    status: FollowUpStatus
+    priority: FollowUpPriority
+    escalation_state: RemediationEscalationState
+    age_days: int
+    idle_days: int
+    due_at: datetime | None
+    days_overdue: int
+    next_escalation_at: datetime | None
+    escalation_reason: str
+    recommended_owner_action: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class RemediationEscalationInventory(BaseModel):
+    project_id: int | None
+    escalation_state: RemediationEscalationState | None
+    total: int
+    by_state: dict[str, int]
+    items: list[RemediationEscalationItem]
     disclaimer: str
