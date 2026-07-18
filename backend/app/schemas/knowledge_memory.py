@@ -70,6 +70,33 @@ class KnowledgeMemoryRead(BaseModel):
     revisions: list[KnowledgeMemoryRevisionRead] = Field(default_factory=list)
 
 
+class KnowledgeMemoryEvidenceItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    project_id: int | None
+    source_url: str | None
+    source_title: str
+    publisher: str | None
+    author: str | None
+    published_at: datetime | None
+    source_type: str
+    claim: str
+    excerpt: str
+    stance: str
+    credibility_score: float
+    freshness_score: float
+    confidence_score: float
+    validation_status: str
+
+
+class KnowledgeMemoryEvidenceTrace(BaseModel):
+    memory_id: int
+    requested_evidence_ids: list[int]
+    evidence: list[KnowledgeMemoryEvidenceItem]
+    unavailable_evidence_ids: list[int]
+
+
 class KnowledgeMemoryPromotionResult(BaseModel):
     memories: list[KnowledgeMemoryRead]
     created_count: int
