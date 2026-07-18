@@ -72,9 +72,10 @@ describe("PersonalMemoryEvidenceRemediationVerification", () => {
     document.body.append(existingInventory);
 
     render(<PersonalMemoryEvidenceRemediationVerification />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/personal-memory/evidence-health", { cache: "no-store" }));
+    expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(recordButton);
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/personal-memory/evidence-health", { cache: "no-store" }));
     expect(await screen.findByLabelText("Evidence remediation verification actions")).toHaveTextContent("1/2 action(s) ready for resolution");
     expect(screen.getByText(/Approved evidence is linked/)).toBeInTheDocument();
     expect(screen.getByText(/Reviewer notes are missing/)).toBeInTheDocument();
