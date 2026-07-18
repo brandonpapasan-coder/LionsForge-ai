@@ -90,6 +90,14 @@ jobs:
           chmod 600 "$HOME/.kube/config"
           kubectl cluster-info
 
+      - name: Verify production TLS certificate secret
+        run: |
+          kubectl get namespace lionsforge-production >/dev/null
+          kubectl -n lionsforge-production get secret lionsforge-api-tls >/dev/null
+          test "$(kubectl -n lionsforge-production get secret lionsforge-api-tls -o jsonpath='{.type}')" = "kubernetes.io/tls"
+          test -n "$(kubectl -n lionsforge-production get secret lionsforge-api-tls -o jsonpath='{.data.tls\.crt}')"
+          test -n "$(kubectl -n lionsforge-production get secret lionsforge-api-tls -o jsonpath='{.data.tls\.key}')"
+
       - name: Apply production configuration
         env:
           PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
@@ -142,6 +150,7 @@ jobs:
             echo "- Rollback SHA: \`${ROLLBACK_IMAGE_TAG}\`"
             echo "- Environment: production"
             echo "- API: ${PRODUCTION_API_URL}"
+            echo "- TLS secret: lionsforge-api-tls verified"
             echo "- Kubernetes rollout: passed"
             echo "- Authenticated smoke test: passed"
           } >> "$GITHUB_STEP_SUMMARY"
