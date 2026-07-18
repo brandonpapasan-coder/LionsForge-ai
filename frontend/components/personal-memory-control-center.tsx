@@ -34,9 +34,33 @@ type Memory = {
   category: string;
   status: string;
   confidence: number;
+  source_evidence_ids?: number[];
   revision_number: number;
   updated_at?: string;
   revisions?: Revision[];
+};
+
+type EvidenceItem = {
+  id: number;
+  source_url: string | null;
+  source_title: string;
+  publisher: string | null;
+  author: string | null;
+  source_type: string;
+  claim: string;
+  excerpt: string;
+  stance: string;
+  validation_status: string;
+  credibility_score: number;
+  freshness_score: number;
+  confidence_score: number;
+};
+
+type EvidenceTrace = {
+  memory_id: number;
+  requested_evidence_ids: number[];
+  evidence: EvidenceItem[];
+  missing_evidence_ids: number[];
 };
 
 type Filters = { projectId: string; status: string; category: string; query: string };
@@ -54,6 +78,16 @@ function formatTimestamp(value?: string) {
   return Number.isNaN(date.getTime()) ? "Time unavailable" : date.toLocaleString();
 }
 
+function safeSourceUrl(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function PersonalMemoryControlCenter() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -62,6 +96,8 @@ export function PersonalMemoryControlCenter() {
   const [appliedFilters, setAppliedFilters] = useState<Filters>(emptyFilters);
   const [editing, setEditing] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [evidenceTrace, setEvidenceTrace] = useState<EvidenceTrace | null>(null);
   const [draft, setDraft] = useState<RevisionDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -92,7 +128,9 @@ export function PersonalMemoryControlCenter() {
     void Promise.all([loadSummary(), loadInventory(emptyFilters)]).catch(() => setError("Personal memory controls could not be loaded."));
   }, [loadInventory, loadSummary]);
 
-  function resetSelectionMode() { setEditing(false); setHistoryOpen(false); setDraft(null); }
+  function resetSelectionMode() {
+    setEditing(false); setHistoryOpen(false); setEvidenceOpen(false); setEvidenceTrace(null); setDraft(null);
+  }
   function selectMemory(item: Memory) { setMemory(item); resetSelectionMode(); setError(null); }
 
   async function applyFilters() {
@@ -106,6 +144,24 @@ export function PersonalMemoryControlCenter() {
     setFilters(emptyFilters); setBusy(true); setError(null);
     try { await loadInventory(emptyFilters); setAppliedFilters(emptyFilters); resetSelectionMode(); }
     catch { setError("The memory inventory could not be refreshed."); }
+    finally { setBusy(false); }
+  }
+
+  async function toggleEvidence() {
+    if (!memory) return;
+    if (evidenceOpen) { setEvidenceOpen(false); return; }
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`/api/personal-memory/${memory.id}/evidence`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(typeof body.detail === "string" ? body.detail : "Supporting evidence could not be loaded.");
+        return;
+      }
+      setEvidenceTrace(body as EvidenceTrace);
+      setEvidenceOpen(true);
+      setHistoryOpen(false);
+    } catch { setError("Supporting evidence could not be loaded."); }
     finally { setBusy(false); }
   }
 
@@ -133,23 +189,14 @@ export function PersonalMemoryControlCenter() {
     if (!window.confirm(`Recover revision ${revision.revision_number} as a new current revision? Later history will be preserved.`)) return;
     setBusy(true); setError(null);
     try {
-      const response = await fetch(`/api/personal-memory/${memory.id}/recover/${revision.id}`, {
-        method: "POST",
-        cache: "no-store",
-      });
+      const response = await fetch(`/api/personal-memory/${memory.id}/recover/${revision.id}`, { method: "POST", cache: "no-store" });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(typeof body.detail === "string" ? body.detail : "The earlier version could not be recovered.");
-        return;
-      }
+      if (!response.ok) { setError(typeof body.detail === "string" ? body.detail : "The earlier version could not be recovered."); return; }
       setMemory(body as Memory);
       await Promise.all([loadSummary(), loadInventory(appliedFilters)]);
-      setHistoryOpen(true);
-    } catch {
-      setError("The earlier version could not be recovered.");
-    } finally {
-      setBusy(false);
-    }
+      setHistoryOpen(true); setEvidenceOpen(false); setEvidenceTrace(null);
+    } catch { setError("The earlier version could not be recovered."); }
+    finally { setBusy(false); }
   }
 
   async function act(action: "archive" | "restore" | "delete") {
@@ -195,11 +242,19 @@ export function PersonalMemoryControlCenter() {
           <div className="action-list"><button type="submit" disabled={busy}>Save revision</button><button type="button" disabled={busy} onClick={() => { setEditing(false); setDraft(null); setError(null); }}>Cancel</button></div>
         </form> : <>
           <div><span className={`priority priority-${memory.status === "archived" ? "low" : "medium"}`}>{memory.status}</span><h3>{memory.summary}</h3><p>{memory.statement}</p><p className="muted">Project {memory.project_id} · {memory.category} · confidence {Math.round(memory.confidence * 100)}% · revision {memory.revision_number}</p></div>
-          <div className="action-list"><button type="button" onClick={() => { setDraft(draftFor(memory)); setEditing(true); setHistoryOpen(false); setError(null); }} disabled={busy || memory.status === "superseded"}>Edit record</button><button type="button" aria-expanded={historyOpen} aria-controls="record-revision-history" onClick={() => setHistoryOpen((open) => !open)} disabled={busy}>{historyOpen ? "Hide revision history" : "View revision history"}</button>{memory.status === "archived" ? <button type="button" onClick={() => void act("restore")} disabled={busy}>Restore</button> : <button type="button" onClick={() => void act("archive")} disabled={busy}>Archive</button>}<button type="button" onClick={() => void act("delete")} disabled={busy}>Permanently delete</button></div>
+          <div className="action-list"><button type="button" onClick={() => { setDraft(draftFor(memory)); setEditing(true); setHistoryOpen(false); setEvidenceOpen(false); setError(null); }} disabled={busy || memory.status === "superseded"}>Edit record</button><button type="button" aria-expanded={historyOpen} aria-controls="record-revision-history" onClick={() => { setHistoryOpen((open) => !open); setEvidenceOpen(false); }} disabled={busy}>{historyOpen ? "Hide revision history" : "View revision history"}</button><button type="button" aria-expanded={evidenceOpen} aria-controls="record-evidence-trace" onClick={() => void toggleEvidence()} disabled={busy}>{evidenceOpen ? "Hide supporting evidence" : "View supporting evidence"}</button>{memory.status === "archived" ? <button type="button" onClick={() => void act("restore")} disabled={busy}>Restore</button> : <button type="button" onClick={() => void act("archive")} disabled={busy}>Archive</button>}<button type="button" onClick={() => void act("delete")} disabled={busy}>Permanently delete</button></div>
           {historyOpen ? <section id="record-revision-history" aria-label="Record revision history">
             <h3>Revision history</h3>
             <article className="action-card" aria-label={`Current revision ${memory.revision_number}`}><strong>Current revision {memory.revision_number}</strong><p>{memory.summary}</p><p>{memory.statement}</p><p className="muted">{memory.category} · {memory.status} · confidence {Math.round(memory.confidence * 100)}% · {formatTimestamp(memory.updated_at)}</p></article>
             {orderedRevisions.length ? orderedRevisions.map((revision) => <article className="action-card" key={revision.id} aria-label={`Prior revision ${revision.revision_number}`}><strong>Revision {revision.revision_number}</strong><p>{revision.summary}</p><p>{revision.statement}</p><p className="muted">{revision.category} · {revision.status} · confidence {Math.round(revision.confidence * 100)}% · {formatTimestamp(revision.created_at)}</p>{revision.revision_number < memory.revision_number ? <button type="button" onClick={() => void recoverRevision(revision)} disabled={busy}>Recover revision {revision.revision_number}</button> : null}</article>) : <p className="muted">No prior revisions are available.</p>}
+          </section> : null}
+          {evidenceOpen && evidenceTrace ? <section id="record-evidence-trace" aria-label="Supporting evidence trace">
+            <h3>Supporting evidence</h3>
+            {evidenceTrace.evidence.length ? evidenceTrace.evidence.map((item) => {
+              const sourceUrl = safeSourceUrl(item.source_url);
+              return <article className="action-card" key={item.id} aria-label={`Evidence ${item.id}`}><strong>{item.source_title}</strong><p>{item.claim}</p><p>{item.excerpt}</p><p className="muted">{item.publisher ?? "Publisher unavailable"} · {item.author ?? "Author unavailable"} · {item.source_type} · {item.stance} · {item.validation_status}</p><p className="muted">Credibility {Math.round(item.credibility_score * 100)}% · freshness {Math.round(item.freshness_score * 100)}% · confidence {Math.round(item.confidence_score * 100)}%</p>{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer">Open source</a> : null}</article>;
+            }) : <p className="muted">No supporting evidence is attached to this record.</p>}
+            {evidenceTrace.missing_evidence_ids.length ? <p role="status">Unavailable evidence IDs: {evidenceTrace.missing_evidence_ids.join(", ")}.</p> : null}
           </section> : null}
         </>}
       </article> : null}
