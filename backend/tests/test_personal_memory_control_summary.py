@@ -69,6 +69,7 @@ def test_control_summary_counts_and_owner_isolation(client):
         "restore",
         "delete",
         "supersede",
+        "recover_version",
     }
 
     other_headers = auth_headers(client, email="memory-summary-other@example.com")
