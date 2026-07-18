@@ -15,8 +15,10 @@ class KnowledgeMemory(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
     project_id: Mapped[int] = mapped_column(ForeignKey("research_projects.id", ondelete="CASCADE"), index=True, nullable=False)
-    mission_id: Mapped[int] = mapped_column(ForeignKey("missions.id", ondelete="CASCADE"), index=True, nullable=False)
-    snapshot_id: Mapped[int] = mapped_column(ForeignKey("executive_brief_snapshots.id", ondelete="CASCADE"), index=True, nullable=False)
+    mission_id: Mapped[int | None] = mapped_column(ForeignKey("missions.id", ondelete="CASCADE"), index=True, nullable=True)
+    snapshot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("executive_brief_snapshots.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     fingerprint: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     statement: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
