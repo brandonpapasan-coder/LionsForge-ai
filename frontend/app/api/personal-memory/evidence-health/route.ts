@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(target, {
+    const response = await fetch(target.toString(), {
       method: "GET",
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
