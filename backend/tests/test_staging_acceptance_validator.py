@@ -41,9 +41,10 @@ def valid_record(*, decision="GO", critical="0", high="0"):
         "Receive complete evidence-first Mentor response",
         "Reopen and continue Mentor conversation",
         "Start and complete Education lesson",
-        "Verify market-learning panels and disclaimers",
+        "Create or review evidence and verify knowledge-quality update",
         "Sign out and sign back in",
-        "Verify persisted research, mentor, education, and learning state",
+        "Verify persisted research, Mentor, education, evidence, and knowledge state",
+        "Verify legacy finance surfaces are absent by default",
         "Execute rollback verification",
     ]
     lines = [
@@ -130,3 +131,11 @@ def test_no_go_allows_documented_blocking_defects():
 def test_incomplete_rollback_is_rejected():
     text = valid_record().replace("- Migration boundary reviewed: Yes", "- Migration boundary reviewed: No")
     assert "rollback-incomplete" in codes(text)
+
+
+def test_obsolete_market_learning_step_does_not_satisfy_active_scope_requirement():
+    text = valid_record().replace(
+        "| Create or review evidence and verify knowledge-quality update | Passed |",
+        "| Verify market-learning panels and disclaimers | Passed |",
+    )
+    assert "missing-row" in codes(text)
