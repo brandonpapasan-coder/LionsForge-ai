@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.api.routes.knowledge_memory_evidence import _assess_evidence_health
 from app.db.session import get_db
-from app.models.evidence import EvidenceRecord, ResearchReviewAction
+from app.models.evidence import EvidenceRecord, ResearchReviewAction, ResearchReviewActionHistory
 from app.models.knowledge_memory import KnowledgeMemory
 from app.models.user import User
 from app.schemas.knowledge_memory import (
@@ -203,6 +204,24 @@ def _plan(db: Session, owner_id: int, memory_id: int) -> KnowledgeMemoryEvidence
     )
 
 
+def _refresh_follow_up(
+    follow_up: ResearchReviewAction,
+    action: KnowledgeMemoryEvidenceRemediationAction,
+    memory_id: int,
+    project_id: int,
+) -> None:
+    follow_up.project_id = project_id
+    follow_up.evidence_id = action.related_evidence_ids[0] if action.related_evidence_ids else 0
+    follow_up.impact_level = "high_attention" if action.priority in {"urgent", "high"} else "review_required"
+    follow_up.governing_rule = f"saved_record_{action.action_type}"
+    follow_up.reason = action.rationale
+    follow_up.action_text = f"{action.action_text} Completion: {' '.join(action.completion_criteria)}"
+    follow_up.supporting_event_ids = [f"memory:{memory_id}"] + [
+        f"evidence:{item_id}" for item_id in action.related_evidence_ids
+    ]
+    follow_up.priority = action.priority
+
+
 @router.get(
     "/{memory_id}/evidence-remediation",
     response_model=KnowledgeMemoryEvidenceRemediationPlan,
@@ -237,6 +256,37 @@ def create_saved_record_evidence_follow_up(
             follow_up_id=action.existing_follow_up_id,
             action_key=action.action_key,
         )
+
+    existing = db.scalar(
+        select(ResearchReviewAction).where(
+            ResearchReviewAction.owner_id == current_user.id,
+            ResearchReviewAction.action_key == action.action_key,
+        )
+    )
+    if existing is not None:
+        previous_status = existing.status
+        _refresh_follow_up(existing, action, memory_id, plan.project_id)
+        existing.status = "open"
+        existing.resolved_at = None
+        existing.resolution_notes = None
+        existing.updated_at = datetime.utcnow()
+        db.add(
+            ResearchReviewActionHistory(
+                action_id=existing.id,
+                owner_id=current_user.id,
+                previous_status=previous_status,
+                new_status="open",
+                note="Reopened because the saved-record remediation condition remains active.",
+            )
+        )
+        db.commit()
+        db.refresh(existing)
+        return KnowledgeMemoryEvidenceRemediationCreateResult(
+            created=False,
+            follow_up_id=existing.id,
+            action_key=existing.action_key,
+        )
+
     follow_up = ResearchReviewAction(
         owner_id=current_user.id,
         project_id=plan.project_id,

@@ -1,3 +1,5 @@
+import pytest
+
 from tests.conftest import auth_headers
 
 
@@ -136,6 +138,66 @@ def test_remediation_follow_up_requires_confirmation_and_deduplicates(client):
     refreshed_action = next(item for item in refreshed["actions"] if item["action_key"] == action["action_key"])
     assert refreshed_action["existing_follow_up_id"] == created.json()["follow_up_id"]
     assert refreshed["open_follow_up_count"] == 1
+
+
+@pytest.mark.parametrize("terminal_status", ["resolved", "dismissed"])
+def test_terminal_remediation_follow_up_reopens_same_record(client, terminal_status):
+    headers = auth_headers(client, email=f"memory-remediation-reopen-{terminal_status}@example.com")
+    project = create_project(client, headers, f"Reopen {terminal_status} remediation project")
+    memory = create_memory(client, headers, project["id"], [])
+    action = next(
+        item
+        for item in get_plan(client, headers, memory["id"])["actions"]
+        if item["action_type"] == "add_direct_support"
+    )
+    endpoint = f"/api/v1/knowledge-memory/{memory['id']}/evidence-remediation/follow-ups"
+    created = client.post(
+        endpoint,
+        headers=headers,
+        json={"action_key": action["action_key"], "confirmed": True},
+    )
+    assert created.status_code == 200
+    follow_up_id = created.json()["follow_up_id"]
+
+    update_payload = {
+        "status": terminal_status,
+        "confirmed": True,
+        "note": f"Marking follow-up {terminal_status} for reopening regression coverage.",
+    }
+    if terminal_status == "resolved":
+        update_payload["resolution_notes"] = "The original review cycle was completed."
+    terminal = client.patch(
+        f"/api/v1/research-follow-up/actions/{follow_up_id}",
+        headers=headers,
+        json=update_payload,
+    )
+    assert terminal.status_code == 200
+    assert terminal.json()["status"] == terminal_status
+
+    reopened = client.post(
+        endpoint,
+        headers=headers,
+        json={"action_key": action["action_key"], "confirmed": True},
+    )
+    assert reopened.status_code == 200
+    assert reopened.json() == {
+        "created": False,
+        "follow_up_id": follow_up_id,
+        "action_key": action["action_key"],
+    }
+
+    queue = client.get(
+        f"/api/v1/research-follow-up/projects/{project['id']}",
+        headers=headers,
+    )
+    assert queue.status_code == 200
+    follow_up = next(item for item in queue.json()["actions"] if item["id"] == follow_up_id)
+    assert follow_up["status"] == "open"
+    assert follow_up["resolved_at"] is None
+    assert follow_up["resolution_notes"] is None
+    assert follow_up["history"][-1]["previous_status"] == terminal_status
+    assert follow_up["history"][-1]["new_status"] == "open"
+    assert "condition remains active" in follow_up["history"][-1]["note"]
 
 
 def test_remediation_plan_and_creation_enforce_owner_isolation(client):
