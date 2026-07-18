@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
-from app.models.knowledge_memory import KnowledgeMemory
+from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
 from app.models.mission import Mission
 from app.models.research_project import ResearchProject
 from app.models.user import User
@@ -19,6 +19,7 @@ from app.schemas.knowledge_memory import (
 from app.services.knowledge_memory_service import (
     list_memories,
     promote_completed_mission,
+    recover_memory_revision,
     revisions_for,
     supersede_memory,
     update_memory,
@@ -26,7 +27,6 @@ from app.services.knowledge_memory_service import (
 from app.services.user_authored_memory_service import validate_user_authored_revision
 
 router = APIRouter()
-
 
 
 def _owned_project(db: Session, owner_id: int, project_id: int) -> ResearchProject:
@@ -41,7 +41,6 @@ def _owned_project(db: Session, owner_id: int, project_id: int) -> ResearchProje
     return project
 
 
-
 def _owned_memory(db: Session, owner_id: int, memory_id: int) -> KnowledgeMemory:
     memory = db.scalar(
         select(KnowledgeMemory).where(
@@ -52,7 +51,6 @@ def _owned_memory(db: Session, owner_id: int, memory_id: int) -> KnowledgeMemory
     if memory is None:
         raise HTTPException(status_code=404, detail="Knowledge memory not found")
     return memory
-
 
 
 def _read(db: Session, memory: KnowledgeMemory) -> KnowledgeMemoryRead:
@@ -171,7 +169,7 @@ def get_memory_control_summary(
         revision_count=sum(memory.revision_number for memory in memories),
         by_status=dict(sorted(by_status.items())),
         by_category=dict(sorted(by_category.items())),
-        available_controls=["inspect", "revise", "archive", "restore", "delete", "supersede"],
+        available_controls=["inspect", "revise", "archive", "restore", "delete", "supersede", "recover_version"],
     )
 
 
@@ -240,6 +238,41 @@ def revise_knowledge_memory(
             detail="Validated memory requires confidence of at least 0.5",
         )
     memory = update_memory(db, memory, changes)
+    return _read(db, memory)
+
+
+@router.post("/{memory_id}/recover/{revision_id}", response_model=KnowledgeMemoryRead)
+def recover_knowledge_memory_version(
+    memory_id: int,
+    revision_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> KnowledgeMemoryRead:
+    memory = _owned_memory(db, current_user.id, memory_id)
+    revision = db.scalar(
+        select(KnowledgeMemoryRevision).where(
+            KnowledgeMemoryRevision.id == revision_id,
+            KnowledgeMemoryRevision.memory_id == memory.id,
+        )
+    )
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Record version not found")
+    changes = {
+        "statement": revision.statement,
+        "summary": revision.summary,
+        "category": revision.category,
+        "status": revision.status,
+        "confidence": revision.confidence,
+        "source_evidence_ids": revision.source_evidence_ids,
+        "provenance": revision.provenance,
+    }
+    try:
+        validate_user_authored_revision(memory, changes)
+        if revision.status == "validated" and revision.confidence < 0.5:
+            raise ValueError("Validated memory requires confidence of at least 0.5")
+        memory = recover_memory_revision(db, memory, revision)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _read(db, memory)
 
 
