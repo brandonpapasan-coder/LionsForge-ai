@@ -1,3 +1,9 @@
+import os
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
 from fastapi import FastAPI
 
 from app.api.router import build_api_router
@@ -14,6 +20,27 @@ LEGACY_PREFIXES = (
     "/api/v1/factors",
     "/api/v1/events",
     "/api/v1/decisions",
+)
+
+LEGACY_MODULES = (
+    "app.api.routes.advanced_alerts",
+    "app.api.routes.alerts",
+    "app.api.routes.autonomous_portfolios",
+    "app.api.routes.companies",
+    "app.api.routes.decisions",
+    "app.api.routes.events",
+    "app.api.routes.factors",
+    "app.api.routes.market",
+    "app.api.routes.market_learning",
+    "app.api.routes.market_learning_evidence",
+    "app.api.routes.market_learning_mastery",
+    "app.api.routes.market_learning_portfolio",
+    "app.api.routes.market_learning_progress",
+    "app.api.routes.market_learning_roadmap",
+    "app.api.routes.market_mentor",
+    "app.api.routes.market_simulator",
+    "app.api.routes.portfolios",
+    "app.api.routes.watchlists",
 )
 
 CORE_PREFIXES = (
@@ -45,6 +72,33 @@ def test_legacy_finance_routes_are_disabled_by_default():
         for path in paths
         for prefix in LEGACY_PREFIXES
     )
+
+
+def test_disabled_startup_does_not_import_legacy_finance_modules():
+    script = textwrap.dedent(
+        f"""
+        import sys
+        import app.api.router  # noqa: F401
+
+        legacy_modules = {LEGACY_MODULES!r}
+        imported = [name for name in legacy_modules if name in sys.modules]
+        if imported:
+            raise SystemExit(f"legacy modules imported: {{imported}}")
+        """
+    )
+    env = os.environ.copy()
+    env.pop("ENABLE_LEGACY_FINANCE_MODULES", None)
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 def test_core_research_routes_remain_available_when_legacy_routes_are_disabled():
