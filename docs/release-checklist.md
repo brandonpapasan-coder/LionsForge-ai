@@ -5,9 +5,10 @@ A release candidate is eligible for staging only when every required gate below 
 ## Release candidate
 
 - Record the exact 40-character `main` commit SHA being evaluated.
-- Confirm Backend CI, Frontend CI, Security Gate, and Deployment Validation successful `push` runs exist for that exact SHA on `main`.
-- Use the same immutable SHA as the `image_tag` for both `Staging Deploy` and `Staging Frontend Deploy`.
-- Do not substitute a branch name, moving tag, manual workflow result, or locally built image.
+- Confirm Backend CI, Frontend CI, Security Gate, and Deployment Validation passed on a `push` event for `main` at that exact SHA.
+- Treat pull-request runs, manual runs, scheduled runs, branch runs, missing status contexts, or unverifiable run evidence as insufficient.
+- Use the same immutable SHA as both the `Staging Deploy` and `Staging Frontend Deploy` workflow `image_tag`.
+- Do not substitute a branch name, moving tag, locally built image, or an unverified merge SHA.
 
 ## GitHub `staging` environment
 
@@ -29,27 +30,17 @@ Secret values must never be committed, echoed, copied into issue comments, or st
 
 ## Automated gates
 
-- Backend CI passes the full test suite.
-- Frontend CI passes tests, type checking, and the production build.
-- Deployment Validation applies all Alembic migrations from a clean database.
-- Security Gate contains no unresolved critical findings.
-- `Staging Deploy` builds and pushes the backend image, resolves its immutable `sha256` digest, deploys by digest, verifies every running backend image ID, completes Kubernetes rollout, and passes authenticated smoke validation.
-- `Staging Frontend Deploy` builds and pushes the frontend image, resolves its immutable `sha256` digest, deploys by digest, verifies every running frontend image ID, completes Kubernetes rollout, and passes the login-page smoke check.
+- Backend CI passes the full test suite on a `push` event for `main` at the exact release SHA.
+- Frontend CI passes tests, type checking, and the production build on a `push` event for `main` at the exact release SHA.
+- Deployment Validation applies all Alembic migrations from a clean database on a `push` event for `main` at the exact release SHA.
+- Security Gate contains no unresolved critical findings on a `push` event for `main` at the exact release SHA.
+- `Staging Deploy` completes backend image build, push, digest resolution, Kubernetes apply, rollout, running-image verification, and authenticated smoke validation.
+- `Staging Frontend Deploy` completes frontend image build, push, digest resolution, Kubernetes apply, rollout, running-image verification, and login-page smoke validation.
 - Staging smoke validation confirms:
   - health and readiness endpoints respond successfully
   - authenticated Dashboard, Mentor, Research, and Education APIs respond successfully
   - OpenAI Mentor provider is enabled and configured or healthy
   - a Mentor request returns the complete schema-valid response contract
-- `Staging Acceptance Validate` confirms exact-SHA release-gate evidence and internal acceptance-record consistency.
-
-## Image provenance gates
-
-- Record the backend staging workflow run and registry digest.
-- Record the frontend staging workflow run and registry digest.
-- Confirm the running backend image digest matches the recorded backend digest.
-- Confirm the running frontend image digest matches the recorded frontend digest.
-- Confirm both deployments were dispatched using the same release candidate SHA.
-- Do not approve GO using image tags alone.
 
 ## Security gates
 
@@ -61,17 +52,17 @@ Secret values must never be committed, echoed, copied into issue comments, or st
 
 ## Operational gates
 
-- Kubernetes namespace, ingress, API and web DNS, TLS, PostgreSQL, and GHCR image-pull access are operational.
+- Kubernetes namespace, ingress, DNS, TLS, PostgreSQL, and GHCR image-pull access are operational.
 - Database backup and restore procedure is documented and tested.
 - Health checks are configured for backend, frontend, and database services.
 - Application errors and latency are observable in staging.
-- Rollback identifies the previous backend and frontend images and the database migration boundary.
+- Rollback identifies the previous backend and frontend image digests and the database migration boundary.
 - A named owner is assigned for every acceptance defect.
 
 ## Staging acceptance journey
 
 1. Register or use the designated staging acceptance user.
-2. Sign in through the deployed frontend and load the Executive Dashboard.
+2. Sign in and load the Executive Dashboard.
 3. Create a research project and save notebook content.
 4. Create and reopen a research session.
 5. Open the AI Mentor from the Research Workspace.
@@ -83,11 +74,10 @@ Secret values must never be committed, echoed, copied into issue comments, or st
 11. Sign out and sign back in.
 12. Verify research, mentor, education, and market-learning state persists.
 13. Exercise the documented rollback procedure without crossing an unsafe migration boundary.
-14. Forward-deploy the same accepted backend and frontend digests after the rollback test.
-15. Record results in `docs/staging-acceptance-record.md`.
-16. Run `Staging Acceptance Validate` against the completed record and exact release SHA.
+14. Record both deployment workflow runs, both immutable image digests, and both running-image verifications in `docs/staging-acceptance-record.md`.
+15. Run `Staging Acceptance Validate` against the completed record and exact release SHA.
 
 ## Release decision
 
-- **GO:** all automated, provenance, security, and operational gates pass; the acceptance journey succeeds; rollback and forward redeploy are verified; both running image digests match the record; and no unresolved critical or high-severity defects remain.
-- **NO-GO:** any required gate fails, either image provenance check is incomplete, provider configuration is missing, data persistence is unreliable, authentication isolation fails, critical safety language is absent, or rollback cannot be executed safely.
+- **GO:** exact-SHA `push`/`main` gates are verified, both staging deploy workflows pass, all automated and operational gates pass, the acceptance journey succeeds, rollback is verified, the completed record passes validation, and no unresolved critical or high-severity defects remain.
+- **NO-GO:** required exact-SHA `push`/`main` evidence is missing or unverifiable, any required gate fails, provider configuration is missing, data persistence is unreliable, authentication isolation fails, critical safety language is absent, image provenance is incomplete, or rollback cannot be executed safely.
