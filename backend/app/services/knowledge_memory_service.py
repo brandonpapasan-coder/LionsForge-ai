@@ -1,5 +1,6 @@
 import hashlib
 import json
+from copy import deepcopy
 
 from sqlalchemy import desc, or_, select
 from sqlalchemy.orm import Session
@@ -179,6 +180,29 @@ def revisions_for(db: Session, memory_id: int) -> list[KnowledgeMemoryRevision]:
             .where(KnowledgeMemoryRevision.memory_id == memory_id)
             .order_by(KnowledgeMemoryRevision.revision_number)
         ).all()
+    )
+
+
+def recover_memory_revision(
+    db: Session,
+    memory: KnowledgeMemory,
+    revision: KnowledgeMemoryRevision,
+) -> KnowledgeMemory:
+    if revision.memory_id != memory.id:
+        raise ValueError("Version does not belong to the selected record")
+    return update_memory(
+        db,
+        memory,
+        {
+            "statement": revision.statement,
+            "summary": revision.summary,
+            "category": revision.category,
+            "status": revision.status,
+            "confidence": revision.confidence,
+            "source_evidence_ids": deepcopy(revision.source_evidence_ids),
+            "provenance": deepcopy(revision.provenance),
+            "superseded_by_id": None,
+        },
     )
 
 
