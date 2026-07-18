@@ -109,11 +109,12 @@ jobs:
           from pathlib import Path
 
           payload = json.loads(Path("release-gate-evidence.json").read_text(encoding="utf-8"))
-          print("| Gate | Status | Conclusion | Run ID |")
-          print("|---|---|---|---|")
+          print("| Gate | Event | Branch | Status | Conclusion | Run ID |")
+          print("|---|---|---|---|---|---|")
           for gate in payload["gates"]:
               print(
-                  f"| {gate['name']} | {gate['status']} | "
+                  f"| {gate['name']} | {gate['event'] or '-'} | "
+                  f"{gate['head_branch'] or '-'} | {gate['status']} | "
                   f"{gate['conclusion'] or '-'} | {gate['run_id'] or '-'} |"
               )
           PY
