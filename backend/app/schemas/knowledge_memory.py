@@ -122,6 +122,26 @@ class KnowledgeMemoryEvidenceTrace(BaseModel):
     health: KnowledgeMemoryEvidenceHealth
 
 
+class KnowledgeMemoryEvidenceHealthInventoryItem(BaseModel):
+    memory_id: int
+    project_id: int
+    summary: str
+    statement: str
+    category: str
+    status: str
+    confidence: float
+    updated_at: datetime
+    health: KnowledgeMemoryEvidenceHealth
+
+
+class KnowledgeMemoryEvidenceHealthInventory(BaseModel):
+    project_id: int | None
+    classification: EvidenceHealthClassification | None
+    total_count: int
+    by_classification: dict[str, int]
+    items: list[KnowledgeMemoryEvidenceHealthInventoryItem]
+
+
 class KnowledgeMemoryPromotionResult(BaseModel):
     memories: list[KnowledgeMemoryRead]
     created_count: int
