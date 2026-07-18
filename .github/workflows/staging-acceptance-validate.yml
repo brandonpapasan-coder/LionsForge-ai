@@ -1,0 +1,97 @@
+name: Staging Acceptance Validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_path:
+        description: Repository-relative path to the completed staging acceptance Markdown record
+        required: true
+        default: docs/staging-acceptance-record.md
+        type: string
+      release_sha:
+        description: Exact 40-character lowercase release commit SHA recorded in the acceptance record
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate workflow inputs
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release_sha must be an exact 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+
+          git cat-file -e "${RELEASE_SHA}^{commit}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+          if [[ "${RECORD_PATH}" = /* || "${RECORD_PATH}" == *".."* || "${RECORD_PATH}" != docs/*.md ]]; then
+            echo "record_path must be a safe repository-relative Markdown path under docs/" >&2
+            exit 1
+          fi
+
+          test -f "${RECORD_PATH}"
+          resolved_path="$(realpath "${RECORD_PATH}")"
+          workspace_path="$(realpath "${GITHUB_WORKSPACE}")"
+          case "${resolved_path}" in
+            "${workspace_path}"/docs/*.md) ;;
+            *)
+              echo "record_path resolves outside the allowed docs directory" >&2
+              exit 1
+              ;;
+          esac
+
+          recorded_sha="$(sed -n 's/^- Release candidate SHA:[[:space:]]*//p' "${RECORD_PATH}" | head -n 1)"
+          if [[ "${recorded_sha}" != "${RELEASE_SHA}" ]]; then
+            echo "release_sha does not match the acceptance record" >&2
+            exit 1
+          fi
+
+      - name: Validate staging acceptance record
+        id: validate
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -o pipefail
+          python scripts/validate_staging_acceptance.py "${RECORD_PATH}" | tee staging-acceptance-validation.txt
+
+      - name: Publish validation summary
+        if: always()
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+        run: |
+          {
+            echo "## Staging acceptance validation"
+            echo
+            echo "- Record path: \`${RECORD_PATH}\`"
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo
+            if [[ -f staging-acceptance-validation.txt ]]; then
+              echo '```text'
+              cat staging-acceptance-validation.txt
+              echo '```'
+            else
+              echo "Validation did not run because input safety checks failed."
+            fi
+            echo
+            echo "This workflow validates record structure and consistency only; it does not independently prove external staging evidence."
+          } >> "${GITHUB_STEP_SUMMARY}"
