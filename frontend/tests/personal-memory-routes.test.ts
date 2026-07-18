@@ -9,10 +9,14 @@ vi.mock("next/headers", () => ({
 import { GET as getSummary } from "@/app/api/personal-memory/summary/route";
 import { DELETE, GET } from "@/app/api/personal-memory/[memoryId]/route";
 import { POST } from "@/app/api/personal-memory/[memoryId]/[action]/route";
+import { POST as recoverVersion } from "@/app/api/personal-memory/[memoryId]/recover/[revisionId]/route";
 
 const memoryContext = (memoryId: string) => ({ params: Promise.resolve({ memoryId }) });
 const actionContext = (memoryId: string, action: string) => ({
   params: Promise.resolve({ memoryId, action }),
+});
+const recoveryContext = (memoryId: string, revisionId: string) => ({
+  params: Promise.resolve({ memoryId, revisionId }),
 });
 
 describe("personal memory API proxies", () => {
@@ -107,6 +111,29 @@ describe("personal memory API proxies", () => {
       actionContext("17", "validate"),
     );
     expect(rejected.status).toBe(404);
+  });
+
+  it("encodes record and version identifiers for recovery", async () => {
+    getCookie.mockReturnValue({ value: "session-value" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ revision_number: 4 }), { status: 200 }),
+    );
+
+    const response = await recoverVersion(
+      new Request("http://localhost", { method: "POST" }),
+      recoveryContext("record / 17", "version / 2"),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/knowledge-memory/record%20%2F%2017/recover/version%20%2F%202",
+      {
+        method: "POST",
+        headers: { authorization: "Bearer session-value" },
+        cache: "no-store",
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ revision_number: 4 });
   });
 
   it("returns stable secret-safe 503 responses", async () => {

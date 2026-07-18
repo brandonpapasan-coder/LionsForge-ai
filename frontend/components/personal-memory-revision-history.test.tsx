@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PersonalMemoryControlCenter } from "@/components/personal-memory-control-center";
@@ -14,7 +14,7 @@ const summary = {
   revision_count: 4,
   by_status: { provisional: 2 },
   by_category: { learning_goal: 2 },
-  available_controls: ["inspect", "revise", "archive", "restore", "delete"],
+  available_controls: ["inspect", "revise", "recover_version", "archive", "restore", "delete"],
 };
 
 const memoryWithHistory = {
@@ -119,5 +119,59 @@ describe("PersonalMemoryControlCenter revision history", () => {
     fireEvent.click(screen.getByRole("button", { name: "View revision history" }));
     expect(screen.getByText("No prior revisions are available.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Hide revision history" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("recovers an earlier version as a new revision and refreshes the dashboard", async () => {
+    let current = memoryWithHistory;
+    let currentSummary = summary;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/personal-memory/summary") return response(currentSummary);
+      if (url === "/api/personal-memory") return response([current, memoryWithoutHistory]);
+      if (url === "/api/personal-memory/11/recover/101" && init?.method === "POST") {
+        current = {
+          ...memoryWithHistory,
+          statement: "Use reliable evidence.",
+          summary: "Prefer reliable evidence",
+          confidence: 0.5,
+          revision_number: 4,
+          revisions: [
+            ...memoryWithHistory.revisions,
+            {
+              id: 103,
+              revision_number: 3,
+              statement: memoryWithHistory.statement,
+              summary: memoryWithHistory.summary,
+              category: memoryWithHistory.category,
+              status: memoryWithHistory.status,
+              confidence: memoryWithHistory.confidence,
+              created_at: memoryWithHistory.updated_at,
+            },
+          ],
+        };
+        currentSummary = { ...summary, revision_count: 5 };
+        return response(current);
+      }
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PersonalMemoryControlCenter />);
+    const inventory = await screen.findByLabelText("Personal memory inventory");
+    fireEvent.click(within(inventory).getByRole("button", { name: /Prioritize primary evidence/i }));
+    fireEvent.click(screen.getByRole("button", { name: "View revision history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recover revision 1" }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      "Recover revision 1 as a new current revision? Later history will be preserved.",
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/personal-memory/11/recover/101",
+      { method: "POST", cache: "no-store" },
+    ));
+    await waitFor(() => expect(screen.getByLabelText("Current revision 4")).toBeInTheDocument());
+    expect(screen.getAllByText("Prefer reliable evidence").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByLabelText("Record revision history")).toBeInTheDocument();
   });
 });

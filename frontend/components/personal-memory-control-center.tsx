@@ -128,6 +128,30 @@ export function PersonalMemoryControlCenter() {
     finally { setBusy(false); }
   }
 
+  async function recoverRevision(revision: Revision) {
+    if (!memory || revision.revision_number >= memory.revision_number) return;
+    if (!window.confirm(`Recover revision ${revision.revision_number} as a new current revision? Later history will be preserved.`)) return;
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(`/api/personal-memory/${memory.id}/recover/${revision.id}`, {
+        method: "POST",
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(typeof body.detail === "string" ? body.detail : "The earlier version could not be recovered.");
+        return;
+      }
+      setMemory(body as Memory);
+      await Promise.all([loadSummary(), loadInventory(appliedFilters)]);
+      setHistoryOpen(true);
+    } catch {
+      setError("The earlier version could not be recovered.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function act(action: "archive" | "restore" | "delete") {
     if (!memory) return;
     if (action === "delete" && !window.confirm("Permanently delete this memory? This cannot be undone.")) return;
@@ -175,7 +199,7 @@ export function PersonalMemoryControlCenter() {
           {historyOpen ? <section id="record-revision-history" aria-label="Record revision history">
             <h3>Revision history</h3>
             <article className="action-card" aria-label={`Current revision ${memory.revision_number}`}><strong>Current revision {memory.revision_number}</strong><p>{memory.summary}</p><p>{memory.statement}</p><p className="muted">{memory.category} · {memory.status} · confidence {Math.round(memory.confidence * 100)}% · {formatTimestamp(memory.updated_at)}</p></article>
-            {orderedRevisions.length ? orderedRevisions.map((revision) => <article className="action-card" key={revision.id} aria-label={`Prior revision ${revision.revision_number}`}><strong>Revision {revision.revision_number}</strong><p>{revision.summary}</p><p>{revision.statement}</p><p className="muted">{revision.category} · {revision.status} · confidence {Math.round(revision.confidence * 100)}% · {formatTimestamp(revision.created_at)}</p></article>) : <p className="muted">No prior revisions are available.</p>}
+            {orderedRevisions.length ? orderedRevisions.map((revision) => <article className="action-card" key={revision.id} aria-label={`Prior revision ${revision.revision_number}`}><strong>Revision {revision.revision_number}</strong><p>{revision.summary}</p><p>{revision.statement}</p><p className="muted">{revision.category} · {revision.status} · confidence {Math.round(revision.confidence * 100)}% · {formatTimestamp(revision.created_at)}</p>{revision.revision_number < memory.revision_number ? <button type="button" onClick={() => void recoverRevision(revision)} disabled={busy}>Recover revision {revision.revision_number}</button> : null}</article>) : <p className="muted">No prior revisions are available.</p>}
           </section> : null}
         </>}
       </article> : null}
