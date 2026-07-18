@@ -9,6 +9,7 @@ import { MarketLearningMasteryPanel } from "@/components/market-learning-mastery
 import { MarketLearningPortfolioPanel } from "@/components/market-learning-portfolio-panel";
 import { MarketLearningProgressPanel } from "@/components/market-learning-progress-panel";
 import { MarketLearningRoadmapPanel } from "@/components/market-learning-roadmap-panel";
+import { PersonalMemoryControlCenter } from "@/components/personal-memory-control-center";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
 export function ExecutiveDashboard() {
@@ -78,6 +79,7 @@ export function ExecutiveDashboard() {
         ))}
       </section>
 
+      <PersonalMemoryControlCenter />
       <KnowledgeQualityDashboard />
       <MarketLearningProgressPanel />
       <MarketLearningRoadmapPanel />
