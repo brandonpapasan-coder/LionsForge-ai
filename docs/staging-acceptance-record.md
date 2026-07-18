@@ -6,11 +6,14 @@ Complete one copy of this record for each release candidate. Do not include secr
 
 - Release candidate SHA:
 - Staging deploy workflow run:
+- Staging frontend deploy workflow run:
 - Staging URL:
 - Acceptance date/time (UTC):
 - Acceptance owner:
 - Backend image digest:
 - Running backend image digest verified: Yes / No
+- Frontend image digest:
+- Running frontend image digest verified: Yes / No
 - Previous deployable image SHA:
 - Database migration revision before deploy:
 - Database migration revision after deploy:
@@ -24,6 +27,7 @@ Complete one copy of this record for each release candidate. Do not include secr
 | Security Gate | Pending | | |
 | Deployment Validation | Pending | | |
 | Staging Deploy | Pending | | |
+| Staging Frontend Deploy | Pending | | |
 | Authenticated smoke test | Pending | | |
 | OpenAI provider health | Pending | | Record only enabled/status/model metadata. |
 | Mentor schema validation | Pending | | Do not copy sensitive conversation data. |
@@ -91,4 +95,4 @@ Severity definitions:
 
 ### Required sign-off statement
 
-> I verified that this decision is based on the exact release candidate SHA and backend image digest recorded above, that the running staging backend image matched that digest, that no credentials are included in this record, and that all blocking gates and defects have been evaluated according to `docs/release-checklist.md`.
+> I verified that this decision is based on the exact release candidate SHA and backend and frontend image digests recorded above, that the running staging backend and frontend images matched those digests, that no credentials are included in this record, and that all blocking gates and defects have been evaluated according to `docs/release-checklist.md`.

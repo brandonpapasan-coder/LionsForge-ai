@@ -24,6 +24,7 @@ REQUIRED_GATES = {
     "Security Gate",
     "Deployment Validation",
     "Staging Deploy",
+    "Staging Frontend Deploy",
     "Authenticated smoke test",
     "OpenAI provider health",
     "Mentor schema validation",
@@ -107,14 +108,26 @@ def validate_record(text: str) -> list[Finding]:
     if not SHA_RE.fullmatch(sha):
         findings.append(Finding("invalid-sha", "Release candidate SHA must be exactly 40 lowercase hexadecimal characters"))
 
-    digest = fields.get("Backend image digest", "")
-    if not DIGEST_RE.fullmatch(digest):
-        findings.append(Finding("invalid-image-digest", "Backend image digest must be sha256 followed by 64 lowercase hexadecimal characters"))
-    if fields.get("Running backend image digest verified") != "Yes":
-        findings.append(Finding("image-provenance-unverified", "Running backend image digest verified must be Yes"))
+    for component in ("Backend", "Frontend"):
+        digest = fields.get(f"{component} image digest", "")
+        if not DIGEST_RE.fullmatch(digest):
+            findings.append(
+                Finding(
+                    "invalid-image-digest",
+                    f"{component} image digest must be sha256 followed by 64 lowercase hexadecimal characters",
+                )
+            )
+        if fields.get(f"Running {component.lower()} image digest verified") != "Yes":
+            findings.append(
+                Finding(
+                    "image-provenance-unverified",
+                    f"Running {component.lower()} image digest verified must be Yes",
+                )
+            )
 
     for field in (
         "Staging deploy workflow run",
+        "Staging frontend deploy workflow run",
         "Staging URL",
         "Acceptance date/time (UTC)",
         "Acceptance owner",
@@ -156,8 +169,8 @@ def validate_record(text: str) -> list[Finding]:
             findings.append(Finding("blocking-defect", "GO requires zero unresolved critical defects"))
         if unresolved_high not in allowed_zero:
             findings.append(Finding("blocking-defect", "GO requires zero unresolved high-severity defects"))
-        if "I verified that this decision is based on the exact release candidate SHA and backend image digest" not in text:
-            findings.append(Finding("missing-signoff", "GO requires the digest-aware sign-off statement"))
+        if "exact release candidate SHA and backend and frontend image digests" not in text:
+            findings.append(Finding("missing-signoff", "GO requires the full image-provenance sign-off statement"))
 
     return findings
 
