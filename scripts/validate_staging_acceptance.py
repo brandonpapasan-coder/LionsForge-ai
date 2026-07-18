@@ -46,9 +46,10 @@ REQUIRED_MANUAL_STEPS = {
     "Receive complete evidence-first Mentor response",
     "Reopen and continue Mentor conversation",
     "Start and complete Education lesson",
-    "Verify market-learning panels and disclaimers",
+    "Create or review evidence and verify knowledge-quality update",
     "Sign out and sign back in",
-    "Verify persisted research, mentor, education, and learning state",
+    "Verify persisted research, Mentor, education, evidence, and knowledge state",
+    "Verify legacy finance surfaces are absent by default",
     "Execute rollback verification",
 }
 
