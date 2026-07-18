@@ -134,7 +134,7 @@ describe("PersonalMemoryControlCenter revision editor", () => {
   });
 
   it("validates confidence locally before calling the revision endpoint", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/personal-memory/summary") return response(baseSummary);
       if (url === "/api/personal-memory") return response([memory]);
