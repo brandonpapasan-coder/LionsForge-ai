@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,10 @@ from app.models.evidence import EvidenceRecord
 from app.models.knowledge_memory import KnowledgeMemory
 from app.models.user import User
 from app.schemas.knowledge_memory import (
+    EvidenceHealthClassification,
     KnowledgeMemoryEvidenceHealth,
+    KnowledgeMemoryEvidenceHealthInventory,
+    KnowledgeMemoryEvidenceHealthInventoryItem,
     KnowledgeMemoryEvidenceTrace,
 )
 
@@ -18,6 +21,14 @@ _APPROVED_STATUSES = {"approved", "validated"}
 _NEEDS_REVIEW_STATUSES = {"unverified", "needs_review", "needs-review", "pending"}
 _SUPPORTING_STANCES = {"supports", "supporting"}
 _CONTRADICTING_STANCES = {"contradicts", "contradicting", "opposes"}
+_HEALTH_PRIORITY = {
+    "contested": 0,
+    "unavailable": 1,
+    "unsupported": 2,
+    "weak": 3,
+    "adequate": 4,
+    "strong": 5,
+}
 
 
 def _average(values: list[float]) -> float | None:
@@ -98,6 +109,79 @@ def _assess_evidence_health(
         average_confidence=average_confidence,
         reasons=reasons,
         recommended_actions=list(dict.fromkeys(recommended_actions)),
+    )
+
+
+@router.get("/evidence-health/inventory", response_model=KnowledgeMemoryEvidenceHealthInventory)
+def get_knowledge_memory_evidence_health_inventory(
+    project_id: int | None = Query(default=None),
+    classification: EvidenceHealthClassification | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> KnowledgeMemoryEvidenceHealthInventory:
+    statement = select(KnowledgeMemory).where(KnowledgeMemory.owner_id == current_user.id)
+    if project_id is not None:
+        statement = statement.where(KnowledgeMemory.project_id == project_id)
+    memories = list(db.scalars(statement).all())
+
+    all_evidence_ids = list(
+        dict.fromkeys(
+            evidence_id
+            for memory in memories
+            for evidence_id in memory.source_evidence_ids
+        )
+    )
+    evidence_records = (
+        list(
+            db.scalars(
+                select(EvidenceRecord).where(
+                    EvidenceRecord.id.in_(all_evidence_ids),
+                    EvidenceRecord.owner_id == current_user.id,
+                )
+            ).all()
+        )
+        if all_evidence_ids
+        else []
+    )
+    records_by_id = {record.id: record for record in evidence_records}
+
+    items: list[KnowledgeMemoryEvidenceHealthInventoryItem] = []
+    by_classification: dict[str, int] = {}
+    for memory in memories:
+        requested_ids = list(dict.fromkeys(memory.source_evidence_ids))
+        records = [records_by_id[evidence_id] for evidence_id in requested_ids if evidence_id in records_by_id]
+        unavailable_ids = [evidence_id for evidence_id in requested_ids if evidence_id not in records_by_id]
+        health = _assess_evidence_health(requested_ids, records, unavailable_ids)
+        by_classification[health.classification] = by_classification.get(health.classification, 0) + 1
+        if classification is not None and health.classification != classification:
+            continue
+        items.append(
+            KnowledgeMemoryEvidenceHealthInventoryItem(
+                memory_id=memory.id,
+                project_id=memory.project_id,
+                summary=memory.summary,
+                statement=memory.statement,
+                category=memory.category,
+                status=memory.status,
+                confidence=memory.confidence,
+                updated_at=memory.updated_at,
+                health=health,
+            )
+        )
+
+    items.sort(
+        key=lambda item: (
+            _HEALTH_PRIORITY[item.health.classification],
+            item.health.average_confidence if item.health.average_confidence is not None else -1,
+            -item.updated_at.timestamp(),
+        )
+    )
+    return KnowledgeMemoryEvidenceHealthInventory(
+        project_id=project_id,
+        classification=classification,
+        total_count=len(items),
+        by_classification=dict(sorted(by_classification.items())),
+        items=items,
     )
 
 
