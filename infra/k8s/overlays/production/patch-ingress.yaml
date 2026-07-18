@@ -3,6 +3,10 @@ kind: Ingress
 metadata:
   name: lionsforge-backend
 spec:
+  tls:
+    - hosts:
+        - api.lionsforge.ai
+      secretName: lionsforge-api-tls
   rules:
     - host: api.lionsforge.ai
       http:
