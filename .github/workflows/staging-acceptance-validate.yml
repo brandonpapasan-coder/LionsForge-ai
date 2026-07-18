@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   validate-record:
@@ -63,6 +64,19 @@ jobs:
             exit 1
           fi
 
+      - name: Verify required release gates
+        id: release-gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -o pipefail
+          python scripts/verify_release_gates.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${RELEASE_SHA}" \
+            --output release-gate-evidence.json \
+            | tee release-gate-evidence.txt
+
       - name: Validate staging acceptance record
         id: validate
         env:
@@ -76,6 +90,7 @@ jobs:
         env:
           RECORD_PATH: ${{ inputs.record_path }}
           RELEASE_SHA: ${{ inputs.release_sha }}
+          GATE_OUTCOME: ${{ steps.release-gates.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
         run: |
           {
@@ -83,15 +98,36 @@ jobs:
             echo
             echo "- Record path: \`${RECORD_PATH}\`"
             echo "- Release SHA: \`${RELEASE_SHA}\`"
-            echo "- Validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
+            echo "- Record validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
             echo
+            if [[ -f release-gate-evidence.json ]]; then
+              echo "### Required release gates"
+              echo
+              python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("release-gate-evidence.json").read_text(encoding="utf-8"))
+          print("| Gate | Status | Conclusion | Run ID |")
+          print("|---|---|---|---|")
+          for gate in payload["gates"]:
+              print(
+                  f"| {gate['name']} | {gate['status']} | "
+                  f"{gate['conclusion'] or '-'} | {gate['run_id'] or '-'} |"
+              )
+          PY
+              echo
+            fi
             if [[ -f staging-acceptance-validation.txt ]]; then
+              echo "### Record validator"
+              echo
               echo '```text'
               cat staging-acceptance-validation.txt
               echo '```'
             else
-              echo "Validation did not run because input safety checks failed."
+              echo "Record validation did not run because an earlier safety or gate check failed."
             fi
             echo
-            echo "This workflow validates record structure and consistency only; it does not independently prove external staging evidence."
+            echo "This workflow verifies GitHub Actions metadata and record consistency. It does not independently prove external staging behavior."
           } >> "${GITHUB_STEP_SUMMARY}"
