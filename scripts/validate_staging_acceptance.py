@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 FIELD_RE = re.compile(r"^- ([^:]+):\s*(.*)$")
 TABLE_ROW_RE = re.compile(r"^\|(.+)\|$")
 REQUIRED_GATES = {
@@ -106,6 +107,12 @@ def validate_record(text: str) -> list[Finding]:
     if not SHA_RE.fullmatch(sha):
         findings.append(Finding("invalid-sha", "Release candidate SHA must be exactly 40 lowercase hexadecimal characters"))
 
+    digest = fields.get("Backend image digest", "")
+    if not DIGEST_RE.fullmatch(digest):
+        findings.append(Finding("invalid-image-digest", "Backend image digest must be sha256 followed by 64 lowercase hexadecimal characters"))
+    if fields.get("Running backend image digest verified") != "Yes":
+        findings.append(Finding("image-provenance-unverified", "Running backend image digest verified must be Yes"))
+
     for field in (
         "Staging deploy workflow run",
         "Staging URL",
@@ -149,8 +156,8 @@ def validate_record(text: str) -> list[Finding]:
             findings.append(Finding("blocking-defect", "GO requires zero unresolved critical defects"))
         if unresolved_high not in allowed_zero:
             findings.append(Finding("blocking-defect", "GO requires zero unresolved high-severity defects"))
-        if "I verified that this decision is based on the exact release candidate SHA" not in text:
-            findings.append(Finding("missing-signoff", "GO requires the documented sign-off statement"))
+        if "I verified that this decision is based on the exact release candidate SHA and backend image digest" not in text:
+            findings.append(Finding("missing-signoff", "GO requires the digest-aware sign-off statement"))
 
     return findings
 
