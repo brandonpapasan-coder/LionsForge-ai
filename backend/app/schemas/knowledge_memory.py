@@ -12,6 +12,14 @@ EvidenceHealthClassification = Literal[
     "unavailable",
     "unsupported",
 ]
+EvidenceRemediationActionType = Literal[
+    "restore_evidence",
+    "resolve_contradiction",
+    "review_evidence",
+    "add_direct_support",
+    "improve_source_quality",
+]
+EvidenceRemediationPriority = Literal["urgent", "high", "normal", "low"]
 UserAuthoredMemoryCategory = Literal[
     "research_preference",
     "research_context",
@@ -140,6 +148,37 @@ class KnowledgeMemoryEvidenceHealthInventory(BaseModel):
     total_count: int
     by_classification: dict[str, int]
     items: list[KnowledgeMemoryEvidenceHealthInventoryItem]
+
+
+class KnowledgeMemoryEvidenceRemediationAction(BaseModel):
+    action_key: str
+    action_type: EvidenceRemediationActionType
+    priority: EvidenceRemediationPriority
+    rationale: str
+    action_text: str
+    related_evidence_ids: list[int] = Field(default_factory=list)
+    completion_criteria: list[str] = Field(default_factory=list)
+    existing_follow_up_id: int | None = None
+
+
+class KnowledgeMemoryEvidenceRemediationPlan(BaseModel):
+    memory_id: int
+    project_id: int
+    health: KnowledgeMemoryEvidenceHealth
+    total_actions: int
+    open_follow_up_count: int
+    actions: list[KnowledgeMemoryEvidenceRemediationAction]
+
+
+class KnowledgeMemoryEvidenceRemediationCreateRequest(BaseModel):
+    action_key: str = Field(min_length=1, max_length=64)
+    confirmed: bool = False
+
+
+class KnowledgeMemoryEvidenceRemediationCreateResult(BaseModel):
+    created: bool
+    follow_up_id: int
+    action_key: str
 
 
 class KnowledgeMemoryPromotionResult(BaseModel):

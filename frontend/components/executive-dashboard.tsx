@@ -11,6 +11,7 @@ import { MarketLearningProgressPanel } from "@/components/market-learning-progre
 import { MarketLearningRoadmapPanel } from "@/components/market-learning-roadmap-panel";
 import { PersonalMemoryControlCenter } from "@/components/personal-memory-control-center";
 import { PersonalMemoryEvidenceHealthInventory } from "@/components/personal-memory-evidence-health-inventory";
+import { PersonalMemoryEvidenceRemediation } from "@/components/personal-memory-evidence-remediation";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
 export function ExecutiveDashboard() {
@@ -52,12 +53,8 @@ export function ExecutiveDashboard() {
     };
   }, []);
 
-  if (error) {
-    return <section className="dashboard-state" role="alert">{error}</section>;
-  }
-  if (!data) {
-    return <section className="dashboard-state" aria-live="polite">Loading your command center…</section>;
-  }
+  if (error) return <section className="dashboard-state" role="alert">{error}</section>;
+  if (!data) return <section className="dashboard-state" aria-live="polite">Loading your command center…</section>;
 
   return (
     <div className="dashboard-shell">
@@ -73,15 +70,14 @@ export function ExecutiveDashboard() {
       <section className="metric-grid" aria-label="Platform metrics">
         {data.metrics.map((metric) => (
           <article className="metric-card" key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <p>{metric.detail}</p>
+            <span>{metric.label}</span><strong>{metric.value}</strong><p>{metric.detail}</p>
           </article>
         ))}
       </section>
 
       <PersonalMemoryEvidenceHealthInventory />
       <PersonalMemoryControlCenter />
+      <PersonalMemoryEvidenceRemediation />
       <KnowledgeQualityDashboard />
       <MarketLearningProgressPanel />
       <MarketLearningRoadmapPanel />
@@ -91,14 +87,11 @@ export function ExecutiveDashboard() {
 
       <div className="dashboard-grid">
         <section className="dashboard-panel">
-          <div className="panel-heading">
-            <div><p className="eyebrow">NEXT BEST ACTIONS</p><h2>Focus your effort</h2></div>
-          </div>
+          <div className="panel-heading"><div><p className="eyebrow">NEXT BEST ACTIONS</p><h2>Focus your effort</h2></div></div>
           <div className="action-list">
             {data.next_actions.map((action) => (
               <Link href={action.href} className="action-card" key={`${action.title}-${action.href}`}>
-                <div><span className={`priority priority-${action.priority}`}>{action.priority}</span><h3>{action.title}</h3><p>{action.reason}</p></div>
-                <span aria-hidden="true">→</span>
+                <div><span className={`priority priority-${action.priority}`}>{action.priority}</span><h3>{action.title}</h3><p>{action.reason}</p></div><span aria-hidden="true">→</span>
               </Link>
             ))}
           </div>
