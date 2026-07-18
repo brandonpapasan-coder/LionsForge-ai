@@ -91,6 +91,21 @@ describe("research-projects API proxy", () => {
     await expect(response.json()).resolves.toEqual({ detail: "Invalid project" });
   });
 
+  it("returns 400 when reading the POST body fails", async () => {
+    getCookie.mockReturnValue({ value: "session-value" });
+    const request = {
+      method: "POST",
+      text: vi.fn().mockRejectedValue(new Error("request stream failed")),
+    } as unknown as Request;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ detail: "Invalid request body" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("returns a stable 503 without exposing backend failure details", async () => {
     getCookie.mockReturnValue({ value: "session-value" });
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
@@ -104,5 +119,20 @@ describe("research-projects API proxy", () => {
     expect(responseBody).toEqual({ detail: "Research projects service is unavailable" });
     expect(JSON.stringify(responseBody)).not.toContain("internal-backend");
     expect(JSON.stringify(responseBody)).not.toContain("session-value");
+  });
+
+  it("returns the same stable 503 when reading the upstream response fails", async () => {
+    getCookie.mockReturnValue({ value: "session-value" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      status: 200,
+      text: vi.fn().mockRejectedValue(new Error("upstream stream failed")),
+    } as unknown as Response);
+
+    const response = await GET(new Request("http://localhost/api/research-projects"));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      detail: "Research projects service is unavailable",
+    });
   });
 });
