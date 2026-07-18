@@ -121,6 +121,8 @@ Tests should cover successful, loading, empty, unauthorized, not-found, and fail
 
 Legacy financial functionality may include market quotes, company news, watchlists, portfolios, holdings analytics, alerts, and ticker-based research. Its presence in the repository does not indicate that LionsForge AI is an active trading platform. No live trading capability should be introduced without a new, explicit product decision and appropriate security, risk, legal, and regulatory review.
 
-## License and contribution status
+## Contribution, security, and licensing
 
-Contribution and licensing guidance should be added before broader external distribution. Until then, repository changes should follow existing branch protections, review expectations, and automated checks.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Report suspected vulnerabilities privately according to [SECURITY.md](SECURITY.md); do not disclose secrets or exploitable details in public issues or pull requests.
+
+The repository does not currently grant an open-source license. No permission to copy, modify, distribute, sublicense, or use the repository beyond rights provided by applicable law should be inferred unless a `LICENSE` file is added later.
