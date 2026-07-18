@@ -1,6 +1,57 @@
 from fastapi import APIRouter
 
-from app.api.routes import advanced_alerts, alerts, auth, autonomous_portfolios, companies, dashboard, decisions, education, entity_resolution, evidence_intelligence, events, executive_intelligence, factors, knowledge_extraction, knowledge_federation, knowledge_graph, knowledge_memory, knowledge_memory_evidence, knowledge_memory_remediation, knowledge_memory_remediation_escalation, knowledge_memory_remediation_verification, knowledge_quality, market, market_learning, market_learning_evidence, market_learning_mastery, market_learning_portfolio, market_learning_progress, market_learning_roadmap, market_mentor, market_simulator, mentor, missions, multi_agent_consensus, news, personal_intelligence, portfolios, release_countdown, research, research_agent, research_conclusion_defense_export_packet, research_conclusion_defense_review, research_conclusion_export_packet, research_conclusion_readiness, research_conclusion_workspace, research_evidence, research_evidence_audit_packet, research_evidence_provenance, research_follow_up_tracker, research_governance_dashboard, research_governance_digest, research_orchestration, research_packet_comparison, research_packet_comparison_report, research_packet_comparison_report_chain, research_packet_comparison_report_chain_export, research_packet_comparison_report_chain_export_integrity, research_packet_comparison_report_chain_export_integrity_receipt, research_packet_comparison_report_chain_export_integrity_receipt_integrity, research_packet_comparison_report_integrity, research_packet_integrity, research_planning, research_projects, research_sessions, research_trust_index, system, user_authored_memory, watchlists
+from app.api.routes import (
+    auth,
+    dashboard,
+    education,
+    entity_resolution,
+    evidence_intelligence,
+    executive_intelligence,
+    knowledge_extraction,
+    knowledge_federation,
+    knowledge_graph,
+    knowledge_memory,
+    knowledge_memory_evidence,
+    knowledge_memory_remediation,
+    knowledge_memory_remediation_escalation,
+    knowledge_memory_remediation_verification,
+    knowledge_quality,
+    mentor,
+    missions,
+    multi_agent_consensus,
+    news,
+    personal_intelligence,
+    release_countdown,
+    research,
+    research_agent,
+    research_conclusion_defense_export_packet,
+    research_conclusion_defense_review,
+    research_conclusion_export_packet,
+    research_conclusion_readiness,
+    research_conclusion_workspace,
+    research_evidence,
+    research_evidence_audit_packet,
+    research_evidence_provenance,
+    research_follow_up_tracker,
+    research_governance_dashboard,
+    research_governance_digest,
+    research_orchestration,
+    research_packet_comparison,
+    research_packet_comparison_report,
+    research_packet_comparison_report_chain,
+    research_packet_comparison_report_chain_export,
+    research_packet_comparison_report_chain_export_integrity,
+    research_packet_comparison_report_chain_export_integrity_receipt,
+    research_packet_comparison_report_chain_export_integrity_receipt_integrity,
+    research_packet_comparison_report_integrity,
+    research_packet_integrity,
+    research_planning,
+    research_projects,
+    research_sessions,
+    research_trust_index,
+    system,
+    user_authored_memory,
+)
 from app.core.config import Settings, get_settings
 
 
@@ -60,6 +111,27 @@ def build_api_router(settings: Settings | None = None) -> APIRouter:
     router.include_router(system.router, prefix="/system", tags=["system"])
 
     if resolved_settings.enable_legacy_finance_modules:
+        from app.api.routes import (
+            advanced_alerts,
+            alerts,
+            autonomous_portfolios,
+            companies,
+            decisions,
+            events,
+            factors,
+            market,
+            market_learning,
+            market_learning_evidence,
+            market_learning_mastery,
+            market_learning_portfolio,
+            market_learning_progress,
+            market_learning_roadmap,
+            market_mentor,
+            market_simulator,
+            portfolios,
+            watchlists,
+        )
+
         router.include_router(market.router, prefix="/market", tags=["market"])
         router.include_router(market_simulator.router, prefix="/market-simulator", tags=["market-simulator"])
         router.include_router(market_mentor.router, prefix="/market-simulator", tags=["market-simulator-mentor"])
