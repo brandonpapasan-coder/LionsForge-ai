@@ -22,6 +22,7 @@ from app.services.knowledge_memory_service import (
     supersede_memory,
     update_memory,
 )
+from app.services.user_authored_memory_service import validate_user_authored_revision
 
 router = APIRouter()
 
@@ -186,6 +187,10 @@ def revise_knowledge_memory(
 ) -> KnowledgeMemoryRead:
     memory = _owned_memory(db, current_user.id, memory_id)
     changes = payload.model_dump(exclude_unset=True)
+    try:
+        validate_user_authored_revision(memory, changes)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     requested_confidence = changes.get("confidence", memory.confidence)
     if changes.get("status") == "validated" and requested_confidence < 0.5:
         raise HTTPException(
