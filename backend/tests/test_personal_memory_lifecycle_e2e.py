@@ -97,6 +97,62 @@ def test_user_authored_memory_lifecycle_updates_context_immediately(client):
     ]
 
 
+def test_recovering_prior_version_creates_new_revision_and_preserves_history(client):
+    headers = auth_headers(client, email="personal-recovery@example.com")
+    project = create_project(client, headers, "Version recovery")
+    created = create_memory(client, headers, project["id"])
+    assert created.status_code == 201
+    original = created.json()
+    original_revision_id = original["revisions"][0]["id"]
+
+    revised = client.patch(
+        f"/api/v1/knowledge-memory/{original['id']}",
+        headers=headers,
+        json={
+            "statement": "I prefer peer-reviewed secondary sources.",
+            "summary": "Prefer peer-reviewed secondary sources.",
+            "category": "research_context",
+            "confidence": 0.6,
+        },
+    )
+    assert revised.status_code == 200
+    assert revised.json()["revision_number"] == 2
+
+    recovered = client.post(
+        f"/api/v1/knowledge-memory/{original['id']}/recover/{original_revision_id}",
+        headers=headers,
+    )
+    assert recovered.status_code == 200
+    payload = recovered.json()
+    assert payload["revision_number"] == 3
+    assert payload["statement"] == original["statement"]
+    assert payload["summary"] == original["summary"]
+    assert payload["category"] == original["category"]
+    assert payload["confidence"] == original["confidence"]
+    assert payload["status"] == original["status"]
+    assert len(payload["revisions"]) == 3
+    assert [item["revision_number"] for item in payload["revisions"]] == [1, 2, 3]
+
+
+def test_recovery_rejects_foreign_revision_and_preserves_owner_isolation(client):
+    owner_headers = auth_headers(client, email="recovery-owner@example.com")
+    other_headers = auth_headers(client, email="recovery-other@example.com")
+    owner_project = create_project(client, owner_headers, "Recovery owner")
+    other_project = create_project(client, other_headers, "Recovery other")
+    owner_memory = create_memory(client, owner_headers, owner_project["id"]).json()
+    other_memory = create_memory(client, other_headers, other_project["id"]).json()
+
+    foreign_revision_id = other_memory["revisions"][0]["id"]
+    assert client.post(
+        f"/api/v1/knowledge-memory/{owner_memory['id']}/recover/{foreign_revision_id}",
+        headers=owner_headers,
+    ).status_code == 404
+    assert client.post(
+        f"/api/v1/knowledge-memory/{owner_memory['id']}/recover/{owner_memory['revisions'][0]['id']}",
+        headers=other_headers,
+    ).status_code == 404
+
+
 def test_user_authored_memory_operations_enforce_owner_isolation(client):
     owner_headers = auth_headers(client, email="personal-owner@example.com")
     other_headers = auth_headers(client, email="personal-other@example.com")
