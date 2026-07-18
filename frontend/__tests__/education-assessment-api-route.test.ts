@@ -81,6 +81,21 @@ describe("education assessment API route", () => {
     expect(await response.json()).toEqual({ score: 92 });
   });
 
+  it("returns 400 when reading the POST body fails", async () => {
+    cookieGet.mockReturnValue({ value: "session-token" });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const request = {
+      text: vi.fn().mockRejectedValue(new Error("request stream failed")),
+    } as never;
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ detail: "Invalid request body" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["GET", async () => GET()],
     [
