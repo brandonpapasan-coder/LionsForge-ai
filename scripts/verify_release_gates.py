@@ -18,6 +18,8 @@ REQUIRED_WORKFLOWS = (
     "Security Gate",
     "Deployment Validation",
 )
+REQUIRED_EVENT = "push"
+REQUIRED_BRANCH = "main"
 
 
 @dataclass(frozen=True)
@@ -27,15 +29,27 @@ class GateResult:
     conclusion: str | None
     run_id: int | None
     html_url: str | None
+    event: str | None
+    head_branch: str | None
+
+
+def is_eligible_run(run: dict) -> bool:
+    return run.get("event") == REQUIRED_EVENT and run.get("head_branch") == REQUIRED_BRANCH
 
 
 def evaluate_runs(runs: list[dict]) -> list[GateResult]:
     results: list[GateResult] = []
     for workflow_name in REQUIRED_WORKFLOWS:
-        matches = [run for run in runs if run.get("name") == workflow_name]
+        matches = [
+            run
+            for run in runs
+            if run.get("name") == workflow_name and is_eligible_run(run)
+        ]
         matches.sort(key=lambda run: run.get("run_number", 0), reverse=True)
         if not matches:
-            results.append(GateResult(workflow_name, "missing", None, None, None))
+            results.append(
+                GateResult(workflow_name, "missing", None, None, None, None, None)
+            )
             continue
         run = matches[0]
         results.append(
@@ -45,13 +59,21 @@ def evaluate_runs(runs: list[dict]) -> list[GateResult]:
                 run.get("conclusion"),
                 run.get("id"),
                 run.get("html_url"),
+                run.get("event"),
+                run.get("head_branch"),
             )
         )
     return results
 
 
 def all_passed(results: list[GateResult]) -> bool:
-    return all(result.status == "completed" and result.conclusion == "success" for result in results)
+    return all(
+        result.status == "completed"
+        and result.conclusion == "success"
+        and result.event == REQUIRED_EVENT
+        and result.head_branch == REQUIRED_BRANCH
+        for result in results
+    )
 
 
 def fetch_runs(repository: str, sha: str, token: str) -> list[dict]:
@@ -96,6 +118,8 @@ def main() -> int:
     payload = {
         "repository": args.repository,
         "release_sha": args.sha,
+        "required_event": REQUIRED_EVENT,
+        "required_branch": REQUIRED_BRANCH,
         "passed": all_passed(results),
         "gates": [result.__dict__ for result in results],
     }
