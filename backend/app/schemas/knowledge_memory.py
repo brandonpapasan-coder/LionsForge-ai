@@ -4,6 +4,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 MemoryStatus = Literal["provisional", "validated", "contested", "superseded", "archived"]
+EvidenceHealthClassification = Literal[
+    "strong",
+    "adequate",
+    "weak",
+    "contested",
+    "unavailable",
+    "unsupported",
+]
 UserAuthoredMemoryCategory = Literal[
     "research_preference",
     "research_context",
@@ -90,11 +98,28 @@ class KnowledgeMemoryEvidenceItem(BaseModel):
     validation_status: str
 
 
+class KnowledgeMemoryEvidenceHealth(BaseModel):
+    classification: EvidenceHealthClassification
+    total_count: int
+    available_count: int
+    unavailable_count: int
+    approved_count: int
+    needs_review_count: int
+    supporting_count: int
+    contradicting_count: int
+    average_credibility: float | None
+    average_freshness: float | None
+    average_confidence: float | None
+    reasons: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+
+
 class KnowledgeMemoryEvidenceTrace(BaseModel):
     memory_id: int
     requested_evidence_ids: list[int]
     evidence: list[KnowledgeMemoryEvidenceItem]
     unavailable_evidence_ids: list[int]
+    health: KnowledgeMemoryEvidenceHealth
 
 
 class KnowledgeMemoryPromotionResult(BaseModel):

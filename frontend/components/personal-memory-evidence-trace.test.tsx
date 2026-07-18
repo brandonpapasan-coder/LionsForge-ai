@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("PersonalMemoryControlCenter evidence trace", () => {
-  it("loads evidence on request, shows safe source links, and reports missing IDs", async () => {
+  it("shows evidence health, safe source links, and unavailable IDs", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/personal-memory/summary") return response(summary);
@@ -61,7 +61,22 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
         return response({
           memory_id: 11,
           requested_evidence_ids: [41, 99],
-          missing_evidence_ids: [99],
+          unavailable_evidence_ids: [99],
+          health: {
+            classification: "adequate",
+            total_count: 2,
+            available_count: 1,
+            unavailable_count: 1,
+            approved_count: 1,
+            needs_review_count: 0,
+            supporting_count: 1,
+            contradicting_count: 0,
+            average_credibility: 0.95,
+            average_freshness: 0.8,
+            average_confidence: 0.9,
+            reasons: ["The evidence is usable but still has quality or review gaps."],
+            recommended_actions: ["Replace or restore unavailable evidence."],
+          },
           evidence: [{
             id: 41,
             source_url: "https://example.com/source",
@@ -86,15 +101,21 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
     render(<PersonalMemoryControlCenter />);
     const inventory = await screen.findByLabelText("Personal memory inventory");
     fireEvent.click(within(inventory).getByRole("button", { name: /Prioritize primary evidence/i }));
-
-    expect(screen.queryByLabelText("Supporting evidence trace")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View supporting evidence" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal-memory/11/evidence",
       { cache: "no-store" },
     ));
+
     const panel = await screen.findByLabelText("Supporting evidence trace");
+    const health = within(panel).getByLabelText("Evidence health assessment");
+    expect(within(health).getByText("adequate")).toBeInTheDocument();
+    expect(within(health).getByText(/1 of 2 linked items available/)).toBeInTheDocument();
+    expect(within(health).getByText(/Average credibility 95%/)).toBeInTheDocument();
+    expect(within(health).getByText("The evidence is usable but still has quality or review gaps.")).toBeInTheDocument();
+    expect(within(health).getByText("Replace or restore unavailable evidence.")).toBeInTheDocument();
+
     expect(within(panel).getByLabelText("Evidence 41")).toBeInTheDocument();
     expect(within(panel).getByRole("link", { name: "Open source" })).toHaveAttribute(
       "href",
@@ -103,13 +124,75 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
     expect(within(panel).getByText("Unavailable evidence IDs: 99.")).toBeInTheDocument();
   });
 
+  it("shows unsupported health when no evidence is linked", async () => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/personal-memory/summary") return response(summary);
+      if (url === "/api/personal-memory") return response([secondMemory]);
+      if (url === "/api/personal-memory/12/evidence") {
+        return response({
+          memory_id: 12,
+          requested_evidence_ids: [],
+          unavailable_evidence_ids: [],
+          evidence: [],
+          health: {
+            classification: "unsupported",
+            total_count: 0,
+            available_count: 0,
+            unavailable_count: 0,
+            approved_count: 0,
+            needs_review_count: 0,
+            supporting_count: 0,
+            contradicting_count: 0,
+            average_credibility: null,
+            average_freshness: null,
+            average_confidence: null,
+            reasons: ["This saved record has no linked evidence."],
+            recommended_actions: ["Link at least one relevant source before relying on this record."],
+          },
+        });
+      }
+      return response(null, 404);
+    }));
+
+    render(<PersonalMemoryControlCenter />);
+    const inventory = await screen.findByLabelText("Personal memory inventory");
+    fireEvent.click(within(inventory).getByRole("button", { name: /Second record/i }));
+    fireEvent.click(screen.getByRole("button", { name: "View supporting evidence" }));
+
+    const health = await screen.findByLabelText("Evidence health assessment");
+    expect(within(health).getByText("unsupported")).toBeInTheDocument();
+    expect(within(health).getByText(/Average credibility Unavailable/)).toBeInTheDocument();
+    expect(screen.getByText("No supporting evidence is attached to this record.")).toBeInTheDocument();
+  });
+
   it("resets the evidence panel when the selected record changes", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/personal-memory/summary") return response(summary);
       if (url === "/api/personal-memory") return response([firstMemory, secondMemory]);
       if (url === "/api/personal-memory/11/evidence") {
-        return response({ memory_id: 11, requested_evidence_ids: [], evidence: [], missing_evidence_ids: [] });
+        return response({
+          memory_id: 11,
+          requested_evidence_ids: [],
+          evidence: [],
+          unavailable_evidence_ids: [],
+          health: {
+            classification: "unsupported",
+            total_count: 0,
+            available_count: 0,
+            unavailable_count: 0,
+            approved_count: 0,
+            needs_review_count: 0,
+            supporting_count: 0,
+            contradicting_count: 0,
+            average_credibility: null,
+            average_freshness: null,
+            average_confidence: null,
+            reasons: [],
+            recommended_actions: [],
+          },
+        });
       }
       return response(null, 404);
     }));

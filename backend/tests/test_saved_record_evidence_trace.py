@@ -11,7 +11,14 @@ def create_project(client, headers, title):
     return response.json()
 
 
-def create_evidence(client, headers, project_id, *, source_url="https://example.com/source"):
+def create_evidence(
+    client,
+    headers,
+    project_id,
+    *,
+    source_url="https://example.com/source",
+    stance="supports",
+):
     response = client.post(
         "/api/v1/evidence-intelligence",
         headers=headers,
@@ -25,8 +32,8 @@ def create_evidence(client, headers, project_id, *, source_url="https://example.
             "source_type": "primary",
             "claim": "The intervention improved measured outcomes.",
             "excerpt": "Measured outcomes improved during the controlled evaluation.",
-            "stance": "supports",
-            "contradiction_key": None,
+            "stance": stance,
+            "contradiction_key": "intervention-outcome" if stance == "contradicts" else None,
             "provenance": {"ingestion_method": "manual"},
         },
     )
@@ -52,6 +59,15 @@ def create_memory(client, headers, project_id, evidence_ids):
     return response.json()
 
 
+def get_trace(client, headers, memory_id):
+    response = client.get(
+        f"/api/v1/knowledge-memory/{memory_id}/evidence",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
 def test_saved_record_evidence_trace_preserves_record_order_and_reports_unavailable(client):
     headers = auth_headers(client, email="memory-evidence@example.com")
     project = create_project(client, headers, "Trace project")
@@ -69,13 +85,7 @@ def test_saved_record_evidence_trace_preserves_record_order_and_reports_unavaila
         [second["id"], 999999, first["id"], second["id"]],
     )
 
-    response = client.get(
-        f"/api/v1/knowledge-memory/{memory['id']}/evidence",
-        headers=headers,
-    )
-
-    assert response.status_code == 200
-    body = response.json()
+    body = get_trace(client, headers, memory["id"])
     expected_requested = list(dict.fromkeys(memory["source_evidence_ids"]))
     assert body["memory_id"] == memory["id"]
     assert body["requested_evidence_ids"] == expected_requested
@@ -87,6 +97,60 @@ def test_saved_record_evidence_trace_preserves_record_order_and_reports_unavaila
     assert source_by_id[second["id"]]["source_title"] == "Primary source"
     assert source_by_id[second["id"]]["source_url"] == "https://example.org/second-source"
     assert source_by_id[second["id"]]["validation_status"] == "unverified"
+    assert body["health"]["total_count"] == 3
+    assert body["health"]["available_count"] == 2
+    assert body["health"]["unavailable_count"] == 1
+    assert body["health"]["supporting_count"] == 2
+    assert body["health"]["needs_review_count"] == 2
+    assert body["health"]["classification"] in {"adequate", "weak"}
+
+
+def test_saved_record_evidence_health_is_unsupported_without_links(client):
+    headers = auth_headers(client, email="memory-evidence-unsupported@example.com")
+    project = create_project(client, headers, "Unsupported health project")
+    memory = create_memory(client, headers, project["id"], [])
+
+    health = get_trace(client, headers, memory["id"])["health"]
+
+    assert health["classification"] == "unsupported"
+    assert health["total_count"] == 0
+    assert health["available_count"] == 0
+    assert health["reasons"] == ["This saved record has no linked evidence."]
+    assert health["recommended_actions"]
+
+
+def test_saved_record_evidence_health_is_unavailable_when_no_links_resolve(client):
+    headers = auth_headers(client, email="memory-evidence-unavailable@example.com")
+    project = create_project(client, headers, "Unavailable health project")
+    memory = create_memory(client, headers, project["id"], [888888, 999999])
+
+    health = get_trace(client, headers, memory["id"])["health"]
+
+    assert health["classification"] == "unavailable"
+    assert health["total_count"] == 2
+    assert health["available_count"] == 0
+    assert health["unavailable_count"] == 2
+
+
+def test_saved_record_evidence_health_is_contested_with_support_and_contradiction(client):
+    headers = auth_headers(client, email="memory-evidence-contested@example.com")
+    project = create_project(client, headers, "Contested health project")
+    supporting = create_evidence(client, headers, project["id"])
+    contradicting = create_evidence(
+        client,
+        headers,
+        project["id"],
+        source_url="https://example.org/contradiction",
+        stance="contradicts",
+    )
+    memory = create_memory(client, headers, project["id"], [supporting["id"], contradicting["id"]])
+
+    health = get_trace(client, headers, memory["id"])["health"]
+
+    assert health["classification"] == "contested"
+    assert health["supporting_count"] == 1
+    assert health["contradicting_count"] == 1
+    assert any("supporting and contradicting" in reason for reason in health["reasons"])
 
 
 def test_saved_record_evidence_trace_enforces_owner_isolation(client):
@@ -108,13 +172,11 @@ def test_saved_record_evidence_trace_enforces_owner_isolation(client):
         [owner_evidence["id"], other_evidence["id"]],
     )
 
-    trace = client.get(
-        f"/api/v1/knowledge-memory/{memory['id']}/evidence",
-        headers=owner_headers,
-    )
-    assert trace.status_code == 200
-    assert [item["id"] for item in trace.json()["evidence"]] == [owner_evidence["id"]]
-    assert trace.json()["unavailable_evidence_ids"] == [other_evidence["id"]]
+    trace = get_trace(client, owner_headers, memory["id"])
+    assert [item["id"] for item in trace["evidence"]] == [owner_evidence["id"]]
+    assert trace["unavailable_evidence_ids"] == [other_evidence["id"]]
+    assert trace["health"]["available_count"] == 1
+    assert trace["health"]["unavailable_count"] == 1
 
     denied = client.get(
         f"/api/v1/knowledge-memory/{memory['id']}/evidence",
