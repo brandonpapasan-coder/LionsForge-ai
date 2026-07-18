@@ -3,6 +3,17 @@ import { NextResponse } from "next/server";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
+function unavailable() {
+  return NextResponse.json(
+    { detail: "Research sessions service is unavailable" },
+    { status: 503 },
+  );
+}
+
+function invalidRequestBody() {
+  return NextResponse.json({ detail: "Invalid request body" }, { status: 400 });
+}
+
 async function proxy(
   request: Request,
   context: { params: Promise<{ projectId: string }> },
@@ -14,9 +25,19 @@ async function proxy(
   }
 
   const { projectId } = await context.params;
+  let body: string | undefined;
 
+  if (request.method !== "GET") {
+    try {
+      body = await request.text();
+    } catch {
+      return invalidRequestBody();
+    }
+  }
+
+  let response: Response;
   try {
-    const response = await fetch(
+    response = await fetch(
       `${backendUrl}/api/v1/research-projects/${encodeURIComponent(projectId)}/sessions`,
       {
         method: request.method,
@@ -24,21 +45,25 @@ async function proxy(
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
         },
-        body: request.method === "GET" ? undefined : await request.text(),
+        body,
         cache: "no-store",
       },
     );
-
-    return new NextResponse(await response.text(), {
-      status: response.status,
-      headers: { "content-type": "application/json" },
-    });
   } catch {
-    return NextResponse.json(
-      { detail: "Research sessions service is unavailable" },
-      { status: 503 },
-    );
+    return unavailable();
   }
+
+  let responseBody: string;
+  try {
+    responseBody = await response.text();
+  } catch {
+    return unavailable();
+  }
+
+  return new NextResponse(responseBody, {
+    status: response.status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 export async function GET(
