@@ -17,6 +17,7 @@ type Summary = {
 
 type Memory = {
   id: number;
+  project_id: number;
   statement: string;
   summary: string;
   category: string;
@@ -25,10 +26,21 @@ type Memory = {
   revision_number: number;
 };
 
+type Filters = {
+  projectId: string;
+  status: string;
+  category: string;
+  query: string;
+};
+
+const emptyFilters: Filters = { projectId: "", status: "", category: "", query: "" };
+
 export function PersonalMemoryControlCenter() {
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [memoryId, setMemoryId] = useState("");
+  const [memories, setMemories] = useState<Memory[]>([]);
   const [memory, setMemory] = useState<Memory | null>(null);
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState<Filters>(emptyFilters);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -42,23 +54,53 @@ export function PersonalMemoryControlCenter() {
     setSummary((await response.json()) as Summary);
   }, []);
 
-  useEffect(() => {
-    void loadSummary().catch(() => setError("Personal memory controls could not be loaded."));
-  }, [loadSummary]);
+  const loadInventory = useCallback(async (scope: Filters) => {
+    const params = new URLSearchParams();
+    if (scope.projectId.trim()) params.set("project_id", scope.projectId.trim());
+    if (scope.status) params.set("status", scope.status);
+    if (scope.category.trim()) params.set("category", scope.category.trim());
+    if (scope.query.trim()) params.set("query", scope.query.trim());
+    const suffix = params.size ? `?${params.toString()}` : "";
+    const response = await fetch(`/api/personal-memory${suffix}`, { cache: "no-store" });
+    if (response.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    if (!response.ok) throw new Error("inventory");
+    const items = (await response.json()) as Memory[];
+    setMemories(items);
+    setMemory((selected) => items.find((item) => item.id === selected?.id) ?? null);
+  }, []);
 
-  async function inspect() {
-    if (!memoryId.trim()) return;
+  useEffect(() => {
+    void Promise.all([loadSummary(), loadInventory(emptyFilters)]).catch(() =>
+      setError("Personal memory controls could not be loaded."),
+    );
+  }, [loadInventory, loadSummary]);
+
+  async function applyFilters() {
+    setBusy(true);
+    setError(null);
+    const next = { ...filters };
+    try {
+      await loadInventory(next);
+      setAppliedFilters(next);
+    } catch {
+      setError("The memory inventory could not be filtered.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearFilters() {
+    setFilters(emptyFilters);
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/personal-memory/${encodeURIComponent(memoryId.trim())}`, {
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error("inspect");
-      setMemory((await response.json()) as Memory);
+      await loadInventory(emptyFilters);
+      setAppliedFilters(emptyFilters);
     } catch {
-      setMemory(null);
-      setError("That memory could not be inspected.");
+      setError("The memory inventory could not be refreshed.");
     } finally {
       setBusy(false);
     }
@@ -79,13 +121,9 @@ export function PersonalMemoryControlCenter() {
         { method: action === "delete" ? "DELETE" : "POST", cache: "no-store" },
       );
       if (!response.ok && response.status !== 204) throw new Error(action);
-      if (action === "delete") {
-        setMemory(null);
-        setMemoryId("");
-      } else {
-        setMemory((await response.json()) as Memory);
-      }
-      await loadSummary();
+      const updated = action === "delete" ? null : ((await response.json()) as Memory);
+      setMemory(updated);
+      await Promise.all([loadSummary(), loadInventory(appliedFilters)]);
     } catch {
       setError(`The ${action} action could not be completed.`);
     } finally {
@@ -122,29 +160,88 @@ export function PersonalMemoryControlCenter() {
               </article>
             ))}
           </div>
-          <p className="muted">
-            Available controls: {summary.available_controls.join(", ")}.
-          </p>
+          <p className="muted">Available controls: {summary.available_controls.join(", ")}.</p>
         </>
       )}
 
-      <div className="action-list">
+      <form
+        className="action-list"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void applyFilters();
+        }}
+        aria-label="Memory inventory filters"
+      >
         <label>
-          Memory ID
+          Project ID
           <input
-            value={memoryId}
-            onChange={(event) => setMemoryId(event.target.value)}
+            aria-label="Project ID"
+            value={filters.projectId}
+            onChange={(event) => setFilters({ ...filters, projectId: event.target.value })}
             inputMode="numeric"
-            placeholder="Enter a memory ID"
+            placeholder="All projects"
           />
         </label>
-        <button type="button" onClick={() => void inspect()} disabled={busy || !memoryId.trim()}>
-          Inspect memory
-        </button>
+        <label>
+          Status
+          <select
+            aria-label="Status"
+            value={filters.status}
+            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+          >
+            <option value="">All statuses</option>
+            <option value="validated">Validated</option>
+            <option value="provisional">Provisional</option>
+            <option value="contested">Contested</option>
+            <option value="superseded">Superseded</option>
+            <option value="archived">Archived</option>
+          </select>
+        </label>
+        <label>
+          Category
+          <input
+            aria-label="Category"
+            value={filters.category}
+            onChange={(event) => setFilters({ ...filters, category: event.target.value })}
+            placeholder="All categories"
+          />
+        </label>
+        <label>
+          Search memories
+          <input
+            aria-label="Search memories"
+            value={filters.query}
+            onChange={(event) => setFilters({ ...filters, query: event.target.value })}
+            placeholder="Statement or summary"
+          />
+        </label>
+        <button type="submit" disabled={busy}>Apply filters</button>
+        <button type="button" onClick={() => void clearFilters()} disabled={busy}>Clear filters</button>
+      </form>
+
+      <div className="action-list" aria-label="Personal memory inventory">
+        {memories.length ? memories.map((item) => (
+          <button
+            type="button"
+            className="action-card"
+            key={item.id}
+            onClick={() => setMemory(item)}
+            aria-pressed={memory?.id === item.id}
+          >
+            <div>
+              <span className={`priority priority-${item.status === "archived" ? "low" : "medium"}`}>
+                {item.status}
+              </span>
+              <h3>{item.summary}</h3>
+              <p>{item.statement}</p>
+              <p className="muted">Project {item.project_id} · {item.category}</p>
+            </div>
+          </button>
+        )) : <p className="muted">No memories match the current filters.</p>}
       </div>
 
       {memory ? (
-        <article className="action-card">
+        <article className="action-card" aria-label="Selected memory">
           <div>
             <span className={`priority priority-${memory.status === "archived" ? "low" : "medium"}`}>
               {memory.status}
@@ -152,7 +249,7 @@ export function PersonalMemoryControlCenter() {
             <h3>{memory.summary}</h3>
             <p>{memory.statement}</p>
             <p className="muted">
-              {memory.category} · confidence {Math.round(memory.confidence * 100)}% · revision {memory.revision_number}
+              Project {memory.project_id} · {memory.category} · confidence {Math.round(memory.confidence * 100)}% · revision {memory.revision_number}
             </p>
           </div>
           <div className="action-list">
@@ -161,9 +258,7 @@ export function PersonalMemoryControlCenter() {
             ) : (
               <button type="button" onClick={() => void act("archive")} disabled={busy}>Archive</button>
             )}
-            <button type="button" onClick={() => void act("delete")} disabled={busy}>
-              Permanently delete
-            </button>
+            <button type="button" onClick={() => void act("delete")} disabled={busy}>Permanently delete</button>
           </div>
         </article>
       ) : null}
