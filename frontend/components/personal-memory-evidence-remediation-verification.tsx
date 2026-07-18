@@ -25,7 +25,7 @@ type Verification = {
 
 export function PersonalMemoryEvidenceRemediationVerification() {
   const recordsRef = useRef<InventoryItem[]>([]);
-  const pendingSelectionRef = useRef<string | null>(null);
+  const loadingRecordsRef = useRef<Promise<InventoryItem[]> | null>(null);
   const [selectedMemoryId, setSelectedMemoryId] = useState<number | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -43,43 +43,49 @@ export function PersonalMemoryEvidenceRemediationVerification() {
     setVerification(body as Verification);
   }, []);
 
-  const selectFromText = useCallback((text: string) => {
-    const selected = recordsRef.current.find((item) => text.includes(item.summary));
-    if (!selected) return false;
-    pendingSelectionRef.current = null;
-    setSelectedMemoryId(selected.memory_id);
-    setVerification(null);
-    setError(null);
-    void loadVerification(selected.memory_id).catch((requestError) => {
-      setError(requestError instanceof Error ? requestError.message : "Remediation verification could not be loaded.");
-    });
-    return true;
-  }, [loadVerification]);
+  const loadRecords = useCallback(async () => {
+    if (recordsRef.current.length) return recordsRef.current;
+    if (!loadingRecordsRef.current) {
+      loadingRecordsRef.current = fetch("/api/personal-memory/evidence-health", { cache: "no-store" })
+        .then(async (response) => {
+          if (response.status === 401) {
+            window.location.href = "/login";
+            return [];
+          }
+          if (!response.ok) throw new Error("inventory");
+          const items = ((await response.json()) as Inventory).items;
+          recordsRef.current = items;
+          return items;
+        })
+        .finally(() => {
+          loadingRecordsRef.current = null;
+        });
+    }
+    return loadingRecordsRef.current;
+  }, []);
 
-  useEffect(() => {
-    void fetch("/api/personal-memory/evidence-health", { cache: "no-store" })
-      .then(async (response) => {
-        if (response.status === 401) {
-          window.location.href = "/login";
-          return null;
-        }
-        if (!response.ok) throw new Error("inventory");
-        return (await response.json()) as Inventory;
-      })
-      .then((inventory) => {
-        if (!inventory) return;
-        recordsRef.current = inventory.items;
-        if (pendingSelectionRef.current) selectFromText(pendingSelectionRef.current);
-      })
-      .catch(() => setError("Evidence remediation verification records could not be loaded."));
-  }, [selectFromText]);
+  const selectFromText = useCallback(async (text: string) => {
+    try {
+      const records = await loadRecords();
+      const selected = records.find((item) => text.includes(item.summary));
+      if (!selected) {
+        setError("The selected saved record could not be matched for remediation verification.");
+        return;
+      }
+      setSelectedMemoryId(selected.memory_id);
+      setVerification(null);
+      setError(null);
+      await loadVerification(selected.memory_id);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Remediation verification could not be loaded.");
+    }
+  }, [loadRecords, loadVerification]);
 
   useEffect(() => {
     function onClick(event: Event) {
       const target = (event.target as Element | null)?.closest('[aria-label="Personal memory inventory"] button');
       const text = target?.textContent ?? "";
-      if (!text) return;
-      if (!selectFromText(text)) pendingSelectionRef.current = text;
+      if (text) void selectFromText(text);
     }
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
@@ -120,27 +126,25 @@ export function PersonalMemoryEvidenceRemediationVerification() {
       <div className="panel-heading"><div><p className="eyebrow">REMEDIATION VERIFICATION</p><h2 id="evidence-remediation-verification-title">Verify completion before resolution</h2></div></div>
       {error ? <p role="alert">{error}</p> : null}
       {selectedMemoryId === null ? <p className="muted">Select a saved record to verify its remediation criteria.</p> : !verification ? <p className="muted">Loading remediation verification…</p> : (
-        <>
+        <div className="action-list" aria-label="Evidence remediation verification actions">
           <p>Record {verification.memory_id} · project {verification.project_id} · {verification.ready_for_resolution_count}/{verification.total_actions} action(s) ready for resolution</p>
-          <div className="action-list" aria-label="Evidence remediation verification actions">
-            {verification.actions.length ? verification.actions.map((action) => (
-              <article className="action-card" key={action.action_key}>
+          {verification.actions.length ? verification.actions.map((action) => (
+            <article className="action-card" key={action.action_key}>
+              <div>
+                <span className={`priority priority-${action.status === "ready_for_resolution" ? "low" : action.status === "partially_satisfied" ? "medium" : "high"}`}>{action.status.replaceAll("_", " ")}</span>
+                <h3>{action.action_type.replaceAll("_", " ")}</h3>
+                <p>{action.passed_count}/{action.total_count} completion criteria passed.</p>
+                <ul>{action.criteria.map((criterion) => <li key={criterion.criterion}><strong>{criterion.passed ? "Passed" : "Not passed"}:</strong> {criterion.criterion} — {criterion.explanation}{criterion.supporting_evidence_ids.length ? ` Evidence IDs: ${criterion.supporting_evidence_ids.join(", ")}.` : ""}</li>)}</ul>
+              </div>
+              {action.follow_up_status === "resolved" ? <span role="status">Follow-up #{action.follow_up_id} resolved</span> : action.status === "ready_for_resolution" && action.follow_up_id !== null ? (
                 <div>
-                  <span className={`priority priority-${action.status === "ready_for_resolution" ? "low" : action.status === "partially_satisfied" ? "medium" : "high"}`}>{action.status.replaceAll("_", " ")}</span>
-                  <h3>{action.action_type.replaceAll("_", " ")}</h3>
-                  <p>{action.passed_count}/{action.total_count} completion criteria passed.</p>
-                  <ul>{action.criteria.map((criterion) => <li key={criterion.criterion}><strong>{criterion.passed ? "Passed" : "Not passed"}:</strong> {criterion.criterion} — {criterion.explanation}{criterion.supporting_evidence_ids.length ? ` Evidence IDs: ${criterion.supporting_evidence_ids.join(", ")}.` : ""}</li>)}</ul>
+                  <label>Resolution notes<textarea aria-label={`Resolution notes for ${action.action_type}`} value={notes[action.action_key] ?? ""} onChange={(event) => setNotes({ ...notes, [action.action_key]: event.target.value })} /></label>
+                  <button type="button" disabled={busyKey !== null} onClick={() => void resolve(action)}>{busyKey === action.action_key ? "Resolving…" : "Resolve verified follow-up"}</button>
                 </div>
-                {action.follow_up_status === "resolved" ? <span role="status">Follow-up #{action.follow_up_id} resolved</span> : action.status === "ready_for_resolution" && action.follow_up_id !== null ? (
-                  <div>
-                    <label>Resolution notes<textarea aria-label={`Resolution notes for ${action.action_type}`} value={notes[action.action_key] ?? ""} onChange={(event) => setNotes({ ...notes, [action.action_key]: event.target.value })} /></label>
-                    <button type="button" disabled={busyKey !== null} onClick={() => void resolve(action)}>{busyKey === action.action_key ? "Resolving…" : "Resolve verified follow-up"}</button>
-                  </div>
-                ) : <span className="muted">{action.follow_up_id === null ? "Create the research follow-up before resolution." : "All criteria must pass before resolution."}</span>}
-              </article>
-            )) : <p className="muted">No remediation actions require verification.</p>}
-          </div>
-        </>
+              ) : <span className="muted">{action.follow_up_id === null ? "Create the research follow-up before resolution." : "All criteria must pass before resolution."}</span>}
+            </article>
+          )) : <p className="muted">No remediation actions require verification.</p>}
+        </div>
       )}
     </section>
   );
