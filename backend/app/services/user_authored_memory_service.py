@@ -21,6 +21,29 @@ def contains_prohibited_secret(*values: str) -> bool:
     return any(pattern.search(text) is not None for pattern in SECRET_PATTERNS)
 
 
+def validate_user_authored_revision(memory: KnowledgeMemory, changes: dict) -> None:
+    if memory.provenance.get("origin") != "user_authored":
+        return
+
+    statement = changes.get("statement", memory.statement)
+    summary = changes.get("summary", memory.summary)
+    category = changes.get("category", memory.category)
+    confidence = changes.get("confidence", memory.confidence)
+    evidence_ids = changes.get("source_evidence_ids", memory.source_evidence_ids)
+    status = changes.get("status", memory.status)
+
+    if contains_prohibited_secret(statement, summary):
+        raise ValueError("Memory content appears to contain a secret or credential")
+    if status == "validated":
+        raise ValueError("User-authored memory cannot be manually marked as validated")
+    if category in EVIDENCE_BACKED_CATEGORIES and (
+        not evidence_ids or not memory.provenance.get("basis")
+    ):
+        raise ValueError("Evidence-backed memory requires evidence IDs and provenance basis")
+    if not 0 <= confidence <= 1:
+        raise ValueError("Memory confidence must be between 0 and 1")
+
+
 def _fingerprint(payload: dict) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
