@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type InventoryItem = { memory_id: number; summary: string };
 type Inventory = { items: InventoryItem[] };
@@ -30,7 +30,8 @@ type RemediationPlan = {
 };
 
 export function PersonalMemoryEvidenceRemediation() {
-  const [records, setRecords] = useState<InventoryItem[]>([]);
+  const recordsRef = useRef<InventoryItem[]>([]);
+  const pendingSelectionRef = useRef<string | null>(null);
   const [selectedMemoryId, setSelectedMemoryId] = useState<number | null>(null);
   const [plan, setPlan] = useState<RemediationPlan | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -47,6 +48,19 @@ export function PersonalMemoryEvidenceRemediation() {
     setPlan(body as RemediationPlan);
   }, []);
 
+  const selectFromText = useCallback((text: string) => {
+    const selected = recordsRef.current.find((item) => text.includes(item.summary));
+    if (!selected) return false;
+    pendingSelectionRef.current = null;
+    setSelectedMemoryId(selected.memory_id);
+    setPlan(null);
+    setError(null);
+    void loadPlan(selected.memory_id).catch((requestError) => {
+      setError(requestError instanceof Error ? requestError.message : "Remediation plan could not be loaded.");
+    });
+    return true;
+  }, [loadPlan]);
+
   useEffect(() => {
     async function loadRecords() {
       try {
@@ -56,34 +70,26 @@ export function PersonalMemoryEvidenceRemediation() {
           return;
         }
         if (!response.ok) throw new Error("inventory");
-        setRecords(((await response.json()) as Inventory).items);
+        recordsRef.current = ((await response.json()) as Inventory).items;
+        if (pendingSelectionRef.current) selectFromText(pendingSelectionRef.current);
       } catch {
         setError("Evidence remediation records could not be loaded.");
       }
     }
     void loadRecords();
-  }, []);
+  }, [selectFromText]);
 
   useEffect(() => {
-    const inventory = document.querySelector('[aria-label="Personal memory inventory"]');
-    if (!inventory) return;
-
     function onClick(event: Event) {
-      const target = (event.target as Element | null)?.closest("button");
-      if (!target) return;
-      const selected = records.find((item) => target.textContent?.includes(item.summary));
-      if (!selected) return;
-      setSelectedMemoryId(selected.memory_id);
-      setPlan(null);
-      setError(null);
-      void loadPlan(selected.memory_id).catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Remediation plan could not be loaded.");
-      });
+      const target = (event.target as Element | null)?.closest('[aria-label="Personal memory inventory"] button');
+      const text = target?.textContent ?? "";
+      if (!text) return;
+      if (!selectFromText(text)) pendingSelectionRef.current = text;
     }
 
-    inventory.addEventListener("click", onClick);
-    return () => inventory.removeEventListener("click", onClick);
-  }, [loadPlan, records]);
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [selectFromText]);
 
   async function createFollowUp(action: RemediationAction) {
     if (action.existing_follow_up_id !== null) return;
