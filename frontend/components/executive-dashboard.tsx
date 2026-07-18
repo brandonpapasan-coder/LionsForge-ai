@@ -12,6 +12,7 @@ import { MarketLearningRoadmapPanel } from "@/components/market-learning-roadmap
 import { PersonalMemoryControlCenter } from "@/components/personal-memory-control-center";
 import { PersonalMemoryEvidenceHealthInventory } from "@/components/personal-memory-evidence-health-inventory";
 import { PersonalMemoryEvidenceRemediation } from "@/components/personal-memory-evidence-remediation";
+import { PersonalMemoryEvidenceRemediationVerification } from "@/components/personal-memory-evidence-remediation-verification";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
 export function ExecutiveDashboard() {
@@ -78,6 +79,7 @@ export function ExecutiveDashboard() {
       <PersonalMemoryEvidenceHealthInventory />
       <PersonalMemoryControlCenter />
       <PersonalMemoryEvidenceRemediation />
+      <PersonalMemoryEvidenceRemediationVerification />
       <KnowledgeQualityDashboard />
       <MarketLearningProgressPanel />
       <MarketLearningRoadmapPanel />
