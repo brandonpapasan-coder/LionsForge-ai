@@ -14,6 +14,7 @@ import { PersonalMemoryEvidenceHealthInventory } from "@/components/personal-mem
 import { PersonalMemoryEvidenceRemediation } from "@/components/personal-memory-evidence-remediation";
 import { PersonalMemoryEvidenceRemediationEscalations } from "@/components/personal-memory-evidence-remediation-escalations";
 import { PersonalMemoryEvidenceRemediationVerification } from "@/components/personal-memory-evidence-remediation-verification";
+import { ReleaseCountdownPanel } from "@/components/release-countdown-panel";
 import type { ExecutiveDashboard as ExecutiveDashboardData } from "@/lib/dashboard";
 
 export function ExecutiveDashboard() {
@@ -77,6 +78,7 @@ export function ExecutiveDashboard() {
         ))}
       </section>
 
+      <ReleaseCountdownPanel />
       <PersonalMemoryEvidenceHealthInventory />
       <PersonalMemoryControlCenter />
       <PersonalMemoryEvidenceRemediation />
