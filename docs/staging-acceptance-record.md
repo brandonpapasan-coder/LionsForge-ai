@@ -9,6 +9,8 @@ Complete one copy of this record for each release candidate. Do not include secr
 - Staging URL:
 - Acceptance date/time (UTC):
 - Acceptance owner:
+- Backend image digest:
+- Running backend image digest verified: Yes / No
 - Previous deployable image SHA:
 - Database migration revision before deploy:
 - Database migration revision after deploy:
@@ -89,4 +91,4 @@ Severity definitions:
 
 ### Required sign-off statement
 
-> I verified that this decision is based on the exact release candidate SHA recorded above, that no credentials are included in this record, and that all blocking gates and defects have been evaluated according to `docs/release-checklist.md`.
+> I verified that this decision is based on the exact release candidate SHA and backend image digest recorded above, that the running staging backend image matched that digest, that no credentials are included in this record, and that all blocking gates and defects have been evaluated according to `docs/release-checklist.md`.
