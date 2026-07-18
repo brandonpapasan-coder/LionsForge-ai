@@ -20,6 +20,11 @@ EvidenceRemediationActionType = Literal[
     "improve_source_quality",
 ]
 EvidenceRemediationPriority = Literal["urgent", "high", "normal", "low"]
+EvidenceRemediationVerificationStatus = Literal[
+    "unresolved",
+    "partially_satisfied",
+    "ready_for_resolution",
+]
 UserAuthoredMemoryCategory = Literal[
     "research_preference",
     "research_context",
@@ -179,6 +184,46 @@ class KnowledgeMemoryEvidenceRemediationCreateResult(BaseModel):
     created: bool
     follow_up_id: int
     action_key: str
+
+
+class KnowledgeMemoryEvidenceRemediationCriterionVerification(BaseModel):
+    criterion: str
+    passed: bool
+    explanation: str
+    supporting_evidence_ids: list[int] = Field(default_factory=list)
+
+
+class KnowledgeMemoryEvidenceRemediationActionVerification(BaseModel):
+    action_key: str
+    action_type: EvidenceRemediationActionType
+    follow_up_id: int | None
+    follow_up_status: str | None
+    status: EvidenceRemediationVerificationStatus
+    passed_count: int
+    total_count: int
+    criteria: list[KnowledgeMemoryEvidenceRemediationCriterionVerification]
+
+
+class KnowledgeMemoryEvidenceRemediationVerification(BaseModel):
+    memory_id: int
+    project_id: int
+    total_actions: int
+    ready_for_resolution_count: int
+    actions: list[KnowledgeMemoryEvidenceRemediationActionVerification]
+
+
+class KnowledgeMemoryEvidenceRemediationResolveRequest(BaseModel):
+    action_key: str = Field(min_length=1, max_length=64)
+    resolution_notes: str = Field(min_length=1, max_length=4000)
+    confirmed: bool = False
+
+
+class KnowledgeMemoryEvidenceRemediationResolveResult(BaseModel):
+    resolved: bool
+    follow_up_id: int
+    action_key: str
+    status: str
+    resolved_at: datetime
 
 
 class KnowledgeMemoryPromotionResult(BaseModel):
