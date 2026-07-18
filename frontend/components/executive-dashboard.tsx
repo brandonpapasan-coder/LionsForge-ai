@@ -4,11 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { KnowledgeQualityDashboard } from "@/components/knowledge-quality-dashboard";
-import { MarketLearningEvidencePanel } from "@/components/market-learning-evidence-panel";
-import { MarketLearningMasteryPanel } from "@/components/market-learning-mastery-panel";
-import { MarketLearningPortfolioPanel } from "@/components/market-learning-portfolio-panel";
-import { MarketLearningProgressPanel } from "@/components/market-learning-progress-panel";
-import { MarketLearningRoadmapPanel } from "@/components/market-learning-roadmap-panel";
 import { PersonalMemoryControlCenter } from "@/components/personal-memory-control-center";
 import { PersonalMemoryEvidenceHealthInventory } from "@/components/personal-memory-evidence-health-inventory";
 import { PersonalMemoryEvidenceRemediation } from "@/components/personal-memory-evidence-remediation";
@@ -85,11 +80,6 @@ export function ExecutiveDashboard() {
       <PersonalMemoryEvidenceRemediationVerification />
       <PersonalMemoryEvidenceRemediationEscalations />
       <KnowledgeQualityDashboard />
-      <MarketLearningProgressPanel />
-      <MarketLearningRoadmapPanel />
-      <MarketLearningMasteryPanel />
-      <MarketLearningEvidencePanel />
-      <MarketLearningPortfolioPanel />
 
       <div className="dashboard-grid">
         <section className="dashboard-panel">
