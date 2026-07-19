@@ -19,8 +19,11 @@ from app.schemas.investigation_evidence import (
     EvidenceCreate,
     EvidenceRead,
     EvidenceUpdate,
+    InvestigationEducationRecommendations,
     InvestigationValidationSummary,
+    ResearchLearningRecommendation,
 )
+from app.services.education import LESSON_BY_SLUG
 
 router = APIRouter()
 
@@ -68,6 +71,15 @@ def _latest_evidence_update(evidence: list[ClaimEvidence]):
     return max((item.updated_at for item in evidence), default=None)
 
 
+def _latest_judgment(db: Session, claim_id: int) -> ClaimValidationJudgment | None:
+    return db.scalar(
+        select(ClaimValidationJudgment)
+        .where(ClaimValidationJudgment.claim_id == claim_id)
+        .order_by(ClaimValidationJudgment.reviewed_at.desc(), ClaimValidationJudgment.id.desc())
+        .limit(1)
+    )
+
+
 def _judgment_read(
     judgment: ClaimValidationJudgment,
     claim: InvestigationClaim,
@@ -108,6 +120,128 @@ def _claim_summary(db: Session, claim: InvestigationClaim) -> ClaimValidationSum
     )
 
 
+def _recommendation(lesson_slug: str, gap_type: str, priority: int, reason: str) -> ResearchLearningRecommendation:
+    lesson = LESSON_BY_SLUG[lesson_slug]
+    return ResearchLearningRecommendation(
+        competency=lesson["competency"],
+        lesson_slug=lesson_slug,
+        lesson_title=lesson["title"],
+        gap_type=gap_type,
+        priority=priority,
+        reason=reason,
+    )
+
+
+def _education_recommendations(db: Session, investigation_id: int) -> list[ResearchLearningRecommendation]:
+    claims = list(
+        db.scalars(
+            select(InvestigationClaim)
+            .where(InvestigationClaim.investigation_id == investigation_id)
+            .order_by(InvestigationClaim.id)
+        ).all()
+    )
+    recommendations: dict[tuple[str, str], ResearchLearningRecommendation] = {}
+
+    def add(item: ResearchLearningRecommendation) -> None:
+        key = (item.lesson_slug, item.gap_type)
+        current = recommendations.get(key)
+        if current is None or item.priority > current.priority:
+            recommendations[key] = item
+
+    if not claims:
+        add(
+            _recommendation(
+                "research-thesis-construction",
+                "missing_claims",
+                5,
+                "Define at least one falsifiable claim so the investigation can be tested against evidence.",
+            )
+        )
+
+    for claim in claims:
+        evidence = _claim_evidence(db, claim.id)
+        latest_update = _latest_evidence_update(evidence)
+        judgment = _latest_judgment(db, claim.id)
+
+        if not evidence:
+            add(
+                _recommendation(
+                    "evidence-quality-and-bias",
+                    "missing_evidence",
+                    5,
+                    "A claim has no attached evidence; practice identifying primary sources and separating evidence from narrative.",
+                )
+            )
+        if any(item.relationship == "contradicts" for item in evidence):
+            add(
+                _recommendation(
+                    "research-thesis-construction",
+                    "contradictory_evidence",
+                    5,
+                    "Contradictory evidence is unresolved; strengthen falsifiability, assumptions, and decision criteria before concluding.",
+                )
+            )
+        if evidence and any(item.credibility_rating is None for item in evidence):
+            add(
+                _recommendation(
+                    "evidence-quality-and-bias",
+                    "unassessed_credibility",
+                    4,
+                    "One or more evidence sources lack a credibility assessment, so source quality and bias should be reviewed.",
+                )
+            )
+        if claim.confidence_level in {None, "low"}:
+            add(
+                _recommendation(
+                    "research-thesis-construction",
+                    "low_claim_confidence",
+                    4,
+                    "A claim is unassessed or low confidence; refine its assumptions and identify what evidence would change the conclusion.",
+                )
+            )
+        if judgment is None:
+            add(
+                _recommendation(
+                    "research-thesis-construction",
+                    "missing_validation_judgment",
+                    4,
+                    "A claim has no validation judgment; document status, confidence, rationale, and unresolved questions.",
+                )
+            )
+            continue
+
+        judgment_read = _judgment_read(judgment, claim, latest_update)
+        if judgment_read.is_stale:
+            add(
+                _recommendation(
+                    "evidence-quality-and-bias",
+                    "stale_validation",
+                    5,
+                    "A validation judgment predates later claim or evidence changes; reassess the updated evidence before relying on it.",
+                )
+            )
+        if judgment.unresolved_questions:
+            add(
+                _recommendation(
+                    "research-thesis-construction",
+                    "unresolved_questions",
+                    4,
+                    "The latest validation judgment records unresolved questions; turn them into explicit tests and decision criteria.",
+                )
+            )
+        if judgment.validation_status in {"mixed", "contradicted", "insufficient", "unreviewed"}:
+            add(
+                _recommendation(
+                    "research-thesis-construction",
+                    "inconclusive_validation",
+                    3,
+                    "The latest validation status is not fully supported; strengthen the thesis and define the evidence needed for resolution.",
+                )
+            )
+
+    return sorted(recommendations.values(), key=lambda item: (-item.priority, item.lesson_slug, item.gap_type))
+
+
 @router.post(
     "/{investigation_id}/claims",
     response_model=ClaimRead,
@@ -140,6 +274,25 @@ def list_claims(
             .where(InvestigationClaim.investigation_id == investigation_id)
             .order_by(InvestigationClaim.updated_at.desc(), InvestigationClaim.id.desc())
         ).all()
+    )
+
+
+@router.get(
+    "/{investigation_id}/education-recommendations",
+    response_model=InvestigationEducationRecommendations,
+)
+def get_investigation_education_recommendations(
+    investigation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> InvestigationEducationRecommendations:
+    _owned_investigation(db, current_user.id, investigation_id)
+    recommendations = _education_recommendations(db, investigation_id)
+    return InvestigationEducationRecommendations(
+        investigation_id=investigation_id,
+        recommendation_count=len(recommendations),
+        completion_authority="adaptive_assessment_only",
+        recommendations=recommendations,
     )
 
 
