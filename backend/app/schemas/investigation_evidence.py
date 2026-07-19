@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 EVIDENCE_TYPES = {"primary", "secondary", "dataset", "expert", "other"}
 EVIDENCE_RELATIONSHIPS = {"supports", "contradicts", "neutral"}
 ASSESSMENT_LEVELS = {"low", "medium", "high"}
+VALIDATION_STATUSES = {"unreviewed", "supported", "mixed", "contradicted", "insufficient"}
 
 
 def _required(value: str, label: str) -> str:
@@ -152,6 +153,49 @@ class EvidenceRead(BaseModel):
     credibility_rationale: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class ClaimValidationJudgmentCreate(BaseModel):
+    validation_status: str
+    confidence_level: str
+    rationale: str = Field(min_length=1, max_length=4000)
+    unresolved_questions: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("validation_status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in VALIDATION_STATUSES:
+            raise ValueError("invalid validation status")
+        return value
+
+    @field_validator("confidence_level")
+    @classmethod
+    def validate_confidence(cls, value: str) -> str:
+        if value not in ASSESSMENT_LEVELS:
+            raise ValueError("invalid confidence level")
+        return value
+
+    @field_validator("rationale")
+    @classmethod
+    def validate_rationale(cls, value: str) -> str:
+        return _required(value, "validation rationale")
+
+    @field_validator("unresolved_questions")
+    @classmethod
+    def clean_unresolved_questions(cls, value: str | None) -> str | None:
+        return _clean_optional(value)
+
+
+class ClaimValidationJudgmentRead(BaseModel):
+    id: int
+    claim_id: int
+    reviewer_id: int
+    validation_status: str
+    confidence_level: str
+    rationale: str
+    unresolved_questions: str | None
+    reviewed_at: datetime
+    is_stale: bool
 
 
 class ClaimValidationSummary(BaseModel):
