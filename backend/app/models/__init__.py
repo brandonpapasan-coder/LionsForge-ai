@@ -7,6 +7,7 @@ from app.models.entity_resolution import KnowledgeEntityAlias, KnowledgeEntityMe
 from app.models.evidence import EvidenceRecord, EvidenceReviewEvent, ResearchReviewAction, ResearchReviewActionHistory
 from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
 from app.models.investigation import Investigation
+from app.models.investigation_evidence import ClaimEvidence, InvestigationClaim
 from app.models.knowledge_federation import KnowledgeFederationLink, KnowledgeFederationRevision
 from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
@@ -47,11 +48,13 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     "Alert",
     "AssessmentAttempt",
+    "ClaimEvidence",
     "Company",
     "EvidenceRecord",
     "EvidenceReviewEvent",
     "ExecutiveBriefSnapshot",
     "Investigation",
+    "InvestigationClaim",
     "KnowledgeEntity",
     "KnowledgeEntityAlias",
     "KnowledgeEntityMergeAudit",
