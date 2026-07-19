@@ -1,4 +1,4 @@
-from tests.conftest import auth_headers
+from tests.conftest import auth_headers, pass_current_assessment
 
 
 def lesson_by_slug(payload: dict, slug: str) -> dict:
@@ -37,13 +37,8 @@ def test_locked_lesson_cannot_be_started(client):
 
 def test_completing_prerequisite_unlocks_and_recommends_dependent_lesson(client):
     headers = auth_headers(client)
-    response = client.put(
-        "/api/v1/education/lessons/financial-statements-foundations/progress",
-        headers=headers,
-        json={"status": "completed", "score": 90},
-    )
-    assert response.status_code == 200
-    payload = response.json()
+    result = pass_current_assessment(client, headers)
+    payload = result["education_hub"]
     valuation = lesson_by_slug(payload, "valuation-and-cash-flow")
 
     assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
@@ -53,16 +48,13 @@ def test_completing_prerequisite_unlocks_and_recommends_dependent_lesson(client)
 
 def test_remediation_overrides_available_progression(client):
     headers = auth_headers(client)
-    client.put(
-        "/api/v1/education/lessons/financial-statements-foundations/progress",
-        headers=headers,
-        json={"status": "completed", "score": 90},
-    )
+    pass_current_assessment(client, headers)
     response = client.put(
         "/api/v1/education/lessons/valuation-and-cash-flow/progress",
         headers=headers,
         json={"status": "in_progress", "score": 45},
     )
+    assert response.status_code == 200
     payload = response.json()
     valuation = lesson_by_slug(payload, "valuation-and-cash-flow")
 
@@ -74,19 +66,11 @@ def test_remediation_overrides_available_progression(client):
 
 def test_completed_path_states_remain_stable(client):
     headers = auth_headers(client)
-    for slug in (
-        "financial-statements-foundations",
-        "valuation-and-cash-flow",
-        "evidence-quality-and-bias",
-        "research-thesis-construction",
-    ):
-        response = client.put(
-            f"/api/v1/education/lessons/{slug}/progress",
-            headers=headers,
-            json={"status": "completed", "score": 85},
-        )
-        assert response.status_code == 200
+    result = None
+    for _ in range(4):
+        result = pass_current_assessment(client, headers)
 
-    payload = response.json()
+    assert result is not None
+    payload = result["education_hub"]
     assert payload["recommended_lesson_slug"] is None
     assert all(lesson["path_state"] == "completed" for lesson in payload["lessons"])
