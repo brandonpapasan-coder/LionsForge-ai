@@ -1,0 +1,153 @@
+name: Production Frontend Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable frontend release commit SHA validated by all required gates
+        required: true
+      rollback_image_tag:
+        description: Immutable previously deployed frontend commit SHA for rollback
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: lionsforge-production-frontend
+  cancel-in-progress: false
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Checkout selected release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_tag }}
+          fetch-depth: 0
+
+      - name: Validate deployment inputs and source provenance
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+          PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+        run: |
+          set -euo pipefail
+          for value in "${IMAGE_TAG}" "${ROLLBACK_IMAGE_TAG}"; do
+            if ! printf '%s' "${value}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "release and rollback tags must be immutable 40-character lowercase commit SHAs" >&2
+              exit 1
+            fi
+          done
+          if [ "${IMAGE_TAG}" = "${ROLLBACK_IMAGE_TAG}" ]; then
+            echo "rollback_image_tag must identify the previously deployed release" >&2
+            exit 1
+          fi
+          case "${PRODUCTION_WEB_URL}" in
+            https://*) ;;
+            *) echo "PRODUCTION_WEB_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${IMAGE_TAG}"
+          git merge-base --is-ancestor "${IMAGE_TAG}" origin/main
+          git cat-file -e "${ROLLBACK_IMAGE_TAG}^{commit}"
+          git merge-base --is-ancestor "${ROLLBACK_IMAGE_TAG}" origin/main
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push immutable frontend image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/frontend:${IMAGE_TAG}"
+          docker build -t "${IMAGE}" frontend
+          docker push "${IMAGE}"
+          docker pull "${IMAGE}"
+          IMAGE_REF="$(docker image inspect "${IMAGE}" --format '{{index .RepoDigests 0}}')"
+          IMAGE_DIGEST="${IMAGE_REF##*@}"
+          if ! printf '%s' "${IMAGE_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "Could not resolve an immutable sha256 image digest" >&2
+            exit 1
+          fi
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          echo "IMAGE_REF=${IMAGE_REF}" >> "$GITHUB_ENV"
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> "$GITHUB_ENV"
+
+      - name: Configure production kubectl
+        env:
+          KUBE_CONFIG_PRODUCTION: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+        run: |
+          set -euo pipefail
+          test -n "${KUBE_CONFIG_PRODUCTION}"
+          mkdir -p "$HOME/.kube"
+          printf '%s' "${KUBE_CONFIG_PRODUCTION}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+          kubectl get namespace lionsforge-production >/dev/null
+
+      - name: Deploy frontend by immutable digest
+        run: |
+          set -euo pipefail
+          kubectl apply -k infra/k8s/overlays/production
+          kubectl -n lionsforge-production set image deployment/lionsforge-frontend frontend="${IMAGE_REF}"
+          kubectl -n lionsforge-production rollout status deployment/lionsforge-frontend --timeout=300s
+
+      - name: Verify deployed image provenance
+        run: |
+          set -euo pipefail
+          mapfile -t IMAGE_IDS < <(
+            kubectl -n lionsforge-production get pods \
+              -l app=lionsforge-frontend \
+              -o jsonpath='{range .items[*].status.containerStatuses[?(@.name=="frontend")]}{.imageID}{"\n"}{end}'
+          )
+          test "${#IMAGE_IDS[@]}" -gt 0
+          for image_id in "${IMAGE_IDS[@]}"; do
+            normalized="${image_id#docker-pullable://}"
+            if [[ "${normalized}" != *@"${IMAGE_DIGEST}" ]]; then
+              echo "Running frontend pod image ID does not match pushed digest" >&2
+              exit 1
+            fi
+          done
+          echo "DEPLOYED_IMAGE_IDS=${#IMAGE_IDS[@]}" >> "$GITHUB_ENV"
+
+      - name: Smoke test production frontend
+        env:
+          PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "${PRODUCTION_WEB_URL}/login" > login.html
+          grep -q "LionsForge" login.html
+
+      - name: Publish image provenance summary
+        if: always()
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+          PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+        run: |
+          {
+            echo "## Production frontend image provenance"
+            echo
+            echo "- Release SHA tag: \`${IMAGE_TAG}\`"
+            echo "- Rollback SHA tag: \`${ROLLBACK_IMAGE_TAG}\`"
+            echo "- Registry digest: \`${IMAGE_DIGEST:-unavailable}\`"
+            echo "- Running frontend containers verified: \`${DEPLOYED_IMAGE_IDS:-0}\`"
+            echo "- Web URL: ${PRODUCTION_WEB_URL}"
+            echo
+            echo "Record the digest in the production acceptance record. No credentials or registry tokens are included."
+          } >> "${GITHUB_STEP_SUMMARY}"
