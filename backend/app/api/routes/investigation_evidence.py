@@ -5,13 +5,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.investigation import Investigation
-from app.models.investigation_evidence import ClaimEvidence, InvestigationClaim
+from app.models.investigation_evidence import ClaimEvidence, ClaimValidationJudgment, InvestigationClaim
 from app.models.user import User
 from app.schemas.investigation_evidence import (
     ClaimAssessmentUpdate,
     ClaimCreate,
     ClaimRead,
     ClaimUpdate,
+    ClaimValidationJudgmentCreate,
+    ClaimValidationJudgmentRead,
     ClaimValidationSummary,
     EvidenceAssessmentUpdate,
     EvidenceCreate,
@@ -58,10 +60,38 @@ def _owned_evidence(db: Session, user_id: int, evidence_id: int) -> ClaimEvidenc
     return evidence
 
 
-def _claim_summary(db: Session, claim: InvestigationClaim) -> ClaimValidationSummary:
-    evidence = list(
-        db.scalars(select(ClaimEvidence).where(ClaimEvidence.claim_id == claim.id)).all()
+def _claim_evidence(db: Session, claim_id: int) -> list[ClaimEvidence]:
+    return list(db.scalars(select(ClaimEvidence).where(ClaimEvidence.claim_id == claim_id)).all())
+
+
+def _latest_evidence_update(evidence: list[ClaimEvidence]):
+    return max((item.updated_at for item in evidence), default=None)
+
+
+def _judgment_read(
+    judgment: ClaimValidationJudgment,
+    claim: InvestigationClaim,
+    latest_evidence_update,
+) -> ClaimValidationJudgmentRead:
+    evidence_is_stale = latest_evidence_update is not None and (
+        judgment.evidence_updated_at_snapshot is None
+        or latest_evidence_update > judgment.evidence_updated_at_snapshot
     )
+    return ClaimValidationJudgmentRead(
+        id=judgment.id,
+        claim_id=judgment.claim_id,
+        reviewer_id=judgment.reviewer_id,
+        validation_status=judgment.validation_status,
+        confidence_level=judgment.confidence_level,
+        rationale=judgment.rationale,
+        unresolved_questions=judgment.unresolved_questions,
+        reviewed_at=judgment.reviewed_at,
+        is_stale=claim.updated_at > judgment.claim_updated_at_snapshot or evidence_is_stale,
+    )
+
+
+def _claim_summary(db: Session, claim: InvestigationClaim) -> ClaimValidationSummary:
+    evidence = _claim_evidence(db, claim.id)
     supporting_count = sum(item.relationship == "supports" for item in evidence)
     contradicting_count = sum(item.relationship == "contradicts" for item in evidence)
     neutral_count = sum(item.relationship == "neutral" for item in evidence)
@@ -140,6 +170,53 @@ def update_claim_assessment(
     db.commit()
     db.refresh(claim)
     return claim
+
+
+@router.post(
+    "/claims/{claim_id}/judgments",
+    response_model=ClaimValidationJudgmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_claim_judgment(
+    claim_id: int,
+    payload: ClaimValidationJudgmentCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ClaimValidationJudgmentRead:
+    claim = _owned_claim(db, current_user.id, claim_id)
+    latest_evidence_update = _latest_evidence_update(_claim_evidence(db, claim.id))
+    judgment = ClaimValidationJudgment(
+        claim_id=claim.id,
+        reviewer_id=current_user.id,
+        validation_status=payload.validation_status,
+        confidence_level=payload.confidence_level,
+        rationale=payload.rationale,
+        unresolved_questions=payload.unresolved_questions,
+        claim_updated_at_snapshot=claim.updated_at,
+        evidence_updated_at_snapshot=latest_evidence_update,
+    )
+    db.add(judgment)
+    db.commit()
+    db.refresh(judgment)
+    return _judgment_read(judgment, claim, latest_evidence_update)
+
+
+@router.get("/claims/{claim_id}/judgments", response_model=list[ClaimValidationJudgmentRead])
+def list_claim_judgments(
+    claim_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ClaimValidationJudgmentRead]:
+    claim = _owned_claim(db, current_user.id, claim_id)
+    latest_evidence_update = _latest_evidence_update(_claim_evidence(db, claim.id))
+    judgments = list(
+        db.scalars(
+            select(ClaimValidationJudgment)
+            .where(ClaimValidationJudgment.claim_id == claim.id)
+            .order_by(ClaimValidationJudgment.reviewed_at.desc(), ClaimValidationJudgment.id.desc())
+        ).all()
+    )
+    return [_judgment_read(item, claim, latest_evidence_update) for item in judgments]
 
 
 @router.get("/claims/{claim_id}/summary", response_model=ClaimValidationSummary)

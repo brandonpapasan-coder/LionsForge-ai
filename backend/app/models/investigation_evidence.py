@@ -50,3 +50,26 @@ class ClaimEvidence(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+class ClaimValidationJudgment(Base):
+    __tablename__ = "claim_validation_judgments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    claim_id: Mapped[int] = mapped_column(
+        ForeignKey("investigation_claims.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    reviewer_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    validation_status: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
+    confidence_level: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    unresolved_questions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claim_updated_at_snapshot: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    evidence_updated_at_snapshot: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
