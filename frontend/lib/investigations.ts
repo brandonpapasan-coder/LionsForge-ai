@@ -78,6 +78,22 @@ export type InvestigationValidationSummary = {
   claims: ClaimValidationSummary[];
 };
 
+export type ResearchLearningRecommendation = {
+  competency: string;
+  lesson_slug: string;
+  lesson_title: string;
+  gap_type: string;
+  priority: number;
+  reason: string;
+};
+
+export type InvestigationEducationRecommendations = {
+  investigation_id: number;
+  recommendation_count: number;
+  completion_authority: "adaptive_assessment_only";
+  recommendations: ResearchLearningRecommendation[];
+};
+
 export type InvestigationCreate = {
   title: string;
   research_question: string;
