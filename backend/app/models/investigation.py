@@ -14,6 +14,9 @@ class Investigation(Base):
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     research_question: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="open", index=True, nullable=False)
+    findings: Mapped[str | None] = mapped_column(Text, nullable=True)
+    limitations: Mapped[str | None] = mapped_column(Text, nullable=True)
+    unresolved_questions: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
