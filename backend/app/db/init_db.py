@@ -2,6 +2,7 @@ from importlib import import_module
 
 from app.db.session import Base, engine
 from app.models import (
+    AssessmentAttempt,
     Company,
     EvidenceRecord,
     LessonProgress,
@@ -20,6 +21,7 @@ _active_models = (
     Company,
     EvidenceRecord,
     LessonProgress,
+    AssessmentAttempt,
     MentorConversation,
     Mission,
     ResearchProject,
