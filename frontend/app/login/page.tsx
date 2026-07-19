@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -69,6 +70,7 @@ export default function LoginPage() {
           <button type="submit" disabled={submitting}>{submitting ? "Signing in..." : "Sign in"}</button>
         </form>
         {message ? <p role="alert" className="form-message">{message}</p> : null}
+        <p className="muted">By using LionsForge AI, you acknowledge the <Link href="/terms">Terms</Link>, <Link href="/privacy">Privacy Notice</Link>, and <Link href="/responsible-ai">Responsible AI guidance</Link>. <Link href="/support">Support and data requests</Link>.</p>
       </section>
     </main>
   );
