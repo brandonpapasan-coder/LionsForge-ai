@@ -18,13 +18,15 @@ from app.services.openai_mentor import OpenAIMentorProvider
 
 router = APIRouter()
 
-RC3_MODULES = [
-    "portfolio-risk-intelligence",
-    "factor-intelligence",
-    "research-agent",
-    "event-intelligence",
-    "decision-intelligence",
-    "autonomous-portfolio-intelligence",
+ACTIVE_PLATFORM_MODULES = [
+    "research-orchestration",
+    "evidence-validation",
+    "knowledge-graph",
+    "knowledge-memory",
+    "education",
+    "mentor",
+    "missions",
+    "multi-agent-consensus",
 ]
 
 
@@ -53,9 +55,9 @@ def system_readiness_endpoint(
 
     checks.append(
         ReadinessCheck(
-            name="rc3_modules",
+            name="active_modules",
             status="pass",
-            detail=f"{len(RC3_MODULES)} RC3 intelligence modules registered.",
+            detail=f"{len(ACTIVE_PLATFORM_MODULES)} active research and education modules registered.",
         )
     )
     status = "ready" if all(check.status == "pass" for check in checks) else "degraded"
@@ -63,7 +65,7 @@ def system_readiness_endpoint(
         status=status,
         release="RC3",
         checks=checks,
-        modules=RC3_MODULES,
+        modules=ACTIVE_PLATFORM_MODULES,
         checked_at=datetime.now(timezone.utc),
     )
 
