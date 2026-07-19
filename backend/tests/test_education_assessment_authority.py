@@ -21,7 +21,7 @@ def test_progress_endpoint_rejects_manual_completion_and_assessment_unlocks_next
     submission = client.post(
         "/api/v1/education/assessment",
         headers=headers,
-        json={"question_id": question["id"], "selected_option": 0},
+        json={"question_id": question["id"], "selected_option": 1},
     )
     assert submission.status_code == 200
     payload = submission.json()
