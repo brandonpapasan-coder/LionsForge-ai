@@ -27,7 +27,7 @@ describe("InvestigationWorkspace", () => {
 
     fireEvent.change(screen.getByLabelText("Validation status"), { target: { value: "in_review" } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/investigations/7", expect.objectContaining({ method: "PATCH" })));
-    expect(await screen.findByDisplayValue("in_review")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("in review")).toBeInTheDocument();
   });
 
   it("creates an investigation and supports the empty state", async () => {
