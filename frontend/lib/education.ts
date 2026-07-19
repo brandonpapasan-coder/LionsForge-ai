@@ -23,6 +23,15 @@ export type CompetencySummary = {
   proficiency_band: string;
 };
 
+export type CompetencyTrend = {
+  competency: string;
+  attempt_count: number;
+  recent_average: number | null;
+  prior_average: number | null;
+  direction: "improving" | "stable" | "declining" | "insufficient_evidence";
+  explanation: string;
+};
+
 export type EducationHubData = {
   completed_lessons: number;
   total_lessons: number;
