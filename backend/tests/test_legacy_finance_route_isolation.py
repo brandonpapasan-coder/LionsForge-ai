@@ -67,7 +67,8 @@ def openapi_paths(*, enabled: bool) -> set[str]:
     return set(app.openapi()["paths"])
 
 
-def test_legacy_finance_routes_are_disabled_by_default():
+def test_legacy_finance_routes_are_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("ENABLE_LEGACY_FINANCE_MODULES", raising=False)
     settings = LegacyFinanceSettings(_env_file=None)
     assert settings.enable_legacy_finance_modules is False
 
