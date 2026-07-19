@@ -17,14 +17,18 @@ jobs:
     environment:
       name: staging
     steps:
-      - name: Checkout repository
+      - name: Checkout selected release commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_tag }}
+          fetch-depth: 0
 
-      - name: Validate deployment inputs
+      - name: Validate deployment inputs and source provenance
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
           STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
         run: |
+          set -euo pipefail
           test -n "${IMAGE_TAG}"
           if ! printf '%s' "${IMAGE_TAG}" | grep -Eq '^[0-9a-f]{40}$'; then
             echo "image_tag must be an immutable 40-character lowercase commit SHA" >&2
@@ -34,6 +38,15 @@ jobs:
             https://*) ;;
             *) echo "STAGING_WEB_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
           esac
+          git fetch origin main --no-tags
+          if [ "$(git rev-parse HEAD)" != "${IMAGE_TAG}" ]; then
+            echo "Checked-out commit does not match image_tag" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "${IMAGE_TAG}" origin/main; then
+            echo "image_tag must reference a commit contained in origin/main" >&2
+            exit 1
+          fi
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
