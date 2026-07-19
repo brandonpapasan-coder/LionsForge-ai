@@ -30,6 +30,19 @@ def _source_warning(evidence: EvidenceRecord) -> str | None:
     return None
 
 
+def _entry_source_metadata(evidence: EvidenceRecord) -> dict[str, object]:
+    return {
+        "source_url": evidence.source_url,
+        "publisher": evidence.publisher,
+        "author": evidence.author,
+        "published_at": evidence.published_at,
+        "fingerprint": evidence.fingerprint,
+        "credibility_score": evidence.credibility_score,
+        "freshness_score": evidence.freshness_score,
+        "confidence_score": evidence.confidence_score,
+    }
+
+
 @router.get("/ledger", response_model=ResearchEvidenceProvenanceLedger)
 def get_provenance_ledger(
     current_user: User = Depends(get_current_user),
@@ -74,6 +87,7 @@ def get_provenance_ledger(
                 supersedes_evidence_id=supersedes_id,
                 warning=warning,
                 occurred_at=evidence.created_at,
+                **_entry_source_metadata(evidence),
             )
         )
         if supersedes_id is not None:
@@ -92,6 +106,7 @@ def get_provenance_ledger(
                     supersedes_evidence_id=supersedes_id,
                     warning=None if supersedes_id in evidence_by_id else "Superseded evidence is not available in this ledger.",
                     occurred_at=evidence.created_at,
+                    **_entry_source_metadata(evidence),
                 )
             )
 
@@ -113,6 +128,7 @@ def get_provenance_ledger(
                 reviewer_notes=review.reviewer_notes,
                 warning=_source_warning(evidence),
                 occurred_at=review.created_at,
+                **_entry_source_metadata(evidence),
             )
         )
 

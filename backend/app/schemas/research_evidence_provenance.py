@@ -10,6 +10,14 @@ class ProvenanceLedgerEntry(BaseModel):
     project_id: int | None
     source_title: str
     source_type: str
+    source_url: str | None = None
+    publisher: str | None = None
+    author: str | None = None
+    published_at: datetime | None = None
+    fingerprint: str = ""
+    credibility_score: float = 0.0
+    freshness_score: float = 0.0
+    confidence_score: float = 0.0
     claim: str
     validation_status: str
     contradiction_key: str | None
