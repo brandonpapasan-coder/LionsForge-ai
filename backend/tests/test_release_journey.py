@@ -1,4 +1,4 @@
-from tests.conftest import auth_headers
+from tests.conftest import auth_headers, pass_current_assessment
 
 
 def test_critical_user_journey(client):
@@ -67,14 +67,8 @@ def test_critical_user_journey(client):
     assert education.status_code == 200
     assert education.json()["total_lessons"] > 0
 
-    lesson_slug = education.json()["lessons"][0]["slug"]
-    completed = client.put(
-        f"/api/v1/education/lessons/{lesson_slug}/progress",
-        headers=headers,
-        json={"status": "completed", "score": 100},
-    )
-    assert completed.status_code == 200
-    assert completed.json()["completed_lessons"] == 1
+    assessment_result = pass_current_assessment(client, headers)
+    assert assessment_result["education_hub"]["completed_lessons"] == 1
 
     refreshed_dashboard = client.get("/api/v1/dashboard", headers=headers)
     assert refreshed_dashboard.status_code == 200
