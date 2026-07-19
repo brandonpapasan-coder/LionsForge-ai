@@ -1,6 +1,6 @@
 """add investigation claims and evidence
 
-Revision ID: 0029_investigation_claims_evidence
+Revision ID: 0029_claims_evidence
 Revises: 0028_investigation_foundation
 Create Date: 2026-07-19 00:00:00.000000
 """
@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0029_investigation_claims_evidence"
+revision: str = "0029_claims_evidence"
 down_revision: str | None = "0028_investigation_foundation"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
