@@ -203,9 +203,12 @@ describe("EducationHub", () => {
     await user.click(await screen.findByLabelText("Intrinsic value from future cash flows"));
     await user.click(screen.getByRole("button", { name: "Submit assessment" }));
 
-    expect(await screen.findByText("100% · Passed")).toBeInTheDocument();
+    const resultCard = screen.getByLabelText("Adaptive competency assessment");
+    expect(await within(resultCard).findByText("100% · Passed")).toBeInTheDocument();
     await waitFor(() => expect(historyCalls).toBe(2));
-    expect(await screen.findByText("Valuation and Cash Flow")).toBeInTheDocument();
+    const history = screen.getByLabelText("Mastery history");
+    expect(within(history).getByText("3 attempts")).toBeInTheDocument();
+    expect(within(history).getByText("Valuation and Cash Flow")).toBeInTheDocument();
     expect(screen.getByLabelText("90% mastery")).toBeInTheDocument();
   });
 
