@@ -7,5 +7,4 @@ data:
   ENVIRONMENT: "staging"
   API_PREFIX: "/api/v1"
   ALLOW_MOCK_DATA: "false"
-  MARKET_DATA_PROVIDER: "mock"
   NEWS_PROVIDER: "mock"
