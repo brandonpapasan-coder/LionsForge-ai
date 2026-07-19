@@ -55,13 +55,15 @@ http://127.0.0.1:8000/docs
 
 ## Legacy finance compatibility
 
-Legacy market, simulator, watchlist, portfolio, alert, company, factor, event, and decision routes are disabled by default. A controlled migration or compatibility environment may explicitly enable them with:
+Legacy market, simulator, watchlist, portfolio, alert, company, factor, event, and decision routes are disabled by default. The active `backend/.env.example` intentionally excludes compatibility switches.
 
-```text
-ENABLE_LEGACY_FINANCE_MODULES=true
+For a controlled migration or compatibility environment, copy the dedicated template setting into that environment:
+
+```bash
+cat backend/.env.legacy.example
 ```
 
-Leave this setting unset or `false` for the current LionsForge AI research, validation, knowledge, and education product direction. Enabling compatibility mode does not authorize live trading, brokerage integration, order routing, individualized financial advice, or security-selection recommendations.
+The compatibility template sets `ENABLE_LEGACY_FINANCE_MODULES=true`. Do not add it to normal LionsForge AI research, validation, knowledge, or education deployments. Enabling compatibility mode does not authorize live trading, brokerage integration, order routing, individualized financial advice, or security-selection recommendations.
 
 ## Frontend quick start
 
