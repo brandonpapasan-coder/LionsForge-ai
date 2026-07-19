@@ -43,7 +43,7 @@ describe("ClaimEvidencePanel", () => {
     fireEvent.change(screen.getByLabelText("Source title"), { target: { value: evidence.source_title } });
     fireEvent.change(screen.getByLabelText("Source URL"), { target: { value: evidence.source_url } });
     fireEvent.click(screen.getByRole("button", { name: "Attach evidence" }));
-    expect(await screen.findByText(evidence.source_title)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: evidence.source_title })).toHaveAttribute("href", evidence.source_url);
   });
 
   it("loads and deletes owner-scoped claim data", async () => {
@@ -56,7 +56,7 @@ describe("ClaimEvidencePanel", () => {
     render(<ClaimEvidencePanel investigationId={4} />);
     expect(await screen.findByText(claim.statement)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show evidence" }));
-    expect(await screen.findByText(evidence.source_title)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: evidence.source_title })).toHaveAttribute("href", evidence.source_url);
     fireEvent.click(screen.getByRole("button", { name: "Delete claim" }));
     await waitFor(() => expect(screen.queryByText(claim.statement)).not.toBeInTheDocument());
   });
