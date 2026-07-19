@@ -18,6 +18,7 @@ describe("InvestigationWorkspace", () => {
   it("renders private investigations and updates status", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([investigation]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...investigation, status: "in_review" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -25,9 +26,10 @@ describe("InvestigationWorkspace", () => {
     expect(await screen.findByText("Validate a research claim")).toBeInTheDocument();
     expect(screen.getByText("Does the current evidence support the claim?")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Validation status"), { target: { value: "in_review" } });
+    const statusSelect = screen.getByLabelText("Validation status");
+    fireEvent.change(statusSelect, { target: { value: "in_review" } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/investigations/7", expect.objectContaining({ method: "PATCH" })));
-    expect(await screen.findByRole("option", { name: "in review", selected: true })).toBeInTheDocument();
+    await waitFor(() => expect(statusSelect).toHaveValue("in_review"));
   });
 
   it("creates an investigation and supports the empty state", async () => {
