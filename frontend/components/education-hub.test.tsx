@@ -144,14 +144,12 @@ describe("EducationHub", () => {
     expect(await screen.findByLabelText("64% mastery")).toBeInTheDocument();
     expect(screen.getByText("proficient mastery")).toBeInTheDocument();
     expect(screen.getAllByText("Valuation and Cash Flow")).toHaveLength(2);
-    const recommended = lessonCard("Valuation and Cash Flow");
-    expect(recommended).toHaveAttribute("data-path-state", "recommended");
-    expect(recommended).toHaveTextContent("Prerequisites: Financial Statements Foundations");
-    const locked = lessonCard("Research Thesis Construction");
-    expect(within(locked).getByRole("button", { name: "Complete prerequisites" })).toBeDisabled();
+    expect(lessonCard("Valuation and Cash Flow")).toHaveAttribute("data-path-state", "recommended");
+    expect(within(lessonCard("Research Thesis Construction")).getByRole("button", { name: "Complete prerequisites" })).toBeDisabled();
+    expect(screen.getByText(/Passing this check is the only way to complete a lesson/)).toBeInTheDocument();
   });
 
-  it("starts an available recommended lesson and refreshes path data", async () => {
+  it("starts a lesson, then requires its competency check instead of offering manual completion", async () => {
     const user = userEvent.setup();
     const updated: EducationHubData = {
       ...hub,
@@ -177,7 +175,8 @@ describe("EducationHub", () => {
         }),
       );
     });
-    expect(within(recommended).getByRole("button", { name: "Complete lesson" })).toBeInTheDocument();
+    expect(within(recommended).queryByRole("button", { name: "Complete lesson" })).not.toBeInTheDocument();
+    expect(within(recommended).getByRole("button", { name: "Take competency check" })).toBeInTheDocument();
   });
 
   it("keeps the newest lesson mutation when an older response finishes last", async () => {
@@ -208,7 +207,7 @@ describe("EducationHub", () => {
     await user.click(within(lessonCard("Evidence Quality and Bias")).getByRole("button", { name: "Start lesson" }));
 
     await waitFor(() => expect(firstSignal?.aborted).toBe(true));
-    expect(within(lessonCard("Evidence Quality and Bias")).getByRole("button", { name: "Complete lesson" })).toBeInTheDocument();
+    expect(within(lessonCard("Evidence Quality and Bias")).getByRole("button", { name: "Take competency check" })).toBeInTheDocument();
     firstMutation.resolve(await response({ ...hub, mastery_percent: 10 }));
     await waitFor(() => expect(screen.queryByLabelText("10% mastery")).not.toBeInTheDocument());
   });

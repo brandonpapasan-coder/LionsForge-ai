@@ -1,22 +1,11 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
-
-
-MASTERY_SCORE_THRESHOLD = 70
+from pydantic import BaseModel, Field
 
 
 class LessonProgressUpdate(BaseModel):
-    status: str = Field(pattern="^(not_started|in_progress|completed)$")
+    status: str = Field(pattern="^(not_started|in_progress)$")
     score: int | None = Field(default=None, ge=0, le=100)
-
-    @model_validator(mode="after")
-    def require_passing_score_for_completion(self) -> "LessonProgressUpdate":
-        if self.status == "completed" and (self.score is None or self.score < MASTERY_SCORE_THRESHOLD):
-            raise ValueError(
-                f"Completed lessons require a score of at least {MASTERY_SCORE_THRESHOLD}%."
-            )
-        return self
 
 
 class LessonRead(BaseModel):
