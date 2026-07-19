@@ -13,10 +13,46 @@ os.environ["ENVIRONMENT"] = "test"
 os.environ["ENABLE_LEGACY_FINANCE_MODULES"] = "false"
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.api.router import build_api_router
+from app.core.config import get_settings
+from app.core.legacy_finance_config import LegacyFinanceSettings
 from app.db.session import Base, engine
-from app.main import app
+from app.main import app, lifespan
+
+LEGACY_FINANCE_TEST_MODULES = {
+    "test_market.py",
+    "test_market_learning_api.py",
+    "test_market_learning_evidence_api.py",
+    "test_market_learning_mastery.py",
+    "test_market_learning_portfolio.py",
+    "test_market_learning_progress_api.py",
+    "test_market_learning_roadmap.py",
+    "test_market_mentor_api.py",
+    "test_market_scenario_api.py",
+    "test_market_simulator.py",
+}
+
+
+def build_legacy_finance_test_app() -> FastAPI:
+    settings = get_settings()
+    legacy_app = FastAPI(lifespan=lifespan)
+    legacy_app.include_router(
+        build_api_router(
+            settings=settings,
+            legacy_finance_settings=LegacyFinanceSettings(
+                enable_legacy_finance_modules=True,
+                _env_file=None,
+            ),
+        ),
+        prefix=settings.api_prefix,
+    )
+    return legacy_app
+
+
+legacy_finance_test_app = build_legacy_finance_test_app()
 
 
 @pytest.fixture
@@ -28,8 +64,13 @@ def reset_database():
 
 
 @pytest.fixture
-def client(reset_database) -> Generator[TestClient, None, None]:
-    with TestClient(app) as test_client:
+def client(request, reset_database) -> Generator[TestClient, None, None]:
+    selected_app = (
+        legacy_finance_test_app
+        if request.node.path.name in LEGACY_FINANCE_TEST_MODULES
+        else app
+    )
+    with TestClient(selected_app) as test_client:
         yield test_client
 
 
