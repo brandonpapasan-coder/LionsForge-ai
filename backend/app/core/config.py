@@ -15,11 +15,6 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
-    market_data_provider: str = "mock"
-    market_data_api_key: str | None = None
-    market_data_failover_providers: str = "mock"
-    market_data_quote_cache_ttl_seconds: int = 30
-    market_data_health_failure_threshold: int = 3
     redis_url: str | None = None
     news_provider: str = "mock"
     news_api_key: str | None = None

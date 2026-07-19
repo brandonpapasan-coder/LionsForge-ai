@@ -1,4 +1,4 @@
-from app.core.config import get_settings
+from app.core.legacy_market_config import get_legacy_market_settings
 from app.services.live_market_adapters import TwelveDataMarketProvider
 from app.services.market_providers import LiveMarketDataProvider, MarketDataProvider, MockMarketDataProvider
 
@@ -40,7 +40,7 @@ def get_configured_market_provider() -> MarketDataProvider:
 
 
 def get_configured_market_providers() -> list[MarketDataProvider]:
-    settings = get_settings()
+    settings = get_legacy_market_settings()
     provider_names = _parse_provider_names(
         settings.market_data_provider, settings.market_data_failover_providers
     )
