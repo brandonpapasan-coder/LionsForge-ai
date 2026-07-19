@@ -9,7 +9,7 @@ import type {
   ValidationStatus,
 } from "@/lib/investigations";
 
-const statuses: ValidationStatus[] = ["unreviewed", "supported", "contradicted", "inconclusive"];
+const statuses: ValidationStatus[] = ["unreviewed", "supported", "mixed", "contradicted", "insufficient"];
 const confidenceLevels: AssessmentLevel[] = ["low", "medium", "high"];
 
 export function ValidationLedgerPanel({ investigationId }: { investigationId: number }) {
@@ -79,7 +79,7 @@ export function ValidationLedgerPanel({ investigationId }: { investigationId: nu
           <h5>{claim.statement}</h5>
           <button type="button" disabled={busy} onClick={() => void loadHistory(claim.id)}>Show validation history</button>
           <form aria-label={`Record validation judgment for ${claim.statement}`} onSubmit={(event) => void recordJudgment(claim.id, event)}>
-            <label>Validation status<select name="validation_status" defaultValue="inconclusive">{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label>Validation status<select name="validation_status" defaultValue="insufficient">{statuses.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label>Confidence level<select name="confidence_level" defaultValue="medium">{confidenceLevels.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label>Review rationale<textarea name="rationale" required maxLength={4000} /></label>
             <label>Unresolved questions<textarea name="unresolved_questions" maxLength={4000} /></label>
