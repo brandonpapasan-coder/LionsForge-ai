@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { ClaimEvidencePanel } from "@/components/claim-evidence-panel";
+import { ResearchLearningRecommendations } from "@/components/research-learning-recommendations";
 import { ValidationLedgerPanel } from "@/components/validation-ledger-panel";
 import type { Investigation, InvestigationStatus } from "@/lib/investigations";
 
@@ -107,6 +108,7 @@ export function InvestigationWorkspace() {
             <label>Validation status<select value={item.status} disabled={busy} onChange={(event) => void updateStatus(item, event.target.value as InvestigationStatus)}>{statuses.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
             <ClaimEvidencePanel investigationId={item.id} />
             <ValidationLedgerPanel investigationId={item.id} />
+            <ResearchLearningRecommendations investigationId={item.id} />
           </article>
         ))}</div> : null}
         {error ? <p role="alert">{error}</p> : null}
