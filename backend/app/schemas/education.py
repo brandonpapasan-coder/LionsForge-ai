@@ -67,6 +67,18 @@ class AssessmentSubmission(BaseModel):
     selected_option: int = Field(ge=0)
 
 
+class AssessmentAttemptRead(BaseModel):
+    id: int
+    lesson_slug: str
+    competency: str
+    difficulty: str
+    question_id: str
+    selected_option: int
+    score: int
+    passed: bool
+    created_at: datetime
+
+
 class AssessmentResultRead(BaseModel):
     lesson_slug: str
     competency: str
