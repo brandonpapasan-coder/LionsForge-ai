@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type {
   AdaptiveAssessment,
+  AssessmentAttempt,
   AssessmentResult,
   EducationHubData,
   Lesson,
@@ -13,6 +14,8 @@ const isAbortError = (error: unknown) => error instanceof DOMException && error.
 
 export function EducationHub() {
   const [data, setData] = useState<EducationHubData | null>(null);
+  const [history, setHistory] = useState<AssessmentAttempt[] | null>(null);
+  const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const [assessment, setAssessment] = useState<AdaptiveAssessment | null>(null);
   const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -23,6 +26,39 @@ export function EducationHub() {
   const loadRequest = useRef<AbortController | null>(null);
   const lessonRequest = useRef<AbortController | null>(null);
   const assessmentRequest = useRef<AbortController | null>(null);
+  const historyRequest = useRef<AbortController | null>(null);
+
+  async function loadHistory() {
+    historyRequest.current?.abort();
+    const controller = new AbortController();
+    historyRequest.current = controller;
+    setHistoryUnavailable(false);
+    try {
+      const response = await fetch("/api/education/assessment/history", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || !mounted.current || historyRequest.current !== controller) return;
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!response.ok) {
+        setHistoryUnavailable(true);
+        return;
+      }
+      const attempts = (await response.json()) as AssessmentAttempt[];
+      if (!controller.signal.aborted && mounted.current && historyRequest.current === controller) {
+        setHistory(attempts);
+      }
+    } catch (requestError) {
+      if (!isAbortError(requestError) && mounted.current && historyRequest.current === controller) {
+        setHistoryUnavailable(true);
+      }
+    } finally {
+      if (historyRequest.current === controller) historyRequest.current = null;
+    }
+  }
 
   useEffect(() => {
     mounted.current = true;
@@ -53,6 +89,7 @@ export function EducationHub() {
     }
 
     void load();
+    void loadHistory();
     return () => {
       mounted.current = false;
       controller.abort();
@@ -61,6 +98,8 @@ export function EducationHub() {
       lessonRequest.current = null;
       assessmentRequest.current?.abort();
       assessmentRequest.current = null;
+      historyRequest.current?.abort();
+      historyRequest.current = null;
     };
   }, []);
 
@@ -154,6 +193,7 @@ export function EducationHub() {
         setData(result.education_hub);
         setAssessment(null);
         setSelectedOption(null);
+        void loadHistory();
       }
     } catch (requestError) {
       if (!isAbortError(requestError) && mounted.current && assessmentRequest.current === controller) setError("The education service is unavailable.");
@@ -169,6 +209,7 @@ export function EducationHub() {
   if (!data) return <section className="education-state">Loading your learning path…</section>;
 
   const recommendedLesson = data.lessons.find((lesson) => lesson.slug === data.recommended_lesson_slug);
+  const lessonTitle = (slug: string) => data.lessons.find((lesson) => lesson.slug === slug)?.title ?? slug.replaceAll("-", " ");
 
   return (
     <div className="education-shell">
@@ -201,6 +242,26 @@ export function EducationHub() {
         ) : null}
         {assessmentResult ? (
           <div role="status"><p><strong>{assessmentResult.score}% · {assessmentResult.passed ? "Passed" : "Needs review"}</strong></p><p>{assessmentResult.feedback}</p><p>Learning objective: {assessmentResult.learning_objective}</p><button type="button" disabled={assessmentBusy || !data.recommended_lesson_slug} onClick={() => void loadAssessment()}>{data.recommended_lesson_slug ? "Take next assessment" : "Learning path complete"}</button></div>
+        ) : null}
+      </section>
+
+      <section className="lesson-card" aria-label="Mastery history">
+        <div className="lesson-meta"><span>private learning evidence</span><span>{history?.length ?? 0} attempts</span></div>
+        <h2>Mastery history</h2>
+        {history === null && !historyUnavailable ? <p>Loading your assessment evidence…</p> : null}
+        {historyUnavailable ? <p role="status">Mastery history is temporarily unavailable. Your lessons and assessments remain available.</p> : null}
+        {history?.length === 0 ? <p>No assessment attempts yet. Your competency checks will appear here.</p> : null}
+        {history && history.length > 0 ? (
+          <div className="lesson-grid">
+            {history.map((attempt) => (
+              <article className="lesson-card" key={attempt.id} data-attempt-result={attempt.passed ? "passed" : "remediation"}>
+                <div className="lesson-meta"><span>{attempt.difficulty}</span><span>{attempt.passed ? "mastery" : "remediation"}</span></div>
+                <h3>{lessonTitle(attempt.lesson_slug)}</h3>
+                <p>{attempt.competency.replaceAll("-", " ")}</p>
+                <div className="lesson-footer"><strong>{attempt.score}% · {attempt.passed ? "Passed" : "Needs review"}</strong><time dateTime={attempt.created_at}>{new Date(attempt.created_at).toLocaleString()}</time></div>
+              </article>
+            ))}
+          </div>
         ) : null}
       </section>
 
