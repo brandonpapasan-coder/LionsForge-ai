@@ -1,10 +1,11 @@
 from datetime import datetime
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 EVIDENCE_TYPES = {"primary", "secondary", "dataset", "expert", "other"}
 EVIDENCE_RELATIONSHIPS = {"supports", "contradicts", "neutral"}
+ASSESSMENT_LEVELS = {"low", "medium", "high"}
 
 
 def _required(value: str, label: str) -> str:
@@ -12,6 +13,13 @@ def _required(value: str, label: str) -> str:
     if not cleaned:
         raise ValueError(f"{label} must not be blank")
     return cleaned
+
+
+def _clean_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
 
 
 class ClaimCreate(BaseModel):
@@ -27,12 +35,37 @@ class ClaimUpdate(ClaimCreate):
     pass
 
 
+class ClaimAssessmentUpdate(BaseModel):
+    confidence_level: str | None = None
+    confidence_rationale: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("confidence_level")
+    @classmethod
+    def validate_confidence_level(cls, value: str | None) -> str | None:
+        if value is not None and value not in ASSESSMENT_LEVELS:
+            raise ValueError("invalid confidence level")
+        return value
+
+    @field_validator("confidence_rationale")
+    @classmethod
+    def clean_confidence_rationale(cls, value: str | None) -> str | None:
+        return _clean_optional(value)
+
+    @model_validator(mode="after")
+    def require_rationale_for_rating(self) -> "ClaimAssessmentUpdate":
+        if self.confidence_level is not None and self.confidence_rationale is None:
+            raise ValueError("confidence rationale is required when confidence is assessed")
+        return self
+
+
 class ClaimRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     investigation_id: int
     statement: str
+    confidence_level: str | None
+    confidence_rationale: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -75,14 +108,34 @@ class EvidenceCreate(BaseModel):
     @field_validator("notes")
     @classmethod
     def clean_notes(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        cleaned = value.strip()
-        return cleaned or None
+        return _clean_optional(value)
 
 
 class EvidenceUpdate(EvidenceCreate):
     pass
+
+
+class EvidenceAssessmentUpdate(BaseModel):
+    credibility_rating: str | None = None
+    credibility_rationale: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("credibility_rating")
+    @classmethod
+    def validate_credibility_rating(cls, value: str | None) -> str | None:
+        if value is not None and value not in ASSESSMENT_LEVELS:
+            raise ValueError("invalid credibility rating")
+        return value
+
+    @field_validator("credibility_rationale")
+    @classmethod
+    def clean_credibility_rationale(cls, value: str | None) -> str | None:
+        return _clean_optional(value)
+
+    @model_validator(mode="after")
+    def require_rationale_for_rating(self) -> "EvidenceAssessmentUpdate":
+        if self.credibility_rating is not None and self.credibility_rationale is None:
+            raise ValueError("credibility rationale is required when credibility is assessed")
+        return self
 
 
 class EvidenceRead(BaseModel):
@@ -95,5 +148,29 @@ class EvidenceRead(BaseModel):
     evidence_type: str
     relationship: str
     notes: str | None
+    credibility_rating: str | None
+    credibility_rationale: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class ClaimValidationSummary(BaseModel):
+    claim_id: int
+    confidence_level: str | None
+    supporting_count: int
+    contradicting_count: int
+    neutral_count: int
+    assessed_evidence_count: int
+    total_evidence_count: int
+    has_unresolved_contradiction: bool
+
+
+class InvestigationValidationSummary(BaseModel):
+    investigation_id: int
+    claim_count: int
+    assessed_claim_count: int
+    low_confidence_count: int
+    medium_confidence_count: int
+    high_confidence_count: int
+    unresolved_contradiction_count: int
+    claims: list[ClaimValidationSummary]
