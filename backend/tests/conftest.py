@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.core.legacy_finance_config import LegacyFinanceSettings
 from app.db.session import Base, engine
 from app.main import app, lifespan
+from app.services.assessments import ASSESSMENT_BANK
 
 LEGACY_FINANCE_TEST_MODULES = {
     "test_advanced_alerts.py",
@@ -107,3 +108,21 @@ def auth_headers(client: TestClient, email: str = "tester@example.com", secret: 
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def pass_current_assessment(client: TestClient, headers: dict[str, str]) -> dict:
+    assessment_response = client.get("/api/v1/education/assessment", headers=headers)
+    assert assessment_response.status_code == 200
+    assessment = assessment_response.json()
+    question = ASSESSMENT_BANK[assessment["lesson_slug"]][assessment["difficulty"]]
+    result = client.post(
+        "/api/v1/education/assessment",
+        headers=headers,
+        json={
+            "question_id": assessment["question"]["id"],
+            "selected_option": question["correct_option"],
+        },
+    )
+    assert result.status_code == 200
+    assert result.json()["passed"] is True
+    return result.json()
