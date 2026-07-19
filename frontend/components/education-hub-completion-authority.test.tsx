@@ -74,10 +74,13 @@ afterEach(() => {
 describe("EducationHub completion authority", () => {
   it("routes an in-progress lesson to the adaptive assessment without sending a completion update", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi
-      .fn()
-      .mockImplementationOnce(() => response(hub))
-      .mockImplementationOnce(() => response(assessment));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/education") return response(hub);
+      if (url === "/api/education/assessment/history") return response([]);
+      if (url === "/api/education/assessment") return response(assessment);
+      return response(null, 404);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<EducationHub />);
@@ -87,10 +90,11 @@ describe("EducationHub completion authority", () => {
     await user.click(within(card).getByRole("button", { name: "Take competency check" }));
 
     expect(await screen.findByText(assessment.question.prompt)).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/education/assessment",
-      expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/education/assessment",
+        expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+      ),
     );
     expect(fetchMock).not.toHaveBeenCalledWith(
       expect.stringContaining("/progress"),

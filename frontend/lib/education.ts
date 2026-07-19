@@ -52,6 +52,18 @@ export type AdaptiveAssessment = {
   question: AssessmentQuestion;
 };
 
+export type AssessmentAttempt = {
+  id: number;
+  lesson_slug: string;
+  competency: string;
+  difficulty: string;
+  question_id: string;
+  selected_option: number;
+  score: number;
+  passed: boolean;
+  created_at: string;
+};
+
 export type AssessmentResult = {
   lesson_slug: string;
   competency: string;
