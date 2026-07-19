@@ -8,12 +8,16 @@ from app.models.investigation import Investigation
 from app.models.investigation_evidence import ClaimEvidence, InvestigationClaim
 from app.models.user import User
 from app.schemas.investigation_evidence import (
+    ClaimAssessmentUpdate,
     ClaimCreate,
     ClaimRead,
     ClaimUpdate,
+    ClaimValidationSummary,
+    EvidenceAssessmentUpdate,
     EvidenceCreate,
     EvidenceRead,
     EvidenceUpdate,
+    InvestigationValidationSummary,
 )
 
 router = APIRouter()
@@ -52,6 +56,26 @@ def _owned_evidence(db: Session, user_id: int, evidence_id: int) -> ClaimEvidenc
     if evidence is None:
         raise HTTPException(status_code=404, detail="Evidence not found")
     return evidence
+
+
+def _claim_summary(db: Session, claim: InvestigationClaim) -> ClaimValidationSummary:
+    evidence = list(
+        db.scalars(select(ClaimEvidence).where(ClaimEvidence.claim_id == claim.id)).all()
+    )
+    supporting_count = sum(item.relationship == "supports" for item in evidence)
+    contradicting_count = sum(item.relationship == "contradicts" for item in evidence)
+    neutral_count = sum(item.relationship == "neutral" for item in evidence)
+    assessed_evidence_count = sum(item.credibility_rating is not None for item in evidence)
+    return ClaimValidationSummary(
+        claim_id=claim.id,
+        confidence_level=claim.confidence_level,
+        supporting_count=supporting_count,
+        contradicting_count=contradicting_count,
+        neutral_count=neutral_count,
+        assessed_evidence_count=assessed_evidence_count,
+        total_evidence_count=len(evidence),
+        has_unresolved_contradiction=contradicting_count > 0,
+    )
 
 
 @router.post(
@@ -101,6 +125,58 @@ def update_claim(
     db.commit()
     db.refresh(claim)
     return claim
+
+
+@router.patch("/claims/{claim_id}/assessment", response_model=ClaimRead)
+def update_claim_assessment(
+    claim_id: int,
+    payload: ClaimAssessmentUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> InvestigationClaim:
+    claim = _owned_claim(db, current_user.id, claim_id)
+    claim.confidence_level = payload.confidence_level
+    claim.confidence_rationale = payload.confidence_rationale
+    db.commit()
+    db.refresh(claim)
+    return claim
+
+
+@router.get("/claims/{claim_id}/summary", response_model=ClaimValidationSummary)
+def get_claim_summary(
+    claim_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ClaimValidationSummary:
+    claim = _owned_claim(db, current_user.id, claim_id)
+    return _claim_summary(db, claim)
+
+
+@router.get("/{investigation_id}/validation-summary", response_model=InvestigationValidationSummary)
+def get_investigation_validation_summary(
+    investigation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> InvestigationValidationSummary:
+    _owned_investigation(db, current_user.id, investigation_id)
+    claims = list(
+        db.scalars(
+            select(InvestigationClaim)
+            .where(InvestigationClaim.investigation_id == investigation_id)
+            .order_by(InvestigationClaim.id)
+        ).all()
+    )
+    summaries = [_claim_summary(db, claim) for claim in claims]
+    return InvestigationValidationSummary(
+        investigation_id=investigation_id,
+        claim_count=len(claims),
+        assessed_claim_count=sum(claim.confidence_level is not None for claim in claims),
+        low_confidence_count=sum(claim.confidence_level == "low" for claim in claims),
+        medium_confidence_count=sum(claim.confidence_level == "medium" for claim in claims),
+        high_confidence_count=sum(claim.confidence_level == "high" for claim in claims),
+        unresolved_contradiction_count=sum(summary.has_unresolved_contradiction for summary in summaries),
+        claims=summaries,
+    )
 
 
 @router.delete("/claims/{claim_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -159,6 +235,21 @@ def update_evidence(
     evidence = _owned_evidence(db, current_user.id, evidence_id)
     for field_name, value in payload.model_dump().items():
         setattr(evidence, field_name, value)
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+@router.patch("/evidence/{evidence_id}/assessment", response_model=EvidenceRead)
+def update_evidence_assessment(
+    evidence_id: int,
+    payload: EvidenceAssessmentUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ClaimEvidence:
+    evidence = _owned_evidence(db, current_user.id, evidence_id)
+    evidence.credibility_rating = payload.credibility_rating
+    evidence.credibility_rationale = payload.credibility_rationale
     db.commit()
     db.refresh(evidence)
     return evidence

@@ -16,10 +16,19 @@ describe("InvestigationWorkspace", () => {
   beforeEach(() => vi.unstubAllGlobals());
 
   it("renders private investigations and updates status", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify([investigation]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ...investigation, status: "in_review" }), { status: 200 }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/investigations" && !init?.method) {
+        return new Response(JSON.stringify([investigation]), { status: 200 });
+      }
+      if (url === "/api/investigations/7/claims") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url === "/api/investigations/7" && init?.method === "PATCH") {
+        return new Response(JSON.stringify({ ...investigation, status: "in_review" }), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<InvestigationWorkspace />);
@@ -33,9 +42,19 @@ describe("InvestigationWorkspace", () => {
   });
 
   it("creates an investigation and supports the empty state", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(investigation), { status: 201 }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/investigations" && init?.method === "POST") {
+        return new Response(JSON.stringify(investigation), { status: 201 });
+      }
+      if (url === "/api/investigations") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (url === "/api/investigations/7/claims") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<InvestigationWorkspace />);

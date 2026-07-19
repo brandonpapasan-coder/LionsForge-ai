@@ -16,6 +16,8 @@ class InvestigationClaim(Base):
         nullable=False,
     )
     statement: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence_level: Mapped[str | None] = mapped_column(String(24), index=True, nullable=True)
+    confidence_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -39,6 +41,8 @@ class ClaimEvidence(Base):
     evidence_type: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
     relationship: Mapped[str] = mapped_column(String(24), index=True, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    credibility_rating: Mapped[str | None] = mapped_column(String(24), index=True, nullable=True)
+    credibility_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
