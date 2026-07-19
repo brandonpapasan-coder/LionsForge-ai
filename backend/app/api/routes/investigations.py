@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.routes.investigation_evidence import router as evidence_router
 from app.db.session import get_db
 from app.models.investigation import Investigation
 from app.models.user import User
@@ -79,3 +80,6 @@ def update_investigation(
     db.commit()
     db.refresh(investigation)
     return investigation
+
+
+router.include_router(evidence_router)

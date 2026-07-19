@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
+import { ClaimEvidencePanel } from "@/components/claim-evidence-panel";
 import type { Investigation, InvestigationStatus } from "@/lib/investigations";
 
 const statuses: InvestigationStatus[] = ["open", "in_review", "validated", "archived"];
@@ -30,9 +31,7 @@ export function InvestigationWorkspace() {
       }
     }
     void load();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   async function createInvestigation(event: FormEvent) {
@@ -82,7 +81,7 @@ export function InvestigationWorkspace() {
         <div>
           <p className="eyebrow">RESEARCH VALIDATION WORKSPACE</p>
           <h1>Turn questions into auditable investigations.</h1>
-          <p>Define the question, preserve ownership, and move each investigation through a clear validation lifecycle.</p>
+          <p>Define the question, map claims to evidence, and preserve a clear validation lifecycle.</p>
         </div>
       </header>
 
@@ -105,6 +104,7 @@ export function InvestigationWorkspace() {
             <div className="lesson-meta"><span>{item.status.replaceAll("_", " ")}</span><time dateTime={item.updated_at}>{new Date(item.updated_at).toLocaleString()}</time></div>
             <h3>{item.title}</h3><p>{item.research_question}</p>
             <label>Validation status<select value={item.status} disabled={busy} onChange={(event) => void updateStatus(item, event.target.value as InvestigationStatus)}>{statuses.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
+            <ClaimEvidencePanel investigationId={item.id} />
           </article>
         ))}</div> : null}
         {error ? <p role="alert">{error}</p> : null}
