@@ -104,17 +104,6 @@ jobs:
       - name: Validate OpenAPI contract
         run: python scripts/validate_openapi.py
 
-      - name: Upload backend quality artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-quality-artifacts
-          path: |
-            backend/coverage.xml
-            backend/openapi.json
-            backend/pytest.log
-          if-no-files-found: warn
-
       - name: Build Docker image
         run: docker build -t lionsforge-backend:ci .
 
@@ -135,4 +124,19 @@ jobs:
           exit 1
 
       - name: Performance smoke
-        run: python scripts/performance_smoke.py
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/performance_smoke.py 2>&1 | tee performance-smoke.log
+
+      - name: Upload backend quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-quality-artifacts
+          path: |
+            backend/coverage.xml
+            backend/openapi.json
+            backend/pytest.log
+            backend/performance-smoke.log
+          if-no-files-found: warn
