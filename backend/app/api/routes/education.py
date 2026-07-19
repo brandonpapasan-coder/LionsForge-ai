@@ -16,6 +16,7 @@ from app.schemas.education import (
     AssessmentQuestionRead,
     AssessmentResultRead,
     AssessmentSubmission,
+    CompetencyTrendRead,
     EducationHubRead,
     LessonProgressUpdate,
     LessonRead,
@@ -27,6 +28,9 @@ router = APIRouter()
 REMEDIATION_SCORE_THRESHOLD = 70
 ASSESSMENT_PASS_SCORE = 70
 REPEATED_FAILURE_THRESHOLD = 2
+TREND_MIN_ATTEMPTS = 4
+TREND_WINDOW_SIZE = 2
+TREND_DELTA_THRESHOLD = 20
 
 
 @dataclass
@@ -64,14 +68,18 @@ def _prerequisite_titles(prerequisites: list[str]) -> str:
     return ", ".join(LESSON_BY_SLUG[slug]["title"] for slug in prerequisites)
 
 
-def _unresolved_failure_streaks(db: Session, user_id: int) -> dict[str, int]:
-    attempts = list(
+def _assessment_attempts(db: Session, user_id: int) -> list[AssessmentAttempt]:
+    return list(
         db.scalars(
             select(AssessmentAttempt)
             .where(AssessmentAttempt.user_id == user_id)
             .order_by(AssessmentAttempt.created_at.desc(), AssessmentAttempt.id.desc())
         ).all()
     )
+
+
+def _unresolved_failure_streaks(db: Session, user_id: int) -> dict[str, int]:
+    attempts = _assessment_attempts(db, user_id)
     streaks: dict[str, int] = defaultdict(int)
     resolved_lessons: set[str] = set()
     for attempt in attempts:
@@ -83,6 +91,65 @@ def _unresolved_failure_streaks(db: Session, user_id: int) -> dict[str, int]:
         else:
             streaks[attempt.lesson_slug] += 1
     return dict(streaks)
+
+
+def _competency_trends(db: Session, user_id: int) -> list[CompetencyTrendRead]:
+    attempts_by_competency: dict[str, list[AssessmentAttempt]] = defaultdict(list)
+    for attempt in _assessment_attempts(db, user_id):
+        attempts_by_competency[attempt.competency].append(attempt)
+
+    trends: list[CompetencyTrendRead] = []
+    for competency in sorted({lesson["competency"] for lesson in LESSONS}):
+        attempts = attempts_by_competency.get(competency, [])
+        attempt_count = len(attempts)
+        if attempt_count < TREND_MIN_ATTEMPTS:
+            trends.append(
+                CompetencyTrendRead(
+                    competency=competency,
+                    attempt_count=attempt_count,
+                    recent_average=None,
+                    prior_average=None,
+                    direction="insufficient_evidence",
+                    explanation=(
+                        f"Complete {TREND_MIN_ATTEMPTS - attempt_count} more assessment attempt"
+                        f"{'s' if TREND_MIN_ATTEMPTS - attempt_count != 1 else ''} to establish a reliable trend."
+                    ),
+                )
+            )
+            continue
+
+        recent_scores = [attempt.score for attempt in attempts[:TREND_WINDOW_SIZE]]
+        prior_scores = [attempt.score for attempt in attempts[TREND_WINDOW_SIZE : TREND_WINDOW_SIZE * 2]]
+        recent_average = round(sum(recent_scores) / len(recent_scores))
+        prior_average = round(sum(prior_scores) / len(prior_scores))
+        delta = recent_average - prior_average
+        if delta >= TREND_DELTA_THRESHOLD:
+            direction = "improving"
+            explanation = (
+                f"Recent performance improved by {delta} points, from {prior_average}% to {recent_average}%."
+            )
+        elif delta <= -TREND_DELTA_THRESHOLD:
+            direction = "declining"
+            explanation = (
+                f"Recent performance decreased by {abs(delta)} points, from {prior_average}% to {recent_average}%. "
+                "Use the recommended review path to rebuild confidence."
+            )
+        else:
+            direction = "stable"
+            explanation = (
+                f"Recent performance is stable at {recent_average}% compared with {prior_average}% previously."
+            )
+        trends.append(
+            CompetencyTrendRead(
+                competency=competency,
+                attempt_count=attempt_count,
+                recent_average=recent_average,
+                prior_average=prior_average,
+                direction=direction,
+                explanation=explanation,
+            )
+        )
+    return trends
 
 
 def _build_hub(db: Session, user_id: int) -> EducationHubRead:
@@ -109,7 +176,6 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         competency.total += 1
 
     competencies = []
-    competency_metrics: dict[str, tuple[int | None, int]] = {}
     for competency_name, counts in sorted(competency_counts.items()):
         completion_component = round((counts.completed / counts.total) * 100)
         average_score = round(sum(counts.scores) / len(counts.scores)) if counts.scores else None
@@ -118,7 +184,6 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
             if average_score is not None
             else completion_component
         )
-        competency_metrics[competency_name] = (average_score, mastery_percent)
         competencies.append(
             {
                 "competency": competency_name,
@@ -165,12 +230,7 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
 
     remediation_candidates = sorted(
         (
-            (
-                -failure_streaks.get(lesson["slug"], 0),
-                progress_by_slug[lesson["slug"]].score,
-                index,
-                lesson,
-            )
+            (-failure_streaks.get(lesson["slug"], 0), progress_by_slug[lesson["slug"]].score, index, lesson)
             for index, lesson in enumerate(LESSONS)
             if lesson_states[lesson["slug"]][0] == "remediation"
         ),
@@ -192,8 +252,7 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
             )
     else:
         available_lesson = next(
-            (lesson for lesson in LESSONS if lesson_states[lesson["slug"]][0] == "available"),
-            None,
+            (lesson for lesson in LESSONS if lesson_states[lesson["slug"]][0] == "available"), None
         )
         if available_lesson is not None:
             recommended_lesson_slug = available_lesson["slug"]
@@ -298,13 +357,15 @@ def get_assessment_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[AssessmentAttempt]:
-    return list(
-        db.scalars(
-            select(AssessmentAttempt)
-            .where(AssessmentAttempt.user_id == current_user.id)
-            .order_by(AssessmentAttempt.created_at.desc(), AssessmentAttempt.id.desc())
-        ).all()
-    )
+    return _assessment_attempts(db, current_user.id)
+
+
+@router.get("/assessment/trends", response_model=list[CompetencyTrendRead])
+def get_competency_trends(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CompetencyTrendRead]:
+    return _competency_trends(db, current_user.id)
 
 
 @router.post("/assessment", response_model=AssessmentResultRead)
