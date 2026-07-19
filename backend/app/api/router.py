@@ -7,6 +7,7 @@ from app.api.routes import (
     entity_resolution,
     evidence_intelligence,
     executive_intelligence,
+    investigations,
     knowledge_extraction,
     knowledge_federation,
     knowledge_graph,
@@ -68,6 +69,7 @@ def build_api_router(
     router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     router.include_router(release_countdown.router, prefix="/release-countdown", tags=["release-countdown"])
     router.include_router(education.router, prefix="/education", tags=["education"])
+    router.include_router(investigations.router, prefix="/investigations", tags=["investigations"])
     router.include_router(knowledge_graph.router, prefix="/knowledge-graph", tags=["knowledge-graph"])
     router.include_router(knowledge_extraction.router, prefix="/knowledge-graph", tags=["knowledge-extraction"])
     router.include_router(entity_resolution.router, prefix="/knowledge-graph", tags=["entity-resolution"])

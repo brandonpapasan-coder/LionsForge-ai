@@ -6,6 +6,7 @@ from app.models.education import AssessmentAttempt, LessonProgress
 from app.models.entity_resolution import KnowledgeEntityAlias, KnowledgeEntityMergeAudit
 from app.models.evidence import EvidenceRecord, EvidenceReviewEvent, ResearchReviewAction, ResearchReviewActionHistory
 from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
+from app.models.investigation import Investigation
 from app.models.knowledge_federation import KnowledgeFederationLink, KnowledgeFederationRevision
 from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
@@ -50,6 +51,7 @@ __all__ = [
     "EvidenceRecord",
     "EvidenceReviewEvent",
     "ExecutiveBriefSnapshot",
+    "Investigation",
     "KnowledgeEntity",
     "KnowledgeEntityAlias",
     "KnowledgeEntityMergeAudit",
