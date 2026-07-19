@@ -15,14 +15,26 @@ export function ClaimEvidencePanel({ investigationId }: { investigationId: numbe
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/investigations/${investigationId}/claims`, { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error();
-        const items = (await response.json()) as InvestigationClaim[];
-        if (active) setClaims(items);
-      })
-      .catch(() => active && setError("Claims and evidence are temporarily unavailable."));
-    return () => { active = false; };
+
+    async function loadClaims() {
+      try {
+        const response = await fetch(`/api/investigations/${investigationId}/claims`, { cache: "no-store" });
+        if (!response?.ok) throw new Error();
+        const payload: unknown = await response.json();
+        if (!Array.isArray(payload)) throw new Error();
+        if (active) setClaims(payload as InvestigationClaim[]);
+      } catch {
+        if (active) {
+          setClaims([]);
+          setError("Claims and evidence are temporarily unavailable.");
+        }
+      }
+    }
+
+    void loadClaims();
+    return () => {
+      active = false;
+    };
   }, [investigationId]);
 
   async function createClaim(event: FormEvent) {
@@ -113,7 +125,7 @@ export function ClaimEvidencePanel({ investigationId }: { investigationId: numbe
         <button type="submit" disabled={busy}>Add claim</button>
       </form>
       {claims === null && !error ? <p>Loading claims…</p> : null}
-      {claims?.length === 0 ? <p>No claims mapped yet.</p> : null}
+      {claims?.length === 0 && !error ? <p>No claims mapped yet.</p> : null}
       {claims?.map((claim) => (
         <article key={claim.id} className="lesson-card">
           <h5>{claim.statement}</h5>
