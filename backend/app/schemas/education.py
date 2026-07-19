@@ -33,6 +33,15 @@ class CompetencySummary(BaseModel):
     proficiency_band: str
 
 
+class CompetencyTrendRead(BaseModel):
+    competency: str
+    attempt_count: int
+    recent_average: int | None
+    prior_average: int | None
+    direction: str
+    explanation: str
+
+
 class EducationHubRead(BaseModel):
     completed_lessons: int
     total_lessons: int
