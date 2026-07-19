@@ -35,7 +35,8 @@ export function ValidationLedgerPanel({ investigationId }: { investigationId: nu
     try {
       const response = await fetch(`/api/investigations/claims/${claimId}/judgments`, { cache: "no-store" });
       if (!response.ok) throw new Error();
-      setJudgments((current) => ({ ...current, [claimId]: (await response.json()) as ClaimValidationJudgment[] }));
+      const history = (await response.json()) as ClaimValidationJudgment[];
+      setJudgments((current) => ({ ...current, [claimId]: history }));
     } catch {
       setError("Validation history could not be loaded.");
     }
@@ -45,7 +46,8 @@ export function ValidationLedgerPanel({ investigationId }: { investigationId: nu
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     try {
       const response = await fetch(`/api/investigations/claims/${claimId}/judgments`, {
         method: "POST",
@@ -60,7 +62,7 @@ export function ValidationLedgerPanel({ investigationId }: { investigationId: nu
       if (!response.ok) throw new Error();
       const created = (await response.json()) as ClaimValidationJudgment;
       setJudgments((current) => ({ ...current, [claimId]: [created, ...(current[claimId] ?? [])] }));
-      event.currentTarget.reset();
+      form.reset();
     } catch {
       setError("A validation judgment requires a status, confidence level, and written rationale.");
     } finally {
