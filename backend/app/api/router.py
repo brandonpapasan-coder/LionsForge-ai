@@ -53,10 +53,15 @@ from app.api.routes import (
     user_authored_memory,
 )
 from app.core.config import Settings, get_settings
+from app.core.legacy_finance_config import LegacyFinanceSettings, get_legacy_finance_settings
 
 
-def build_api_router(settings: Settings | None = None) -> APIRouter:
+def build_api_router(
+    settings: Settings | None = None,
+    legacy_finance_settings: LegacyFinanceSettings | None = None,
+) -> APIRouter:
     resolved_settings = settings or get_settings()
+    resolved_legacy_finance_settings = legacy_finance_settings or get_legacy_finance_settings()
     router = APIRouter()
 
     router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -110,7 +115,7 @@ def build_api_router(settings: Settings | None = None) -> APIRouter:
     router.include_router(news.router, prefix="/news", tags=["news"])
     router.include_router(system.router, prefix="/system", tags=["system"])
 
-    if resolved_settings.enable_legacy_finance_modules:
+    if resolved_legacy_finance_settings.enable_legacy_finance_modules:
         from app.api.routes import (
             advanced_alerts,
             alerts,
