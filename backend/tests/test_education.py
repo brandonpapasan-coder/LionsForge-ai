@@ -1,4 +1,4 @@
-from tests.conftest import auth_headers
+from tests.conftest import auth_headers, pass_current_assessment
 
 
 def test_education_hub_requires_authentication(client):
@@ -19,50 +19,33 @@ def test_education_hub_returns_catalog_and_progress(client):
     assert payload["mastery_percent"] == 0
     assert payload["proficiency_band"] == "foundation"
     assert payload["recommended_lesson_slug"] == "financial-statements-foundations"
-    assert (
-        payload["recommendation_reason"]
-        == "Continue the curriculum with the next available foundation lesson."
-    )
+    assert payload["recommendation_reason"] == "Continue the curriculum with the next available foundation lesson."
 
-    updated = client.put(
-        "/api/v1/education/lessons/financial-statements-foundations/progress",
-        headers=headers,
-        json={"status": "completed", "score": 90},
-    )
-    assert updated.status_code == 200
-    payload = updated.json()
+    result = pass_current_assessment(client, headers)
+    payload = result["education_hub"]
     assert payload["completed_lessons"] == 1
     assert payload["assessed_lessons"] == 1
     assert payload["completion_percent"] == 25
-    assert payload["average_score"] == 90
-    assert payload["mastery_percent"] == 64
+    assert payload["average_score"] == 100
+    assert payload["mastery_percent"] == 70
     assert payload["proficiency_band"] == "proficient"
     assert payload["recommended_lesson_slug"] == "valuation-and-cash-flow"
-    assert (
-        payload["recommendation_reason"]
-        == "Continue with Valuation and Cash Flow; its prerequisite lessons are complete."
-    )
+    assert payload["recommendation_reason"] == "Continue with Valuation and Cash Flow; its prerequisite lessons are complete."
     lesson = next(item for item in payload["lessons"] if item["slug"] == "financial-statements-foundations")
     assert lesson["status"] == "completed"
-    assert lesson["score"] == 90
+    assert lesson["score"] == 100
     assert lesson["completed_at"] is not None
 
-    competency = next(
-        item for item in payload["competencies"] if item["competency"] == lesson["competency"]
-    )
+    competency = next(item for item in payload["competencies"] if item["competency"] == lesson["competency"])
     assert competency["assessed_lessons"] == 1
-    assert competency["average_score"] == 90
-    assert competency["mastery_percent"] == 94
+    assert competency["average_score"] == 100
+    assert competency["mastery_percent"] == 100
     assert competency["proficiency_band"] == "expert"
 
 
 def test_low_score_prioritizes_unfinished_remediation(client):
     headers = auth_headers(client)
-    client.put(
-        "/api/v1/education/lessons/financial-statements-foundations/progress",
-        headers=headers,
-        json={"status": "completed", "score": 95},
-    )
+    pass_current_assessment(client, headers)
     client.put(
         "/api/v1/education/lessons/valuation-and-cash-flow/progress",
         headers=headers,
@@ -85,20 +68,12 @@ def test_low_score_prioritizes_unfinished_remediation(client):
 
 def test_completed_path_has_no_recommendation(client):
     headers = auth_headers(client)
-    for slug in (
-        "financial-statements-foundations",
-        "valuation-and-cash-flow",
-        "evidence-quality-and-bias",
-        "research-thesis-construction",
-    ):
-        response = client.put(
-            f"/api/v1/education/lessons/{slug}/progress",
-            headers=headers,
-            json={"status": "completed", "score": 85},
-        )
-        assert response.status_code == 200
+    result = None
+    for _ in range(4):
+        result = pass_current_assessment(client, headers)
 
-    payload = response.json()
+    assert result is not None
+    payload = result["education_hub"]
     assert payload["recommended_lesson_slug"] is None
     assert payload["recommendation_reason"] == "All current lessons are complete."
 
@@ -178,11 +153,7 @@ def test_incorrect_assessment_keeps_lesson_in_remediation(client):
 
 def test_assessment_difficulty_advances_with_mastery(client):
     headers = auth_headers(client)
-    client.put(
-        "/api/v1/education/lessons/financial-statements-foundations/progress",
-        headers=headers,
-        json={"status": "completed", "score": 95},
-    )
+    pass_current_assessment(client, headers)
     client.put(
         "/api/v1/education/lessons/valuation-and-cash-flow/progress",
         headers=headers,
@@ -216,12 +187,7 @@ def test_stale_or_invalid_assessment_submission_is_rejected(client):
 
 def test_assessment_progress_is_isolated_by_user(client):
     owner_headers = auth_headers(client, email="assessment-owner@example.com")
-    assessment = client.get("/api/v1/education/assessment", headers=owner_headers).json()
-    client.post(
-        "/api/v1/education/assessment",
-        headers=owner_headers,
-        json={"question_id": assessment["question"]["id"], "selected_option": 1},
-    )
+    pass_current_assessment(client, owner_headers)
 
     other_headers = auth_headers(client, email="assessment-other@example.com")
     other = client.get("/api/v1/education", headers=other_headers).json()
@@ -231,17 +197,8 @@ def test_assessment_progress_is_isolated_by_user(client):
 
 def test_completed_path_rejects_new_assessment(client):
     headers = auth_headers(client)
-    for slug in (
-        "financial-statements-foundations",
-        "valuation-and-cash-flow",
-        "evidence-quality-and-bias",
-        "research-thesis-construction",
-    ):
-        client.put(
-            f"/api/v1/education/lessons/{slug}/progress",
-            headers=headers,
-            json={"status": "completed", "score": 85},
-        )
+    for _ in range(4):
+        pass_current_assessment(client, headers)
     response = client.get("/api/v1/education/assessment", headers=headers)
     assert response.status_code == 409
 
@@ -251,6 +208,6 @@ def test_unknown_lesson_is_rejected(client):
     response = client.put(
         "/api/v1/education/lessons/not-a-lesson/progress",
         headers=headers,
-        json={"status": "completed", "score": 80},
+        json={"status": "in_progress", "score": 80},
     )
     assert response.status_code == 404
