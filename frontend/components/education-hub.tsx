@@ -64,8 +64,8 @@ export function EducationHub() {
     };
   }, []);
 
-  async function updateLesson(lesson: Lesson, status: "in_progress" | "completed") {
-    if (lesson.path_state === "locked") return;
+  async function startLesson(lesson: Lesson) {
+    if (lesson.path_state === "locked" || lesson.status !== "not_started") return;
     lessonRequest.current?.abort();
     const controller = new AbortController();
     lessonRequest.current = controller;
@@ -75,7 +75,7 @@ export function EducationHub() {
       const response = await fetch(`/api/education/lessons/${lesson.slug}/progress`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status, score: status === "completed" ? 100 : null }),
+        body: JSON.stringify({ status: "in_progress", score: null }),
         signal: controller.signal,
       });
       if (controller.signal.aborted || !mounted.current || lessonRequest.current !== controller) return;
@@ -194,7 +194,7 @@ export function EducationHub() {
         <div className="lesson-meta"><span>adaptive assessment</span>{assessment ? <span>{assessment.difficulty}</span> : null}</div>
         <h2>Competency check</h2>
         {!assessment && !assessmentResult ? (
-          <><p>Measure your current understanding and update your learning path with an explainable, competency-based checkpoint.</p><button type="button" disabled={assessmentBusy || !data.recommended_lesson_slug} onClick={() => void loadAssessment()}>{assessmentBusy ? "Loading…" : data.recommended_lesson_slug ? "Begin assessment" : "Path complete"}</button></>
+          <><p>Measure your current understanding and update your learning path with an explainable, competency-based checkpoint. Passing this check is the only way to complete a lesson.</p><button type="button" disabled={assessmentBusy || !data.recommended_lesson_slug} onClick={() => void loadAssessment()}>{assessmentBusy ? "Loading…" : data.recommended_lesson_slug ? "Begin assessment" : "Path complete"}</button></>
         ) : null}
         {assessment ? (
           <div><p><strong>{assessment.competency.replaceAll("-", " ")}</strong> · {assessment.difficulty_reason}</p><p>{assessment.question.objective}</p><fieldset><legend>{assessment.question.prompt}</legend>{assessment.question.options.map((option, index) => (<label key={option}><input type="radio" name="assessment-option" value={index} checked={selectedOption === index} onChange={() => setSelectedOption(index)} />{option}</label>))}</fieldset><button type="button" disabled={assessmentBusy || selectedOption === null} onClick={() => void submitAssessment()}>{assessmentBusy ? "Scoring…" : "Submit assessment"}</button></div>
@@ -216,7 +216,7 @@ export function EducationHub() {
               <div className="lesson-meta"><span>{lesson.level}</span><span>{lesson.estimated_minutes} min</span><span>{lesson.path_state}</span></div>
               <h2>{lesson.title}</h2><p>{lesson.description}</p><p>{lesson.path_reason}</p>
               {lesson.prerequisites.length > 0 ? <small>Prerequisites: {lesson.prerequisites.map((slug) => data.lessons.find((item) => item.slug === slug)?.title ?? slug).join(", ")}</small> : <small>No prerequisite lessons.</small>}
-              <div className="lesson-footer"><span className={`lesson-status status-${lesson.status}`}>{lesson.status.replaceAll("_", " ")}</span>{lesson.status === "completed" ? <strong>Score {lesson.score ?? 100}%</strong> : locked ? <button type="button" disabled>Complete prerequisites</button> : <button type="button" disabled={updating === lesson.slug} onClick={() => void updateLesson(lesson, lesson.status === "not_started" ? "in_progress" : "completed")}>{updating === lesson.slug ? "Saving…" : lesson.status === "not_started" ? "Start lesson" : "Complete lesson"}</button>}</div>
+              <div className="lesson-footer"><span className={`lesson-status status-${lesson.status}`}>{lesson.status.replaceAll("_", " ")}</span>{lesson.status === "completed" ? <strong>Score {lesson.score ?? 100}%</strong> : locked ? <button type="button" disabled>Complete prerequisites</button> : lesson.status === "not_started" ? <button type="button" disabled={updating === lesson.slug} onClick={() => void startLesson(lesson)}>{updating === lesson.slug ? "Saving…" : "Start lesson"}</button> : <button type="button" disabled={assessmentBusy} onClick={() => void loadAssessment()}>{assessmentBusy ? "Loading…" : "Take competency check"}</button>}</div>
             </article>
           );
         })}
