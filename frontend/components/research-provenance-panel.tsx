@@ -6,6 +6,7 @@ import type { ResearchEvidenceProvenanceLedger } from "@/lib/research-evidence-p
 
 const label = (value: string) => value.replaceAll("_", " ");
 const isAbortError = (error: unknown) => error instanceof DOMException && error.name === "AbortError";
+const formatScore = (value: number) => `${Math.round(value * 100)}%`;
 
 export function ResearchProvenancePanel({ projectId }: { projectId: number }) {
   const [ledger, setLedger] = useState<ResearchEvidenceProvenanceLedger | null>(null);
@@ -92,6 +93,11 @@ export function ResearchProvenancePanel({ projectId }: { projectId: number }) {
               <strong>{entry.source_title}</strong>
               <p>{entry.claim}</p>
               <p><strong>Status:</strong> {label(entry.validation_status)} · <strong>Source:</strong> {label(entry.source_type)}</p>
+              {entry.source_url ? <p><strong>URL:</strong> <a href={entry.source_url} target="_blank" rel="noreferrer">Open source</a></p> : null}
+              {entry.author || entry.publisher ? <p><strong>Attribution:</strong> {[entry.author, entry.publisher].filter(Boolean).join(" · ")}</p> : null}
+              {entry.published_at ? <p><strong>Published:</strong> {new Date(entry.published_at).toLocaleString()}</p> : null}
+              <p><strong>Quality:</strong> credibility {formatScore(entry.credibility_score)} · freshness {formatScore(entry.freshness_score)} · confidence {formatScore(entry.confidence_score)}</p>
+              <p className="muted"><strong>Fingerprint:</strong> <code>{entry.fingerprint}</code></p>
               {entry.reviewer_notes ? <p><strong>Review notes:</strong> {entry.reviewer_notes}</p> : null}
               {entry.contradiction_key ? <p><strong>Contradiction key:</strong> {entry.contradiction_key}</p> : null}
               {entry.supersedes_evidence_id ? <p><strong>Supersedes evidence:</strong> #{entry.supersedes_evidence_id}</p> : null}
