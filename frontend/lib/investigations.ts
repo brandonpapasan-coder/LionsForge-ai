@@ -2,6 +2,7 @@ export type InvestigationStatus = "open" | "in_review" | "validated" | "archived
 export type EvidenceType = "primary" | "secondary" | "dataset" | "expert" | "other";
 export type EvidenceRelationship = "supports" | "contradicts" | "neutral";
 export type AssessmentLevel = "low" | "medium" | "high";
+export type ValidationStatus = "unreviewed" | "supported" | "mixed" | "contradicted" | "insufficient";
 
 export type Investigation = {
   id: number;
@@ -34,6 +35,25 @@ export type ClaimEvidence = {
   credibility_rationale: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ClaimValidationJudgment = {
+  id: number;
+  claim_id: number;
+  reviewer_id: number;
+  validation_status: ValidationStatus;
+  confidence_level: AssessmentLevel;
+  rationale: string;
+  unresolved_questions: string | null;
+  reviewed_at: string;
+  is_stale: boolean;
+};
+
+export type ClaimValidationJudgmentCreate = {
+  validation_status: ValidationStatus;
+  confidence_level: AssessmentLevel;
+  rationale: string;
+  unresolved_questions?: string | null;
 };
 
 export type ClaimValidationSummary = {
