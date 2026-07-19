@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.api.router import build_api_router
 from app.core.config import Settings
+from app.core.legacy_finance_config import LegacyFinanceSettings
 
 LEGACY_PREFIXES = (
     "/api/v1/market",
@@ -53,17 +54,21 @@ CORE_PREFIXES = (
 
 
 def openapi_paths(*, enabled: bool) -> set[str]:
-    settings = Settings(
+    settings = Settings(_env_file=None)
+    legacy_finance_settings = LegacyFinanceSettings(
         _env_file=None,
         enable_legacy_finance_modules=enabled,
     )
     app = FastAPI()
-    app.include_router(build_api_router(settings), prefix="/api/v1")
+    app.include_router(
+        build_api_router(settings, legacy_finance_settings),
+        prefix="/api/v1",
+    )
     return set(app.openapi()["paths"])
 
 
 def test_legacy_finance_routes_are_disabled_by_default():
-    settings = Settings(_env_file=None, enable_legacy_finance_modules=False)
+    settings = LegacyFinanceSettings(_env_file=None)
     assert settings.enable_legacy_finance_modules is False
 
     paths = openapi_paths(enabled=False)
