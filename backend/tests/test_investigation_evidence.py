@@ -24,15 +24,15 @@ def create_claim(client, headers, investigation_id, statement="The source suppor
     return response.json()
 
 
-def create_evidence(client, headers, claim_id):
+def create_evidence(client, headers, claim_id, relationship="supports", title="Primary source"):
     response = client.post(
         f"{BASE}/claims/{claim_id}/evidence",
         headers=headers,
         json={
-            "source_title": "Primary source",
+            "source_title": title,
             "source_url": "https://example.com/source",
             "evidence_type": "primary",
-            "relationship": "supports",
+            "relationship": relationship,
             "notes": "Directly addresses the claim.",
         },
     )
@@ -134,3 +134,99 @@ def test_deleting_claim_cascades_evidence(client):
 
     assert client.delete(f"{BASE}/claims/{claim['id']}", headers=headers).status_code == 204
     assert client.delete(f"{BASE}/evidence/{evidence['id']}", headers=headers).status_code == 404
+
+
+def test_assessments_require_rationale_and_are_owner_isolated(client):
+    owner = auth_headers(client, email="assessment-owner@example.com")
+    other = auth_headers(client, email="assessment-other@example.com")
+    investigation = create_investigation(client, owner)
+    claim = create_claim(client, owner, investigation["id"])
+    evidence = create_evidence(client, owner, claim["id"])
+
+    missing_claim_rationale = client.patch(
+        f"{BASE}/claims/{claim['id']}/assessment",
+        headers=owner,
+        json={"confidence_level": "high", "confidence_rationale": "   "},
+    )
+    assert missing_claim_rationale.status_code == 422
+
+    invalid_evidence_rating = client.patch(
+        f"{BASE}/evidence/{evidence['id']}/assessment",
+        headers=owner,
+        json={"credibility_rating": "certain", "credibility_rationale": "Reviewed source."},
+    )
+    assert invalid_evidence_rating.status_code == 422
+
+    claim_assessment = client.patch(
+        f"{BASE}/claims/{claim['id']}/assessment",
+        headers=owner,
+        json={"confidence_level": "medium", "confidence_rationale": "Support exists, but a contradiction remains."},
+    )
+    assert claim_assessment.status_code == 200
+    assert claim_assessment.json()["confidence_level"] == "medium"
+
+    evidence_assessment = client.patch(
+        f"{BASE}/evidence/{evidence['id']}/assessment",
+        headers=owner,
+        json={"credibility_rating": "high", "credibility_rationale": "Primary source with direct observations."},
+    )
+    assert evidence_assessment.status_code == 200
+    assert evidence_assessment.json()["credibility_rating"] == "high"
+
+    assert client.patch(
+        f"{BASE}/claims/{claim['id']}/assessment",
+        headers=other,
+        json={"confidence_level": "low", "confidence_rationale": "Unauthorized."},
+    ).status_code == 404
+    assert client.get(f"{BASE}/{investigation['id']}/validation-summary", headers=other).status_code == 404
+
+
+def test_validation_summaries_count_relationships_and_confidence(client):
+    headers = auth_headers(client, email="summary-owner@example.com")
+    investigation = create_investigation(client, headers)
+    assessed_claim = create_claim(client, headers, investigation["id"], "Assessed claim")
+    unassessed_claim = create_claim(client, headers, investigation["id"], "Unassessed claim")
+
+    supporting = create_evidence(client, headers, assessed_claim["id"], "supports", "Supporting source")
+    create_evidence(client, headers, assessed_claim["id"], "contradicts", "Contradicting source")
+    create_evidence(client, headers, assessed_claim["id"], "neutral", "Neutral source")
+
+    assert client.patch(
+        f"{BASE}/claims/{assessed_claim['id']}/assessment",
+        headers=headers,
+        json={"confidence_level": "medium", "confidence_rationale": "Mixed evidence requires caution."},
+    ).status_code == 200
+    assert client.patch(
+        f"{BASE}/evidence/{supporting['id']}/assessment",
+        headers=headers,
+        json={"credibility_rating": "high", "credibility_rationale": "Direct primary documentation."},
+    ).status_code == 200
+
+    claim_summary = client.get(f"{BASE}/claims/{assessed_claim['id']}/summary", headers=headers)
+    assert claim_summary.status_code == 200
+    assert claim_summary.json() == {
+        "claim_id": assessed_claim["id"],
+        "confidence_level": "medium",
+        "supporting_count": 1,
+        "contradicting_count": 1,
+        "neutral_count": 1,
+        "assessed_evidence_count": 1,
+        "total_evidence_count": 3,
+        "has_unresolved_contradiction": True,
+    }
+
+    investigation_summary = client.get(
+        f"{BASE}/{investigation['id']}/validation-summary", headers=headers
+    )
+    assert investigation_summary.status_code == 200
+    body = investigation_summary.json()
+    assert body["claim_count"] == 2
+    assert body["assessed_claim_count"] == 1
+    assert body["medium_confidence_count"] == 1
+    assert body["low_confidence_count"] == 0
+    assert body["high_confidence_count"] == 0
+    assert body["unresolved_contradiction_count"] == 1
+    assert {item["claim_id"] for item in body["claims"]} == {
+        assessed_claim["id"],
+        unassessed_claim["id"],
+    }
