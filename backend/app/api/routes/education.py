@@ -26,6 +26,7 @@ from app.services.education import LESSON_BY_SLUG, LESSONS
 router = APIRouter()
 REMEDIATION_SCORE_THRESHOLD = 70
 ASSESSMENT_PASS_SCORE = 70
+REPEATED_FAILURE_THRESHOLD = 2
 
 
 @dataclass
@@ -63,10 +64,32 @@ def _prerequisite_titles(prerequisites: list[str]) -> str:
     return ", ".join(LESSON_BY_SLUG[slug]["title"] for slug in prerequisites)
 
 
+def _unresolved_failure_streaks(db: Session, user_id: int) -> dict[str, int]:
+    attempts = list(
+        db.scalars(
+            select(AssessmentAttempt)
+            .where(AssessmentAttempt.user_id == user_id)
+            .order_by(AssessmentAttempt.created_at.desc(), AssessmentAttempt.id.desc())
+        ).all()
+    )
+    streaks: dict[str, int] = defaultdict(int)
+    resolved_lessons: set[str] = set()
+    for attempt in attempts:
+        if attempt.lesson_slug in resolved_lessons:
+            continue
+        if attempt.passed:
+            resolved_lessons.add(attempt.lesson_slug)
+            streaks.pop(attempt.lesson_slug, None)
+        else:
+            streaks[attempt.lesson_slug] += 1
+    return dict(streaks)
+
+
 def _build_hub(db: Session, user_id: int) -> EducationHubRead:
     progress_rows = list(db.scalars(select(LessonProgress).where(LessonProgress.user_id == user_id)).all())
     progress_by_slug = {row.lesson_slug: row for row in progress_rows}
     completed_slugs = {row.lesson_slug for row in progress_rows if row.status == "completed"}
+    failure_streaks = _unresolved_failure_streaks(db, user_id)
 
     competency_counts: dict[str, CompetencyAccumulator] = defaultdict(CompetencyAccumulator)
     completed = 0
@@ -114,12 +137,19 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
         progress = progress_by_slug.get(slug)
         prerequisites = lesson["prerequisites"]
         missing_prerequisites = [item for item in prerequisites if item not in completed_slugs]
+        failure_streak = failure_streaks.get(slug, 0)
         if progress and progress.status == "completed":
             lesson_states[slug] = ("completed", "Lesson completed and prerequisite credit earned.")
         elif missing_prerequisites:
             lesson_states[slug] = (
                 "locked",
                 f"Complete {_prerequisite_titles(missing_prerequisites)} before this lesson becomes available.",
+            )
+        elif failure_streak >= REPEATED_FAILURE_THRESHOLD:
+            lesson_states[slug] = (
+                "remediation",
+                f"Targeted review is recommended after {failure_streak} consecutive unsuccessful attempts. "
+                "The difficulty is reduced to rebuild mastery without penalty.",
             )
         elif progress and progress.score is not None and progress.score < REMEDIATION_SCORE_THRESHOLD:
             lesson_states[slug] = (
@@ -135,19 +165,31 @@ def _build_hub(db: Session, user_id: int) -> EducationHubRead:
 
     remediation_candidates = sorted(
         (
-            (progress_by_slug[lesson["slug"]].score, index, lesson)
+            (
+                -failure_streaks.get(lesson["slug"], 0),
+                progress_by_slug[lesson["slug"]].score,
+                index,
+                lesson,
+            )
             for index, lesson in enumerate(LESSONS)
             if lesson_states[lesson["slug"]][0] == "remediation"
         ),
-        key=lambda item: (item[0], item[1]),
+        key=lambda item: (item[0], item[1], item[2]),
     )
     if remediation_candidates:
-        score, _, lesson = remediation_candidates[0]
+        negative_streak, score, _, lesson = remediation_candidates[0]
+        failure_streak = -negative_streak
         recommended_lesson_slug = lesson["slug"]
-        recommendation_reason = (
-            f"Strengthen {_humanize(lesson['competency'])}: the latest {score}% assessment score is below the "
-            f"{REMEDIATION_SCORE_THRESHOLD}% mastery threshold."
-        )
+        if failure_streak >= REPEATED_FAILURE_THRESHOLD:
+            recommendation_reason = (
+                f"Rebuild {_humanize(lesson['competency'])} with targeted remediation after "
+                f"{failure_streak} consecutive unsuccessful attempts. The next check uses foundation difficulty."
+            )
+        else:
+            recommendation_reason = (
+                f"Strengthen {_humanize(lesson['competency'])}: the latest {score}% assessment score is below the "
+                f"{REMEDIATION_SCORE_THRESHOLD}% mastery threshold."
+            )
     else:
         available_lesson = next(
             (lesson for lesson in LESSONS if lesson_states[lesson["slug"]][0] == "available"),
@@ -211,7 +253,15 @@ def _assessment_for_user(db: Session, user_id: int) -> AdaptiveAssessmentRead:
 
     lesson = LESSON_BY_SLUG[hub.recommended_lesson_slug]
     competency = next(item for item in hub.competencies if item.competency == lesson["competency"])
-    difficulty, reason = _assessment_difficulty(competency.mastery_percent)
+    failure_streak = _unresolved_failure_streaks(db, user_id).get(lesson["slug"], 0)
+    if failure_streak >= REPEATED_FAILURE_THRESHOLD:
+        difficulty = "foundation"
+        reason = (
+            f"Foundation difficulty selected for targeted remediation after {failure_streak} consecutive "
+            "unsuccessful attempts. A passing attempt will clear this remediation condition."
+        )
+    else:
+        difficulty, reason = _assessment_difficulty(competency.mastery_percent)
     question = ASSESSMENT_BANK[lesson["slug"]][difficulty]
     return AdaptiveAssessmentRead(
         lesson_slug=lesson["slug"],
