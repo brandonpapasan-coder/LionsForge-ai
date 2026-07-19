@@ -14,10 +14,10 @@ class ProvenanceLedgerEntry(BaseModel):
     publisher: str | None = None
     author: str | None = None
     published_at: datetime | None = None
-    fingerprint: str
-    credibility_score: float
-    freshness_score: float
-    confidence_score: float
+    fingerprint: str = ""
+    credibility_score: float = 0.0
+    freshness_score: float = 0.0
+    confidence_score: float = 0.0
     claim: str
     validation_status: str
     contradiction_key: str | None
