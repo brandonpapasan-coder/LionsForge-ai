@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.education import LessonProgress
+from app.models.education import AssessmentAttempt, LessonProgress
 from app.models.user import User
 from app.schemas.education import (
     AdaptiveAssessmentRead,
+    AssessmentAttemptRead,
     AssessmentQuestionRead,
     AssessmentResultRead,
     AssessmentSubmission,
@@ -242,6 +243,20 @@ def get_adaptive_assessment(
     return _assessment_for_user(db, current_user.id)
 
 
+@router.get("/assessment/history", response_model=list[AssessmentAttemptRead])
+def get_assessment_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[AssessmentAttempt]:
+    return list(
+        db.scalars(
+            select(AssessmentAttempt)
+            .where(AssessmentAttempt.user_id == current_user.id)
+            .order_by(AssessmentAttempt.created_at.desc(), AssessmentAttempt.id.desc())
+        ).all()
+    )
+
+
 @router.post("/assessment", response_model=AssessmentResultRead)
 def submit_adaptive_assessment(
     payload: AssessmentSubmission,
@@ -269,6 +284,18 @@ def submit_adaptive_assessment(
     progress.status = "completed" if passed else "in_progress"
     progress.score = score
     progress.completed_at = datetime.utcnow() if passed else None
+    db.add(
+        AssessmentAttempt(
+            user_id=current_user.id,
+            lesson_slug=assessment.lesson_slug,
+            competency=assessment.competency,
+            difficulty=assessment.difficulty,
+            question_id=question["id"],
+            selected_option=payload.selected_option,
+            score=score,
+            passed=passed,
+        )
+    )
     db.commit()
 
     feedback = (
@@ -315,7 +342,7 @@ def update_lesson_progress(
 
     progress.status = payload.status
     progress.score = payload.score
-    progress.completed_at = datetime.utcnow() if payload.status == "completed" else None
+    progress.completed_at = None
     db.commit()
 
     return _build_hub(db, current_user.id)
