@@ -79,14 +79,28 @@ def test_provenance_ledger_orders_creation_review_and_supersession(client):
     assert body["entries"][1]["reviewer_notes"] == "Resolve the conflicting interpretation."
     assert body["entries"][3]["supersedes_evidence_id"] == first["id"]
 
+    first_events = [entry for entry in body["entries"] if entry["evidence_id"] == first["id"]]
+    assert first_events
+    assert {entry["fingerprint"] for entry in first_events} == {first["fingerprint"]}
+    assert {entry["source_url"] for entry in first_events} == {"https://example.com/initial"}
+    for entry in first_events:
+        assert 0.0 <= entry["credibility_score"] <= 1.0
+        assert 0.0 <= entry["freshness_score"] <= 1.0
+        assert 0.0 <= entry["confidence_score"] <= 1.0
+
 
 def test_provenance_ledger_warns_for_missing_non_user_source_url(client):
     headers = auth_headers(client, email="provenance-warning@example.com")
-    create_evidence(client, headers, title="Unlinked source", claim="A claim without a URL")
+    created = create_evidence(client, headers, title="Unlinked source", claim="A claim without a URL")
 
     body = client.get("/api/v1/research-evidence-provenance/ledger", headers=headers).json()
     assert body["summary"]["missing_source_metadata"] == 1
     assert body["entries"][0]["warning"] == "Source URL is missing for non-user evidence."
+    assert body["entries"][0]["source_url"] is None
+    assert body["entries"][0]["publisher"] is None
+    assert body["entries"][0]["author"] is None
+    assert body["entries"][0]["published_at"] is None
+    assert body["entries"][0]["fingerprint"] == created["fingerprint"]
 
 
 def test_provenance_ledger_is_owner_scoped(client):
