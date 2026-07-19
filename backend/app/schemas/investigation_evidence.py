@@ -218,3 +218,19 @@ class InvestigationValidationSummary(BaseModel):
     high_confidence_count: int
     unresolved_contradiction_count: int
     claims: list[ClaimValidationSummary]
+
+
+class ResearchLearningRecommendation(BaseModel):
+    competency: str
+    lesson_slug: str
+    lesson_title: str
+    gap_type: str
+    priority: int = Field(ge=1, le=5)
+    reason: str
+
+
+class InvestigationEducationRecommendations(BaseModel):
+    investigation_id: int
+    recommendation_count: int
+    completion_authority: str
+    recommendations: list[ResearchLearningRecommendation]
