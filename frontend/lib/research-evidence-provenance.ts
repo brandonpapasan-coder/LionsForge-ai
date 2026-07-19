@@ -5,6 +5,14 @@ export type ProvenanceLedgerEntry = {
   project_id: number | null;
   source_title: string;
   source_type: string;
+  source_url: string | null;
+  publisher: string | null;
+  author: string | null;
+  published_at: string | null;
+  fingerprint: string;
+  credibility_score: number;
+  freshness_score: number;
+  confidence_score: number;
   claim: string;
   validation_status: string;
   contradiction_key: string | null;
