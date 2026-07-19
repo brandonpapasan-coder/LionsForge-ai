@@ -2,7 +2,7 @@ from importlib import import_module
 from typing import Any
 
 from app.models.company import Company
-from app.models.education import LessonProgress
+from app.models.education import AssessmentAttempt, LessonProgress
 from app.models.entity_resolution import KnowledgeEntityAlias, KnowledgeEntityMergeAudit
 from app.models.evidence import EvidenceRecord, EvidenceReviewEvent, ResearchReviewAction, ResearchReviewActionHistory
 from app.models.executive_brief_snapshot import ExecutiveBriefSnapshot
@@ -45,6 +45,7 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "Alert",
+    "AssessmentAttempt",
     "Company",
     "EvidenceRecord",
     "EvidenceReviewEvent",
