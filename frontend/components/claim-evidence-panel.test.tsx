@@ -91,12 +91,12 @@ describe("ClaimEvidencePanel", () => {
     fireEvent.change(screen.getByLabelText("Confidence level"), { target: { value: "medium" } });
     fireEvent.change(screen.getByLabelText("Confidence rationale"), { target: { value: "Mixed evidence remains." } });
     fireEvent.click(screen.getByRole("button", { name: "Save claim assessment" }));
-    expect(await screen.findByText("Mixed evidence remains.")).toBeInTheDocument();
+    expect(await screen.findByText("Mixed evidence remains.", { selector: "p" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Credibility rating"), { target: { value: "high" } });
     fireEvent.change(screen.getByLabelText("Credibility rationale"), { target: { value: "Direct primary record." } });
     fireEvent.click(screen.getByRole("button", { name: "Save evidence assessment" }));
-    expect(await screen.findByText("Direct primary record.")).toBeInTheDocument();
+    expect(await screen.findByText("Direct primary record.", { selector: "p" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show validation summary" }));
     expect(await screen.findByText("1 claims contain unresolved contradictory evidence.")).toBeInTheDocument();
