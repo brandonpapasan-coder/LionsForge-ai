@@ -40,7 +40,7 @@ describe("ResearchLearningRecommendations", () => {
     expect(screen.getByText("Research Thesis Construction")).toBeInTheDocument();
     expect(screen.getByText(/Contradictory evidence requires/)).toBeInTheDocument();
     expect(screen.getByText("Completion authority: adaptive assessment only.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open lesson in Education Hub" })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "Open lesson in Education Hub" })[0]).toHaveAttribute(
       "href",
       "/education#evidence-quality-and-bias",
     );
