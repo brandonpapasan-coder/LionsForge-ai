@@ -24,10 +24,13 @@ from app.main import app, lifespan
 
 LEGACY_FINANCE_TEST_MODULES = {
     "test_advanced_alerts.py",
+    "test_alert_intelligence.py",
     "test_alerts.py",
+    "test_autonomous_portfolio_intelligence.py",
     "test_autonomous_portfolios.py",
     "test_companies.py",
     "test_decisions.py",
+    "test_event_intelligence.py",
     "test_events.py",
     "test_factors.py",
     "test_market.py",
@@ -40,6 +43,7 @@ LEGACY_FINANCE_TEST_MODULES = {
     "test_market_mentor_api.py",
     "test_market_scenario_api.py",
     "test_market_simulator.py",
+    "test_portfolio_risk.py",
     "test_portfolios.py",
     "test_watchlists.py",
 }
