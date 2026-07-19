@@ -13,6 +13,13 @@ def _clean_required(value: str, field_name: str) -> str:
     return cleaned
 
 
+def _clean_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
 class InvestigationCreate(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     research_question: str = Field(min_length=1, max_length=4000)
@@ -51,6 +58,17 @@ class InvestigationUpdate(BaseModel):
         return value
 
 
+class InvestigationSynthesisUpdate(BaseModel):
+    findings: str | None = Field(default=None, max_length=12000)
+    limitations: str | None = Field(default=None, max_length=12000)
+    unresolved_questions: str | None = Field(default=None, max_length=12000)
+
+    @field_validator("findings", "limitations", "unresolved_questions")
+    @classmethod
+    def normalize_sections(cls, value: str | None) -> str | None:
+        return _clean_optional(value)
+
+
 class InvestigationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -58,5 +76,8 @@ class InvestigationRead(BaseModel):
     title: str
     research_question: str
     status: str
+    findings: str | None
+    limitations: str | None
+    unresolved_questions: str | None
     created_at: datetime
     updated_at: datetime
