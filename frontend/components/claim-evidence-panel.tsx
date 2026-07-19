@@ -53,7 +53,8 @@ export function ClaimEvidencePanel({ investigationId }: { investigationId: numbe
       setError("Evidence could not be loaded.");
       return;
     }
-    setEvidence((current) => ({ ...current, [claimId]: (await response.json()) as ClaimEvidence[] }));
+    const items = (await response.json()) as ClaimEvidence[];
+    setEvidence((current) => ({ ...current, [claimId]: items }));
   }
 
   async function createEvidence(claimId: number, event: FormEvent<HTMLFormElement>) {
