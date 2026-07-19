@@ -41,11 +41,10 @@ The production example uses a portable `postgresql://` database URL. Production 
 
 ### Provider configuration
 
-Local development should use:
+Local development for the active research and education platform should use:
 
 ```bash
-MARKET_DATA_PROVIDER=mock
 NEWS_PROVIDER=mock
 ```
 
-Live provider names require matching API keys.
+Live news-provider names require matching API keys. Legacy market-data configuration is not part of standard startup; intentional compatibility work should follow [`MARKET_DATA.md`](MARKET_DATA.md) and enable the legacy finance feature flag explicitly.
