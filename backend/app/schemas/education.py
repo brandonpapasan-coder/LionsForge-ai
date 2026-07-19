@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class LessonProgressUpdate(BaseModel):
-    status: str = Field(pattern="^(not_started|in_progress)$")
+    status: str = Field(pattern="^(not_started|in_progress|completed)$")
     score: int | None = Field(default=None, ge=0, le=100)
 
 
