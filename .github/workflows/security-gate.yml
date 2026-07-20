@@ -111,12 +111,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      - name: Run pinned Gitleaks CLI
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_SUMMARY: true
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="zricethezav/gitleaks:v8.24.2"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            test -n "$PR_BASE_SHA"
+            test -n "$PR_HEAD_SHA"
+            range="$PR_BASE_SHA..$PR_HEAD_SHA"
+            docker run --rm -v "$PWD:/repo" -w /repo "$image" git --redact --log-opts="$range"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            range="$PUSH_BEFORE_SHA..$CURRENT_SHA"
+            docker run --rm -v "$PWD:/repo" -w /repo "$image" git --redact --log-opts="$range"
+          else
+            docker run --rm -v "$PWD:/repo" -w /repo "$image" git --redact
+          fi
 
   container-security:
     name: Container security and SBOM

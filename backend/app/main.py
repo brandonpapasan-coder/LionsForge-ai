@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -24,6 +25,21 @@ class PlatformInfo(BaseModel):
     version: str
     mission: str
     modules: list[str]
+
+
+class LaunchGate(BaseModel):
+    key: str
+    category: Literal["repository", "external"]
+    status: Literal["available", "unverified"]
+    issue: int | None = None
+
+
+class LaunchReadiness(BaseModel):
+    contract_version: str
+    release_candidate: str
+    overall_status: Literal["blocked_external_evidence"]
+    gates: list[LaunchGate]
+    interpretation_notice: str
 
 
 app = FastAPI(
@@ -72,4 +88,25 @@ def platform_info():
             "portfolio-risk-intelligence",
             "adaptive-education",
         ],
+    )
+
+
+@app.get("/launch-readiness", response_model=LaunchReadiness)
+def launch_readiness():
+    return LaunchReadiness(
+        contract_version="1.0",
+        release_candidate="validated-main-candidate",
+        overall_status="blocked_external_evidence",
+        gates=[
+            LaunchGate(key="repository_validation_controls", category="repository", status="available"),
+            LaunchGate(key="staging_acceptance", category="external", status="unverified", issue=29),
+            LaunchGate(key="production_controls", category="external", status="unverified", issue=401),
+            LaunchGate(key="policy_and_support", category="external", status="unverified", issue=402),
+            LaunchGate(key="controlled_beta", category="external", status="unverified", issue=403),
+            LaunchGate(key="general_availability", category="external", status="unverified", issue=400),
+        ],
+        interpretation_notice=(
+            "Repository controls and passing workflows are not proof that a live environment, "
+            "policy approval, controlled beta, or general-availability acceptance has completed."
+        ),
     )
