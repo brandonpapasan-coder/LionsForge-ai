@@ -4,7 +4,7 @@ LionsForge AI is an AI-assisted research, evidence validation, knowledge managem
 
 ## Current status
 
-The repository is under active MVP development. The current application includes a FastAPI backend, a Next.js frontend, authenticated research workflows, institutional knowledge-quality views, automated backend and frontend testing, deployment validation, and security checks.
+The repository is under active MVP development. The current application includes a FastAPI backend, a Next.js frontend, authenticated research workflows, institutional knowledge-quality views, deterministic investigation evidence-packet exports, automated backend and frontend testing, deployment validation, and security checks.
 
 The repository also contains legacy investment-research modules from an earlier product direction. Those modules are not the strategic focus of LionsForge AI and should be treated as compatibility or migration candidates until they are explicitly retained, reframed, or removed.
 
@@ -91,6 +91,7 @@ Current development is centered on:
 - Knowledge-quality metrics, risks, priorities, and recent activity
 - Project-level quality drill-down with safe inaccessible-project handling
 - Transparent no-baseline states for empty research scopes
+- Deterministic, read-only investigation evidence packets with provenance, human-authorship labels, stable JSON ordering, and researcher-facing downloads
 - Frontend component testing with Vitest and Testing Library
 - Backend CI, Frontend CI, Security Gate, and Deployment Validation workflows
 
