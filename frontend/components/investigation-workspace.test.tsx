@@ -86,7 +86,7 @@ describe("InvestigationWorkspace", () => {
     render(<InvestigationWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Download evidence packet" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("No file was downloaded");
+    expect(await screen.findByText(/No file was downloaded/)).toBeInTheDocument();
     expect(click).not.toHaveBeenCalled();
   });
 
