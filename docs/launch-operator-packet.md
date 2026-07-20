@@ -12,17 +12,17 @@ This packet converts the remaining external launch work into an operator-owned e
 
 Record one exact 40-character commit from `main`.
 
-- release SHA:
+- release commit reference:
 - selection date:
 - selected by:
 - Backend CI run:
 - Frontend CI run:
 - Security Gate run:
 - Deployment Validation run:
-- backend image digest:
-- frontend image digest:
+- backend immutable image digest:
+- frontend immutable image digest:
 
-Do not approve deployment when the SHA and both immutable image digests are missing.
+Do not approve deployment when the commit reference and both immutable image digests are missing.
 
 ## 2. Named owners
 
@@ -43,14 +43,14 @@ Every role must name a person or accountable team before launch execution begins
 
 ## 3. Infrastructure intake
 
-Record references only. Never paste credentials, kubeconfig content, API keys, JWT secrets, tester passwords, or private customer data into this document or a public issue.
+Record references only. Never paste authentication material, cluster configuration content, provider credentials, signing material, acceptance-user credentials, or private customer data into this document or a public issue.
 
 ### Staging
 
 - Kubernetes cluster and namespace reference:
 - PostgreSQL instance reference:
-- API HTTPS URL:
-- web HTTPS URL:
+- API HTTPS endpoint reference:
+- web HTTPS endpoint reference:
 - DNS owner:
 - certificate status:
 - GitHub `staging` environment configured:
@@ -64,8 +64,8 @@ Record references only. Never paste credentials, kubeconfig content, API keys, J
 
 - Kubernetes cluster and namespace reference:
 - PostgreSQL instance reference:
-- API HTTPS URL:
-- web HTTPS URL:
+- API HTTPS endpoint reference:
+- web HTTPS endpoint reference:
 - DNS owner:
 - certificate status:
 - GitHub `production` environment configured:
@@ -113,7 +113,7 @@ Public registration must remain disabled until required approvals are complete.
 ## 6. Execution order
 
 1. Complete staging provisioning in #29.
-2. Deploy the selected SHA by immutable backend and frontend digests.
+2. Deploy the selected commit by immutable backend and frontend digests.
 3. Execute staging acceptance and record evidence.
 4. Complete production controls in #401.
 5. Complete legal, privacy, and support activation in #402.
@@ -136,12 +136,12 @@ Pause deployment or beta access for:
 - an unmonitored launch-critical service;
 - sustained abuse, budget, or provider-limit breach;
 - withdrawal of legal, security, operations, or owner approval;
-- mismatch between deployed SHA or image digests and the approved release record.
+- mismatch between deployed commit or image digests and the approved release record.
 
 ## 8. Final decision record
 
 - decision: GO / CONDITIONAL GO / NO-GO
-- release SHA:
+- release commit reference:
 - decision date:
 - approved beta or GA scope:
 - conditions, if any:
