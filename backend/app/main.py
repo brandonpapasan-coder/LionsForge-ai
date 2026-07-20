@@ -95,7 +95,7 @@ def platform_info():
 def launch_readiness():
     return LaunchReadiness(
         contract_version="1.0",
-        release_candidate="8488db1545d6053edc1c0cebc4c74ac93b64bf7b",
+        release_candidate="validated-main-candidate",
         overall_status="blocked_external_evidence",
         gates=[
             LaunchGate(key="repository_validation_controls", category="repository", status="available"),
