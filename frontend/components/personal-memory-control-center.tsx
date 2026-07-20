@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Summary = {
   project_id: number | null;
@@ -132,6 +132,8 @@ export function PersonalMemoryControlCenter() {
   const [draft, setDraft] = useState<RevisionDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const inventoryControllerRef = useRef<AbortController | null>(null);
+  const evidenceControllerRef = useRef<AbortController | null>(null);
 
   const loadSummary = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/personal-memory/summary", { cache: "no-store", signal });
@@ -140,7 +142,8 @@ export function PersonalMemoryControlCenter() {
       return;
     }
     if (!response.ok) throw new Error("summary");
-    setSummary((await response.json()) as Summary);
+    const nextSummary = (await response.json()) as Summary;
+    if (!signal?.aborted) setSummary(nextSummary);
   }, []);
 
   const loadInventory = useCallback(async (scope: Filters, signal?: AbortSignal) => {
@@ -157,19 +160,39 @@ export function PersonalMemoryControlCenter() {
     }
     if (!response.ok) throw new Error("inventory");
     const items = (await response.json()) as Memory[];
+    if (signal?.aborted) return;
     setMemories(items);
     setMemory((selected) => items.find((item) => item.id === selected?.id) ?? null);
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void Promise.all([loadSummary(controller.signal), loadInventory(emptyFilters, controller.signal)]).catch((loadError) => {
+    const summaryController = new AbortController();
+    const inventoryController = new AbortController();
+    inventoryControllerRef.current = inventoryController;
+    void Promise.all([
+      loadSummary(summaryController.signal),
+      loadInventory(emptyFilters, inventoryController.signal),
+    ]).catch((loadError) => {
       if (!isAbortError(loadError)) setError("Personal memory controls could not be loaded.");
     });
-    return () => controller.abort();
+    return () => {
+      summaryController.abort();
+      inventoryController.abort();
+      if (inventoryControllerRef.current === inventoryController) inventoryControllerRef.current = null;
+      evidenceControllerRef.current?.abort();
+      evidenceControllerRef.current = null;
+    };
   }, [loadInventory, loadSummary]);
 
+  function abortEvidenceLoad() {
+    const hadActiveLoad = evidenceControllerRef.current !== null;
+    evidenceControllerRef.current?.abort();
+    evidenceControllerRef.current = null;
+    if (hadActiveLoad) setBusy(false);
+  }
+
   function resetSelectionMode() {
+    abortEvidenceLoad();
     setEditing(false);
     setHistoryOpen(false);
     setEvidenceOpen(false);
@@ -184,46 +207,70 @@ export function PersonalMemoryControlCenter() {
   }
 
   async function applyFilters() {
+    inventoryControllerRef.current?.abort();
+    const controller = new AbortController();
+    inventoryControllerRef.current = controller;
     setBusy(true);
     setError(null);
     const next = { ...filters };
     try {
-      await loadInventory(next);
+      await loadInventory(next, controller.signal);
+      if (controller.signal.aborted || inventoryControllerRef.current !== controller) return;
       setAppliedFilters(next);
       resetSelectionMode();
-    } catch {
-      setError("The memory inventory could not be filtered.");
+    } catch (loadError) {
+      if (!isAbortError(loadError)) setError("The memory inventory could not be filtered.");
     } finally {
-      setBusy(false);
+      if (inventoryControllerRef.current === controller) {
+        inventoryControllerRef.current = null;
+        setBusy(false);
+      }
     }
   }
 
   async function clearFilters() {
+    inventoryControllerRef.current?.abort();
+    const controller = new AbortController();
+    inventoryControllerRef.current = controller;
     setFilters(emptyFilters);
     setBusy(true);
     setError(null);
     try {
-      await loadInventory(emptyFilters);
+      await loadInventory(emptyFilters, controller.signal);
+      if (controller.signal.aborted || inventoryControllerRef.current !== controller) return;
       setAppliedFilters(emptyFilters);
       resetSelectionMode();
-    } catch {
-      setError("The memory inventory could not be refreshed.");
+    } catch (loadError) {
+      if (!isAbortError(loadError)) setError("The memory inventory could not be refreshed.");
     } finally {
-      setBusy(false);
+      if (inventoryControllerRef.current === controller) {
+        inventoryControllerRef.current = null;
+        setBusy(false);
+      }
     }
   }
 
   async function toggleEvidence() {
     if (!memory) return;
     if (evidenceOpen) {
+      abortEvidenceLoad();
       setEvidenceOpen(false);
+      setEvidenceTrace(null);
       return;
     }
+    abortEvidenceLoad();
+    const controller = new AbortController();
+    evidenceControllerRef.current = controller;
+    const selectedMemoryId = memory.id;
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/personal-memory/${memory.id}/evidence`, { cache: "no-store" });
+      const response = await fetch(`/api/personal-memory/${selectedMemoryId}/evidence`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
       const body = await response.json().catch(() => ({}));
+      if (controller.signal.aborted || evidenceControllerRef.current !== controller) return;
       if (!response.ok) {
         setError(typeof body.detail === "string" ? body.detail : "Supporting evidence could not be loaded.");
         return;
@@ -231,10 +278,13 @@ export function PersonalMemoryControlCenter() {
       setEvidenceTrace(body as EvidenceTrace);
       setEvidenceOpen(true);
       setHistoryOpen(false);
-    } catch {
-      setError("Supporting evidence could not be loaded.");
+    } catch (loadError) {
+      if (!isAbortError(loadError)) setError("Supporting evidence could not be loaded.");
     } finally {
-      setBusy(false);
+      if (evidenceControllerRef.current === controller) {
+        evidenceControllerRef.current = null;
+        setBusy(false);
+      }
     }
   }
 
@@ -469,8 +519,8 @@ export function PersonalMemoryControlCenter() {
                 <p className="muted">Project {memory.project_id} · {memory.category} · confidence {Math.round(memory.confidence * 100)}% · revision {memory.revision_number}</p>
               </div>
               <div className="action-list">
-                <button type="button" onClick={() => { setDraft(draftFor(memory)); setEditing(true); setHistoryOpen(false); setEvidenceOpen(false); setError(null); }} disabled={busy || memory.status === "superseded"}>Edit record</button>
-                <button type="button" aria-expanded={historyOpen} aria-controls="record-revision-history" onClick={() => { setHistoryOpen((open) => !open); setEvidenceOpen(false); }} disabled={busy}>{historyOpen ? "Hide revision history" : "View revision history"}</button>
+                <button type="button" onClick={() => { resetSelectionMode(); setDraft(draftFor(memory)); setEditing(true); setError(null); }} disabled={busy || memory.status === "superseded"}>Edit record</button>
+                <button type="button" aria-expanded={historyOpen} aria-controls="record-revision-history" onClick={() => { abortEvidenceLoad(); setHistoryOpen((open) => !open); setEvidenceOpen(false); setEvidenceTrace(null); }} disabled={busy}>{historyOpen ? "Hide revision history" : "View revision history"}</button>
                 <button type="button" aria-expanded={evidenceOpen} aria-controls="record-evidence-trace" onClick={() => void toggleEvidence()} disabled={busy}>{evidenceOpen ? "Hide supporting evidence" : "View supporting evidence"}</button>
                 {memory.status === "archived" ? <button type="button" onClick={() => void act("restore")} disabled={busy}>Restore</button> : <button type="button" onClick={() => void act("archive")} disabled={busy}>Archive</button>}
                 <button type="button" onClick={() => void act("delete")} disabled={busy}>Permanently delete</button>
