@@ -131,12 +131,20 @@ def validate_record(text: str) -> list[Finding]:
     decision = fields.get("Decision", "")
     if decision not in {"GO", "NO-GO"}:
         findings.append(Finding("invalid-decision", "Decision must be GO or NO-GO"))
+    elif decision != "GO":
+        findings.append(
+            Finding(
+                "decision-no-go",
+                "Activation validation requires the final recorded decision to be GO",
+            )
+        )
 
     for field in (
         "Record owner role",
         "Review date",
         "Intended effective date",
         "Public legal entity name",
+        "Public business address or approved registered-agent address",
         "Governing-law and venue language approved",
         "Supported launch jurisdictions",
         "Age eligibility and parental-consent position",
@@ -248,6 +256,39 @@ def validate_record(text: str) -> list[Finding]:
                     f"Privacy control is incomplete: {field}",
                 )
             )
+
+    consent_required = fields.get("Consent control required", "")
+    consent_tested = fields.get("Consent control tested when required", "")
+    if consent_required not in {"YES", "NO", "NOT REQUIRED"}:
+        findings.append(
+            Finding(
+                "consent-decision-incomplete",
+                "Consent control requirement must be explicitly YES, NO, or NOT REQUIRED",
+            )
+        )
+    elif consent_required == "YES" and consent_tested not in {
+        "YES",
+        "VERIFIED",
+        "PASSED",
+    }:
+        findings.append(
+            Finding(
+                "consent-control-untested",
+                "Required consent controls must be tested successfully",
+            )
+        )
+    elif consent_required in {"NO", "NOT REQUIRED"} and consent_tested not in {
+        "NOT APPLICABLE",
+        "YES",
+        "VERIFIED",
+        "PASSED",
+    }:
+        findings.append(
+            Finding(
+                "consent-control-incomplete",
+                "Consent testing status must be explicit even when consent is not required",
+            )
+        )
 
     if fields.get("Open high or critical privacy/security defects", "") not in {
         "0",
