@@ -26,7 +26,10 @@ const judgment = {
 };
 
 describe("ValidationLedgerPanel", () => {
-  beforeEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("records an immutable judgment and displays it", async () => {
     const fetchMock = vi.fn()
@@ -62,6 +65,21 @@ describe("ValidationLedgerPanel", () => {
 
     expect(await screen.findByText("Stale judgment: the claim or evidence changed after this review.")).toBeInTheDocument();
     expect(screen.getAllByText(judgment.rationale)).toHaveLength(2);
+  });
+
+  it("aborts the initial claims request when the panel unmounts", () => {
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>(() => undefined);
+    }));
+
+    const { unmount } = render(<ValidationLedgerPanel investigationId={4} />);
+    expect(requestSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(requestSignal?.aborted).toBe(true);
   });
 
   it("keeps the workspace usable when history is unavailable", async () => {
