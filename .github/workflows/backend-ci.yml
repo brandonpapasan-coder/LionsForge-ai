@@ -66,14 +66,18 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          ../scripts/validate_production_acceptance.py
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
+          tests/test_production_acceptance_validator.py
 
       - name: Ruff format check
         run: >-
           ruff format --check
           app/schemas/system_readiness.py
           scripts/export_openapi.py
+          ../scripts/validate_production_acceptance.py
+          tests/test_production_acceptance_validator.py
 
       - name: Type check
         run: >-
@@ -83,6 +87,7 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          ../scripts/validate_production_acceptance.py
 
       - name: Validate Alembic migrations on PostgreSQL
         run: |
