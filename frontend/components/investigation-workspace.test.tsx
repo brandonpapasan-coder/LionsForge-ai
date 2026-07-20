@@ -37,6 +37,20 @@ describe("InvestigationWorkspace", () => {
     vi.unstubAllGlobals();
   });
 
+  it("aborts the initial request when the workspace unmounts", () => {
+    let signal: AbortSignal | null | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal;
+      return new Promise<Response>(() => undefined);
+    }));
+
+    const { unmount } = render(<InvestigationWorkspace />);
+    expect(signal).toBeDefined();
+
+    unmount();
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("renders private investigations and updates status", async () => {
     const fetchMock = investigationFetch();
     vi.stubGlobal("fetch", fetchMock);
