@@ -28,7 +28,10 @@ const evidence = {
 };
 
 describe("ClaimEvidencePanel", () => {
-  beforeEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("creates a claim and attaches evidence", async () => {
     const fetchMock = vi.fn()
@@ -116,6 +119,21 @@ describe("ClaimEvidencePanel", () => {
     expect(await screen.findByRole("link", { name: evidence.source_title })).toHaveAttribute("href", evidence.source_url);
     fireEvent.click(screen.getByRole("button", { name: "Delete claim" }));
     await waitFor(() => expect(screen.queryByText(claim.statement)).not.toBeInTheDocument());
+  });
+
+  it("aborts the initial claims request when the panel unmounts", () => {
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>(() => undefined);
+    }));
+
+    const { unmount } = render(<ClaimEvidencePanel investigationId={4} />);
+    expect(requestSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(requestSignal?.aborted).toBe(true);
   });
 
   it("keeps the panel available when claims fail to load", async () => {
