@@ -5,7 +5,7 @@ def test_launch_readiness_uses_conservative_external_defaults(client):
     payload = response.json()
     assert payload["contract_version"] == "1.0"
     assert payload["overall_status"] == "blocked_external_evidence"
-    assert len(payload["release_candidate"]) == 40
+    assert payload["release_candidate"] == "validated-main-candidate"
 
     keys = [gate["key"] for gate in payload["gates"]]
     assert keys == [
