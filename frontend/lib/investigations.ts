@@ -3,6 +3,7 @@ export type EvidenceType = "primary" | "secondary" | "dataset" | "expert" | "oth
 export type EvidenceRelationship = "supports" | "contradicts" | "neutral";
 export type AssessmentLevel = "low" | "medium" | "high";
 export type ValidationStatus = "unreviewed" | "supported" | "mixed" | "contradicted" | "insufficient";
+export type QualityAssessmentStatus = "missing" | "partial" | "complete";
 
 export type Investigation = {
   id: number;
@@ -92,6 +93,23 @@ export type InvestigationEducationRecommendations = {
   recommendation_count: number;
   completion_authority: "adaptive_assessment_only";
   recommendations: ResearchLearningRecommendation[];
+};
+
+export type QualityAssessmentDimension = {
+  key: string;
+  label: string;
+  status: QualityAssessmentStatus;
+  counts: Record<string, number>;
+  explanation: string;
+};
+
+export type InvestigationQualityAssessment = {
+  contract_version: string;
+  investigation_id: number;
+  dimensions: QualityAssessmentDimension[];
+  recommendations: string[];
+  generated_from_stored_state_at: string;
+  interpretation_notice: string;
 };
 
 export type InvestigationCreate = {
