@@ -162,7 +162,7 @@ describe("EducationHub", () => {
     expect(screen.getByRole("button", { name: "Begin assessment" })).toBeEnabled();
   });
 
-  it("retries mastery history in place and disables duplicate recovery requests", async () => {
+  it("retries mastery history in place and prevents duplicate recovery requests", async () => {
     const user = userEvent.setup();
     let historyCalls = 0;
     let resolveRetry: ((value: { ok: boolean; status: number; json: () => Promise<unknown> }) => void) | undefined;
@@ -185,7 +185,8 @@ describe("EducationHub", () => {
     const retry = await screen.findByRole("button", { name: "Retry mastery history" });
     await user.click(retry);
 
-    expect(screen.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+    expect(screen.getByText("Loading your assessment evidence…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry mastery history" })).not.toBeInTheDocument();
     expect(historyCalls).toBe(2);
 
     resolveRetry?.(await response(attempts));
