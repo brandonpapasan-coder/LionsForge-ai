@@ -103,3 +103,16 @@ class InvestigationQualityAssessment(BaseModel):
         "This checklist describes research completeness from stored state. "
         "It is not a truth score, confidence probability, or automated validation judgment."
     )
+
+
+class InvestigationEvidencePacket(BaseModel):
+    contract_version: str = "1.0"
+    export_format: Literal["json"] = "json"
+    investigation_id: int
+    validation_report: InvestigationValidationReport
+    quality_assessment: InvestigationQualityAssessment
+    generated_from_stored_state_at: datetime
+    provenance_notice: str = (
+        "This packet is assembled deterministically from stored investigation state. "
+        "Synthesis text and validation judgments remain explicitly human-authored, and the packet does not assign truth."
+    )
