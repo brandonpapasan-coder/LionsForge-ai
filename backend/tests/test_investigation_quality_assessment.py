@@ -51,17 +51,22 @@ def test_empty_quality_assessment_is_conservative_deterministic_and_owner_isolat
 def test_quality_assessment_tracks_partial_and_complete_stored_state(client):
     headers = auth_headers(client, email="quality-progress@example.com")
     investigation = create_investigation(client, headers)
-    first_claim = client.post(
+    first_claim_response = client.post(
         f"{BASE}/{investigation['id']}/claims",
         headers=headers,
         json={"statement": "The first claim is supported."},
-    ).json()
-    second_claim = client.post(
+    )
+    assert first_claim_response.status_code == 201
+    first_claim = first_claim_response.json()
+    second_claim_response = client.post(
         f"{BASE}/{investigation['id']}/claims",
         headers=headers,
         json={"statement": "The second claim needs review."},
-    ).json()
-    client.post(
+    )
+    assert second_claim_response.status_code == 201
+    second_claim = second_claim_response.json()
+
+    first_evidence = client.post(
         f"{BASE}/claims/{first_claim['id']}/evidence",
         headers=headers,
         json={
@@ -71,7 +76,8 @@ def test_quality_assessment_tracks_partial_and_complete_stored_state(client):
             "relationship": "supports",
         },
     )
-    client.post(
+    assert first_evidence.status_code == 201
+    first_judgment = client.post(
         f"{BASE}/claims/{first_claim['id']}/judgments",
         headers=headers,
         json={
@@ -80,11 +86,13 @@ def test_quality_assessment_tracks_partial_and_complete_stored_state(client):
             "rationale": "Human reviewer judgment.",
         },
     )
-    client.put(
+    assert first_judgment.status_code == 201
+    first_synthesis = client.put(
         f"{BASE}/{investigation['id']}/synthesis",
         headers=headers,
         json={"findings": "A cautious finding."},
     )
+    assert first_synthesis.status_code == 200
 
     partial = assessment(client, headers, investigation["id"])
     partial_status = statuses(partial)
@@ -96,7 +104,7 @@ def test_quality_assessment_tracks_partial_and_complete_stored_state(client):
     assert partial_status["recorded_limitations"] == "missing"
     assert partial_status["unresolved_questions"] == "missing"
 
-    client.post(
+    second_evidence = client.post(
         f"{BASE}/claims/{second_claim['id']}/evidence",
         headers=headers,
         json={
@@ -106,16 +114,18 @@ def test_quality_assessment_tracks_partial_and_complete_stored_state(client):
             "relationship": "neutral",
         },
     )
-    client.post(
+    assert second_evidence.status_code == 201
+    second_judgment = client.post(
         f"{BASE}/claims/{second_claim['id']}/judgments",
         headers=headers,
         json={
-            "validation_status": "inconclusive",
+            "validation_status": "insufficient",
             "confidence_level": "low",
             "rationale": "Human reviewer judgment remains cautious.",
         },
     )
-    client.put(
+    assert second_judgment.status_code == 201
+    completed_synthesis = client.put(
         f"{BASE}/{investigation['id']}/synthesis",
         headers=headers,
         json={
@@ -124,6 +134,7 @@ def test_quality_assessment_tracks_partial_and_complete_stored_state(client):
             "unresolved_questions": "What additional evidence could change the conclusion?",
         },
     )
+    assert completed_synthesis.status_code == 200
 
     complete = assessment(client, headers, investigation["id"])
     assert all(value == "complete" for value in statuses(complete).values())
