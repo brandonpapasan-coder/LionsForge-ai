@@ -169,7 +169,7 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
   });
 
   it("aborts an active evidence request when the selected record changes", async () => {
-    let evidenceSignal: AbortSignal | undefined;
+    let evidenceSignal: AbortSignal | null | undefined;
     let resolveEvidence: ((value: Response) => void) | undefined;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -201,7 +201,7 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
   });
 
   it("aborts an active evidence request when the control center unmounts", async () => {
-    let evidenceSignal: AbortSignal | undefined;
+    let evidenceSignal: AbortSignal | null | undefined;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/personal-memory/summary") return response(summary);
