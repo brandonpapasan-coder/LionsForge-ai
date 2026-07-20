@@ -38,6 +38,28 @@ const secondMemory = {
   source_evidence_ids: [],
 };
 
+const unsupportedTrace = {
+  memory_id: 11,
+  requested_evidence_ids: [],
+  evidence: [],
+  unavailable_evidence_ids: [],
+  health: {
+    classification: "unsupported",
+    total_count: 0,
+    available_count: 0,
+    unavailable_count: 0,
+    approved_count: 0,
+    needs_review_count: 0,
+    supporting_count: 0,
+    contradicting_count: 0,
+    average_credibility: null,
+    average_freshness: null,
+    average_confidence: null,
+    reasons: [],
+    recommended_actions: [],
+  },
+};
+
 function response(body: unknown, status = 200) {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
@@ -105,7 +127,7 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal-memory/11/evidence",
-      { cache: "no-store" },
+      expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
     ));
 
     const panel = await screen.findByLabelText("Supporting evidence trace");
@@ -130,27 +152,7 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
       if (url === "/api/personal-memory/summary") return response(summary);
       if (url === "/api/personal-memory") return response([secondMemory]);
       if (url === "/api/personal-memory/12/evidence") {
-        return response({
-          memory_id: 12,
-          requested_evidence_ids: [],
-          unavailable_evidence_ids: [],
-          evidence: [],
-          health: {
-            classification: "unsupported",
-            total_count: 0,
-            available_count: 0,
-            unavailable_count: 0,
-            approved_count: 0,
-            needs_review_count: 0,
-            supporting_count: 0,
-            contradicting_count: 0,
-            average_credibility: null,
-            average_freshness: null,
-            average_confidence: null,
-            reasons: ["This saved record has no linked evidence."],
-            recommended_actions: ["Link at least one relevant source before relying on this record."],
-          },
-        });
+        return response({ ...unsupportedTrace, memory_id: 12 });
       }
       return response(null, 404);
     }));
@@ -166,34 +168,68 @@ describe("PersonalMemoryControlCenter evidence trace", () => {
     expect(screen.getByText("No supporting evidence is attached to this record.")).toBeInTheDocument();
   });
 
+  it("aborts an active evidence request when the selected record changes", async () => {
+    let evidenceSignal: AbortSignal | undefined;
+    let resolveEvidence: ((value: Response) => void) | undefined;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/personal-memory/summary") return response(summary);
+      if (url === "/api/personal-memory") return response([firstMemory, secondMemory]);
+      if (url === "/api/personal-memory/11/evidence") {
+        evidenceSignal = init?.signal;
+        return new Promise<Response>((resolve) => {
+          resolveEvidence = resolve;
+        });
+      }
+      return response(null, 404);
+    }));
+
+    render(<PersonalMemoryControlCenter />);
+    const inventory = await screen.findByLabelText("Personal memory inventory");
+    fireEvent.click(within(inventory).getByRole("button", { name: /Prioritize primary evidence/i }));
+    fireEvent.click(screen.getByRole("button", { name: "View supporting evidence" }));
+    await waitFor(() => expect(evidenceSignal).toBeDefined());
+
+    fireEvent.click(within(inventory).getByRole("button", { name: /Second record/i }));
+    expect(evidenceSignal?.aborted).toBe(true);
+
+    resolveEvidence?.(await response(unsupportedTrace));
+    await Promise.resolve();
+
+    expect(screen.queryByLabelText("Supporting evidence trace")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View supporting evidence" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("aborts an active evidence request when the control center unmounts", async () => {
+    let evidenceSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/personal-memory/summary") return response(summary);
+      if (url === "/api/personal-memory") return response([firstMemory]);
+      if (url === "/api/personal-memory/11/evidence") {
+        evidenceSignal = init?.signal;
+        return new Promise<Response>(() => undefined);
+      }
+      return response(null, 404);
+    }));
+
+    const { unmount } = render(<PersonalMemoryControlCenter />);
+    const inventory = await screen.findByLabelText("Personal memory inventory");
+    fireEvent.click(within(inventory).getByRole("button", { name: /Prioritize primary evidence/i }));
+    fireEvent.click(screen.getByRole("button", { name: "View supporting evidence" }));
+    await waitFor(() => expect(evidenceSignal).toBeDefined());
+
+    unmount();
+
+    expect(evidenceSignal?.aborted).toBe(true);
+  });
+
   it("resets the evidence panel when the selected record changes", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/personal-memory/summary") return response(summary);
       if (url === "/api/personal-memory") return response([firstMemory, secondMemory]);
-      if (url === "/api/personal-memory/11/evidence") {
-        return response({
-          memory_id: 11,
-          requested_evidence_ids: [],
-          evidence: [],
-          unavailable_evidence_ids: [],
-          health: {
-            classification: "unsupported",
-            total_count: 0,
-            available_count: 0,
-            unavailable_count: 0,
-            approved_count: 0,
-            needs_review_count: 0,
-            supporting_count: 0,
-            contradicting_count: 0,
-            average_credibility: null,
-            average_freshness: null,
-            average_confidence: null,
-            reasons: [],
-            recommended_actions: [],
-          },
-        });
-      }
+      if (url === "/api/personal-memory/11/evidence") return response(unsupportedTrace);
       return response(null, 404);
     }));
 
