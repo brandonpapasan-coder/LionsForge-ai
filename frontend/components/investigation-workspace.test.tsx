@@ -12,23 +12,33 @@ const investigation = {
   updated_at: "2026-07-19T12:00:00Z",
 };
 
+function investigationFetch(responseForPacket?: Response) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "/api/investigations" && !init?.method) {
+      return new Response(JSON.stringify([investigation]), { status: 200 });
+    }
+    if (url === "/api/investigations/7/claims") {
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
+    if (url === "/api/investigations/7/evidence-packet") {
+      return responseForPacket ?? new Response("{}", { status: 404 });
+    }
+    if (url === "/api/investigations/7" && init?.method === "PATCH") {
+      return new Response(JSON.stringify({ ...investigation, status: "in_review" }), { status: 200 });
+    }
+    return new Response("{}", { status: 404 });
+  });
+}
+
 describe("InvestigationWorkspace", () => {
-  beforeEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("renders private investigations and updates status", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url === "/api/investigations" && !init?.method) {
-        return new Response(JSON.stringify([investigation]), { status: 200 });
-      }
-      if (url === "/api/investigations/7/claims") {
-        return new Response(JSON.stringify([]), { status: 200 });
-      }
-      if (url === "/api/investigations/7" && init?.method === "PATCH") {
-        return new Response(JSON.stringify({ ...investigation, status: "in_review" }), { status: 200 });
-      }
-      return new Response("{}", { status: 404 });
-    });
+    const fetchMock = investigationFetch();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<InvestigationWorkspace />);
@@ -39,6 +49,45 @@ describe("InvestigationWorkspace", () => {
     fireEvent.change(statusSelect, { target: { value: "in_review" } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/investigations/7", expect.objectContaining({ method: "PATCH" })));
     await waitFor(() => expect(statusSelect).toHaveValue("in_review"));
+  });
+
+  it("downloads the exact evidence packet through the authenticated workspace proxy", async () => {
+    const packet = { investigation: { id: 7 }, claims: [], interpretation_notice: "Human review required." };
+    const fetchMock = investigationFetch(new Response(JSON.stringify(packet), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.fn(() => "blob:evidence-packet");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    let downloadedFilename = "";
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+      downloadedFilename = this.download;
+    });
+
+    render(<InvestigationWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Download evidence packet" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/investigations/7/evidence-packet",
+      { cache: "no-store" },
+    ));
+    await waitFor(() => expect(downloadedFilename).toBe("lionsforge-investigation-7-evidence-packet.json"));
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:evidence-packet");
+  });
+
+  it("reports a conservative error and does not download a failed export", async () => {
+    const fetchMock = investigationFetch(new Response(JSON.stringify({ detail: "Not found" }), { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(<InvestigationWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Download evidence packet" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No file was downloaded");
+    expect(click).not.toHaveBeenCalled();
   });
 
   it("creates an investigation and supports the empty state", async () => {
