@@ -14,13 +14,13 @@ export function InvestigationSynthesisPanel({ investigationId }: { investigation
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  async function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
     try {
       const [synthesisResponse, reportResponse] = await Promise.all([
-        fetch(`/api/investigations/${investigationId}/synthesis`, { cache: "no-store" }),
-        fetch(`/api/investigations/${investigationId}/validation-report`, { cache: "no-store" }),
+        fetch(`/api/investigations/${investigationId}/synthesis`, { cache: "no-store", signal }),
+        fetch(`/api/investigations/${investigationId}/validation-report`, { cache: "no-store", signal }),
       ]);
       if (synthesisResponse.status === 401 || reportResponse.status === 401) { window.location.href = "/login"; return; }
       if (synthesisResponse.ok) {
@@ -29,11 +29,20 @@ export function InvestigationSynthesisPanel({ investigationId }: { investigation
       } else if (synthesisResponse.status !== 404) throw new Error();
       if (!reportResponse.ok) throw new Error();
       setReport((await reportResponse.json()) as Report);
-    } catch { setError("Synthesis and validation report are temporarily unavailable."); }
-    finally { setLoading(false); }
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      setError("Synthesis and validation report are temporarily unavailable.");
+    }
+    finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }
 
-  useEffect(() => { void load(); }, [investigationId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [investigationId]);
 
   async function save(event: FormEvent) {
     event.preventDefault(); setSaving(true); setError(null);
