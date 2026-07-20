@@ -157,8 +157,44 @@ describe("EducationHub", () => {
     render(<EducationHub />);
 
     expect(await screen.findByText("Mastery history is temporarily unavailable. Your lessons and assessments remain available.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry mastery history" })).toBeEnabled();
     expect(screen.getByLabelText("72% mastery")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Begin assessment" })).toBeEnabled();
+  });
+
+  it("retries mastery history in place and prevents duplicate recovery requests", async () => {
+    const user = userEvent.setup();
+    let historyCalls = 0;
+    let resolveRetry: ((value: { ok: boolean; status: number; json: () => Promise<unknown> }) => void) | undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/education") return response(hub);
+      if (url === "/api/education/assessment/history") {
+        historyCalls += 1;
+        if (historyCalls === 1) return response({ detail: "unavailable" }, 503);
+        return new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((resolve) => {
+          resolveRetry = resolve;
+        });
+      }
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EducationHub />);
+
+    const retry = await screen.findByRole("button", { name: "Retry mastery history" });
+    await user.click(retry);
+
+    expect(screen.getByText("Loading your assessment evidence…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry mastery history" })).not.toBeInTheDocument();
+    expect(historyCalls).toBe(2);
+
+    resolveRetry?.(await response(attempts));
+
+    const history = await screen.findByLabelText("Mastery history");
+    await waitFor(() => expect(within(history).getByText("2 attempts")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Retry mastery history" })).not.toBeInTheDocument();
+    expect(within(history).getByText("100% · Passed")).toBeInTheDocument();
   });
 
   it("refreshes mastery history after a scored assessment", async () => {

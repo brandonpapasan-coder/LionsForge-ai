@@ -16,6 +16,7 @@ export function EducationHub() {
   const [data, setData] = useState<EducationHubData | null>(null);
   const [history, setHistory] = useState<AssessmentAttempt[] | null>(null);
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [assessment, setAssessment] = useState<AdaptiveAssessment | null>(null);
   const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -32,6 +33,7 @@ export function EducationHub() {
     historyRequest.current?.abort();
     const controller = new AbortController();
     historyRequest.current = controller;
+    setHistoryLoading(true);
     setHistoryUnavailable(false);
     try {
       const response = await fetch("/api/education/assessment/history", {
@@ -56,7 +58,10 @@ export function EducationHub() {
         setHistoryUnavailable(true);
       }
     } finally {
-      if (historyRequest.current === controller) historyRequest.current = null;
+      if (historyRequest.current === controller) {
+        historyRequest.current = null;
+        if (mounted.current) setHistoryLoading(false);
+      }
     }
   }
 
@@ -248,8 +253,13 @@ export function EducationHub() {
       <section className="lesson-card" aria-label="Mastery history">
         <div className="lesson-meta"><span>private learning evidence</span><span>{history?.length ?? 0} attempts</span></div>
         <h2>Mastery history</h2>
-        {history === null && !historyUnavailable ? <p>Loading your assessment evidence…</p> : null}
-        {historyUnavailable ? <p role="status">Mastery history is temporarily unavailable. Your lessons and assessments remain available.</p> : null}
+        {historyLoading && history === null ? <p>Loading your assessment evidence…</p> : null}
+        {historyUnavailable ? (
+          <div role="status">
+            <p>Mastery history is temporarily unavailable. Your lessons and assessments remain available.</p>
+            <button type="button" disabled={historyLoading} onClick={() => void loadHistory()}>{historyLoading ? "Retrying…" : "Retry mastery history"}</button>
+          </div>
+        ) : null}
         {history?.length === 0 ? <p>No assessment attempts yet. Your competency checks will appear here.</p> : null}
         {history && history.length > 0 ? (
           <div className="lesson-grid">
