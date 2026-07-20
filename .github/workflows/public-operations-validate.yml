@@ -1,0 +1,146 @@
+name: Public Operations Validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_path:
+        description: Repository-relative path to the completed public operations activation Markdown record
+        required: true
+        default: docs/public-operations-activation-record.md
+        type: string
+      release_sha:
+        description: Exact 40-character lowercase release commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-public-operations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate workflow inputs
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release_sha must be an exact 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          git cat-file -e "${RELEASE_SHA}^{commit}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+          if [[ "${RECORD_PATH}" = /* || "${RECORD_PATH}" == *".."* || "${RECORD_PATH}" != docs/*.md ]]; then
+            echo "record_path must be a safe repository-relative Markdown path under docs/" >&2
+            exit 1
+          fi
+
+          test -f "${RECORD_PATH}"
+          resolved_path="$(realpath "${RECORD_PATH}")"
+          workspace_path="$(realpath "${GITHUB_WORKSPACE}")"
+          case "${resolved_path}" in
+            "${workspace_path}"/docs/*.md) ;;
+            *)
+              echo "record_path resolves outside the allowed docs directory" >&2
+              exit 1
+              ;;
+          esac
+
+          recorded_release_sha="$(sed -n 's/^- Release candidate SHA:[[:space:]]*//p' "${RECORD_PATH}" | head -n 1 | tr -d '`*')"
+          test "${recorded_release_sha}" = "${RELEASE_SHA}"
+
+      - name: Verify required release gates
+        id: release-gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -o pipefail
+          python scripts/verify_release_gates.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${RELEASE_SHA}" \
+            --output public-operations-release-gate-evidence.json \
+            | tee public-operations-release-gate-evidence.txt
+
+      - name: Validate public operations activation record
+        id: validate
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -o pipefail
+          python scripts/validate_public_operations_activation.py "${RECORD_PATH}" \
+            | tee public-operations-validation.txt
+
+      - name: Publish validation summary
+        if: always()
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          GATE_OUTCOME: ${{ steps.release-gates.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+        run: |
+          {
+            echo "## Public operations activation validation"
+            echo
+            echo "- Record path: \`${RECORD_PATH}\`"
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
+            echo "- Record validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo
+            if [[ -f public-operations-release-gate-evidence.json ]]; then
+              echo "### Required release gates"
+              echo
+              python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(
+              Path("public-operations-release-gate-evidence.json").read_text(encoding="utf-8")
+          )
+          print("| Gate | Event | Branch | Status | Conclusion | Run ID |")
+          print("|---|---|---|---|---|---|")
+          for gate in payload["gates"]:
+              print(
+                  f"| {gate['name']} | {gate['event'] or '-'} | "
+                  f"{gate['head_branch'] or '-'} | {gate['status']} | "
+                  f"{gate['conclusion'] or '-'} | {gate['run_id'] or '-'} |"
+              )
+          PY
+              echo
+            fi
+            if [[ -f public-operations-validation.txt ]]; then
+              echo "### Activation record validator"
+              echo
+              echo '```text'
+              cat public-operations-validation.txt
+              echo '```'
+            else
+              echo "Record validation did not run because an earlier safety or release-gate check failed."
+            fi
+            echo
+            echo "This workflow validates repository evidence and record consistency. It does not provide legal advice or independently prove external operational readiness."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-operations-validation-evidence
+          path: |
+            public-operations-release-gate-evidence.json
+            public-operations-release-gate-evidence.txt
+            public-operations-validation.txt
+          if-no-files-found: warn
+          retention-days: 90
