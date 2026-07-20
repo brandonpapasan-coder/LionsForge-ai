@@ -60,12 +60,12 @@ const unsupportedTrace = {
   },
 };
 
-function response(body: unknown, status = 200) {
+function response(body: unknown, status = 200): Promise<Response> {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
-  });
+  } as Response);
 }
 
 afterEach(() => {
