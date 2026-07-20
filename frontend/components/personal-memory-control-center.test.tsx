@@ -72,7 +72,7 @@ describe("PersonalMemoryControlCenter inventory", () => {
   });
 
   it("cancels a stale filtered inventory request before applying replacement filters", async () => {
-    let firstSignal: AbortSignal | undefined;
+    let firstSignal: AbortSignal | null | undefined;
     let resolveFirst: ((value: Response) => void) | undefined;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
