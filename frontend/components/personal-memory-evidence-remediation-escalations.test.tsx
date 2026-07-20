@@ -59,7 +59,7 @@ afterEach(() => {
 
 describe("PersonalMemoryEvidenceRemediationEscalations", () => {
   it("shows critical-first escalation details and applies filters with a replaceable request signal", async () => {
-    const fetchMock = vi.fn(() => response(inventory));
+    const fetchMock = vi.fn((_url: RequestInfo | URL, _options?: RequestInit) => response(inventory));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<PersonalMemoryEvidenceRemediationEscalations />);
