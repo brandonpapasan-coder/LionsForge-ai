@@ -16,6 +16,7 @@ export function InvestigationWorkspace() {
   const [title, setTitle] = useState("");
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exportingId, setExportingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +61,25 @@ export function InvestigationWorkspace() {
     finally { setBusy(false); }
   }
 
+  async function downloadEvidencePacket(item: Investigation) {
+    setExportingId(item.id); setError(null);
+    try {
+      const response = await fetch(`/api/investigations/${item.id}/evidence-packet`, { cache: "no-store" });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `lionsforge-investigation-${item.id}-evidence-packet.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch { setError("The evidence packet could not be exported. No file was downloaded."); }
+    finally { setExportingId(null); }
+  }
+
   return <main className="education-shell">
     <header className="education-hero"><div><p className="eyebrow">RESEARCH VALIDATION WORKSPACE</p><h1>Turn questions into auditable investigations.</h1><p>Define the question, map claims to evidence, and preserve a clear validation lifecycle.</p></div></header>
     <section className="lesson-card" aria-label="Create investigation"><h2>Start an investigation</h2><form onSubmit={createInvestigation}>
@@ -75,6 +95,8 @@ export function InvestigationWorkspace() {
         <div className="lesson-meta"><span>{item.status.replaceAll("_", " ")}</span><time dateTime={item.updated_at}>{new Date(item.updated_at).toLocaleString()}</time></div>
         <h3>{item.title}</h3><p>{item.research_question}</p>
         <label>Validation status<select value={item.status} disabled={busy} onChange={(event) => void updateStatus(item, event.target.value as InvestigationStatus)}>{statuses.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
+        <button type="button" disabled={exportingId === item.id} onClick={() => void downloadEvidencePacket(item)}>{exportingId === item.id ? "Preparing evidence packet…" : "Download evidence packet"}</button>
+        <p>This JSON export preserves stored claims, evidence, human judgments, synthesis, limitations, and validation state without automated truth scoring.</p>
         <ClaimEvidencePanel investigationId={item.id} />
         <ValidationLedgerPanel investigationId={item.id} />
         <InvestigationSynthesisPanel investigationId={item.id} />
