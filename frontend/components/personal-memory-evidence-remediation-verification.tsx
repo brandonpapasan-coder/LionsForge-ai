@@ -23,9 +23,15 @@ type Verification = {
   actions: Action[];
 };
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function PersonalMemoryEvidenceRemediationVerification() {
   const recordsRef = useRef<InventoryItem[]>([]);
   const loadingRecordsRef = useRef<Promise<InventoryItem[]> | null>(null);
+  const inventoryAbortRef = useRef<AbortController | null>(null);
+  const verificationAbortRef = useRef<AbortController | null>(null);
   const [selectedMemoryId, setSelectedMemoryId] = useState<number | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -33,20 +39,36 @@ export function PersonalMemoryEvidenceRemediationVerification() {
   const [error, setError] = useState<string | null>(null);
 
   const loadVerification = useCallback(async (memoryId: number) => {
-    const response = await fetch(`/api/personal-memory/${memoryId}/evidence-remediation/verification`, { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
+    verificationAbortRef.current?.abort();
+    const controller = new AbortController();
+    verificationAbortRef.current = controller;
+
+    try {
+      const response = await fetch(`/api/personal-memory/${memoryId}/evidence-remediation/verification`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Remediation verification could not be loaded.");
+      if (!controller.signal.aborted) setVerification(body as Verification);
+    } finally {
+      if (verificationAbortRef.current === controller) verificationAbortRef.current = null;
     }
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Remediation verification could not be loaded.");
-    setVerification(body as Verification);
   }, []);
 
   const loadRecords = useCallback(async () => {
     if (recordsRef.current.length) return recordsRef.current;
     if (!loadingRecordsRef.current) {
-      loadingRecordsRef.current = fetch("/api/personal-memory/evidence-health", { cache: "no-store" })
+      const controller = new AbortController();
+      inventoryAbortRef.current = controller;
+      loadingRecordsRef.current = fetch("/api/personal-memory/evidence-health", {
+        cache: "no-store",
+        signal: controller.signal,
+      })
         .then(async (response) => {
           if (response.status === 401) {
             window.location.href = "/login";
@@ -54,10 +76,11 @@ export function PersonalMemoryEvidenceRemediationVerification() {
           }
           if (!response.ok) throw new Error("inventory");
           const items = ((await response.json()) as Inventory).items;
-          recordsRef.current = items;
+          if (!controller.signal.aborted) recordsRef.current = items;
           return items;
         })
         .finally(() => {
+          if (inventoryAbortRef.current === controller) inventoryAbortRef.current = null;
           loadingRecordsRef.current = null;
         });
     }
@@ -77,6 +100,7 @@ export function PersonalMemoryEvidenceRemediationVerification() {
       setError(null);
       await loadVerification(selected.memory_id);
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       setError(requestError instanceof Error ? requestError.message : "Remediation verification could not be loaded.");
     }
   }, [loadRecords, loadVerification]);
@@ -90,6 +114,11 @@ export function PersonalMemoryEvidenceRemediationVerification() {
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
   }, [selectFromText]);
+
+  useEffect(() => () => {
+    inventoryAbortRef.current?.abort();
+    verificationAbortRef.current?.abort();
+  }, []);
 
   async function resolve(action: Action) {
     if (selectedMemoryId === null || action.status !== "ready_for_resolution" || action.follow_up_id === null) return;
@@ -115,6 +144,7 @@ export function PersonalMemoryEvidenceRemediationVerification() {
       if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Verified follow-up could not be resolved.");
       await loadVerification(selectedMemoryId);
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       setError(requestError instanceof Error ? requestError.message : "Verified follow-up could not be resolved.");
     } finally {
       setBusyKey(null);
