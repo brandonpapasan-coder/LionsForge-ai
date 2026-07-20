@@ -20,18 +20,25 @@ export function InvestigationWorkspace() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     async function load() {
       try {
-        const response = await fetch("/api/investigations", { cache: "no-store" });
+        const response = await fetch("/api/investigations", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (response.status === 401) { window.location.href = "/login"; return; }
         if (!response.ok) throw new Error();
         const payload = (await response.json()) as Investigation[];
-        if (active) setItems(payload);
-      } catch { if (active) setError("The Research Validation Workspace is temporarily unavailable."); }
+        setItems(payload);
+      } catch {
+        if (!controller.signal.aborted) {
+          setError("The Research Validation Workspace is temporarily unavailable.");
+        }
+      }
     }
     void load();
-    return () => { active = false; };
+    return () => { controller.abort(); };
   }, []);
 
   async function createInvestigation(event: FormEvent) {
