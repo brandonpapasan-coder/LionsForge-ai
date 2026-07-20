@@ -27,12 +27,13 @@ export function InvestigationQualityAssessmentPanel({ investigationId }: { inves
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  async function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
     try {
       const response = await fetch(`/api/investigations/${investigationId}/quality-assessment`, {
         cache: "no-store",
+        signal,
       });
       if (response.status === 401) {
         window.location.href = "/login";
@@ -40,15 +41,18 @@ export function InvestigationQualityAssessmentPanel({ investigationId }: { inves
       }
       if (!response.ok) throw new Error();
       setAssessment((await response.json()) as InvestigationQualityAssessment);
-    } catch {
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
       setError("The investigation quality checklist is temporarily unavailable.");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [investigationId]);
 
   return (
