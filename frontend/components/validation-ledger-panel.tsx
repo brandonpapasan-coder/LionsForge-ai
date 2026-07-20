@@ -19,15 +19,26 @@ export function ValidationLedgerPanel({ investigationId }: { investigationId: nu
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-    void fetch(`/api/investigations/${investigationId}/claims`, { cache: "no-store" })
-      .then((response) => {
+    const controller = new AbortController();
+
+    async function loadClaims() {
+      try {
+        const response = await fetch(`/api/investigations/${investigationId}/claims`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error();
-        return response.json() as Promise<InvestigationClaim[]>;
-      })
-      .then((payload) => { if (active) setClaims(payload); })
-      .catch(() => { if (active) setError("Validation history is temporarily unavailable."); });
-    return () => { active = false; };
+        const payload = (await response.json()) as InvestigationClaim[];
+        setClaims(payload);
+      } catch {
+        if (!controller.signal.aborted) {
+          setError("Validation history is temporarily unavailable.");
+        }
+      }
+    }
+
+    void loadClaims();
+    return () => controller.abort();
   }, [investigationId]);
 
   async function loadHistory(claimId: number) {
