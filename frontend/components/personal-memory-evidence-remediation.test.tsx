@@ -13,7 +13,10 @@ function response(body: unknown, status = 200) {
 }
 
 const inventory = {
-  items: [{ memory_id: 11, summary: "Contested intervention finding" }],
+  items: [
+    { memory_id: 11, summary: "Contested intervention finding" },
+    { memory_id: 12, summary: "Weak replication finding" },
+  ],
 };
 
 const plan = {
@@ -35,6 +38,18 @@ const plan = {
     },
   ],
 };
+
+function appendInventoryButtons() {
+  const existingInventory = document.createElement("div");
+  existingInventory.setAttribute("aria-label", "Personal memory inventory");
+  const firstButton = document.createElement("button");
+  firstButton.textContent = "Contested intervention finding";
+  const secondButton = document.createElement("button");
+  secondButton.textContent = "Weak replication finding";
+  existingInventory.append(firstButton, secondButton);
+  document.body.append(existingInventory);
+  return { firstButton, secondButton };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -64,20 +79,14 @@ describe("PersonalMemoryEvidenceRemediation", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    const existingInventory = document.createElement("div");
-    existingInventory.setAttribute("aria-label", "Personal memory inventory");
-    const recordButton = document.createElement("button");
-    recordButton.textContent = "Contested intervention finding";
-    existingInventory.append(recordButton);
-    document.body.append(existingInventory);
-
+    const { firstButton } = appendInventoryButtons();
     render(<PersonalMemoryEvidenceRemediation />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal-memory/evidence-health",
-      { cache: "no-store" },
+      expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
     ));
 
-    fireEvent.click(recordButton);
+    fireEvent.click(firstButton);
 
     expect(await screen.findByText("resolve contradiction")).toBeInTheDocument();
     expect(screen.getByText("The contradiction is documented.")).toBeInTheDocument();
@@ -104,18 +113,59 @@ describe("PersonalMemoryEvidenceRemediation", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(window, "confirm").mockReturnValue(false);
 
-    const existingInventory = document.createElement("div");
-    existingInventory.setAttribute("aria-label", "Personal memory inventory");
-    const recordButton = document.createElement("button");
-    recordButton.textContent = "Contested intervention finding";
-    existingInventory.append(recordButton);
-    document.body.append(existingInventory);
-
+    const { firstButton } = appendInventoryButtons();
     render(<PersonalMemoryEvidenceRemediation />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    fireEvent.click(recordButton);
+    fireEvent.click(firstButton);
     fireEvent.click(await screen.findByRole("button", { name: "Create research follow-up" }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts inventory and plan requests when unmounted", async () => {
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/personal-memory/evidence-health") return response(inventory);
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { firstButton } = appendInventoryButtons();
+    const { unmount } = render(<PersonalMemoryEvidenceRemediation />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const inventorySignal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
+    fireEvent.click(firstButton);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const planSignal = fetchMock.mock.calls[1]?.[1]?.signal as AbortSignal;
+
+    unmount();
+
+    expect(inventorySignal.aborted).toBe(true);
+    expect(planSignal.aborted).toBe(true);
+  });
+
+  it("aborts the prior plan request before loading a replacement selection", async () => {
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === "/api/personal-memory/evidence-health") return response(inventory);
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { firstButton, secondButton } = appendInventoryButtons();
+    render(<PersonalMemoryEvidenceRemediation />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(firstButton);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const firstPlanSignal = fetchMock.mock.calls[1]?.[1]?.signal as AbortSignal;
+
+    fireEvent.click(secondButton);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+    expect(firstPlanSignal.aborted).toBe(true);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/personal-memory/12/evidence-remediation");
+    expect((fetchMock.mock.calls[2]?.[1]?.signal as AbortSignal).aborted).toBe(false);
   });
 });

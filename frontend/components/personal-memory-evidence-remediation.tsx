@@ -29,23 +29,39 @@ type RemediationPlan = {
   actions: RemediationAction[];
 };
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function PersonalMemoryEvidenceRemediation() {
   const recordsRef = useRef<InventoryItem[]>([]);
   const pendingSelectionRef = useRef<string | null>(null);
+  const inventoryControllerRef = useRef<AbortController | null>(null);
+  const planControllerRef = useRef<AbortController | null>(null);
   const [selectedMemoryId, setSelectedMemoryId] = useState<number | null>(null);
   const [plan, setPlan] = useState<RemediationPlan | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadPlan = useCallback(async (memoryId: number) => {
-    const response = await fetch(`/api/personal-memory/${memoryId}/evidence-remediation`, { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
+    planControllerRef.current?.abort();
+    const controller = new AbortController();
+    planControllerRef.current = controller;
+    try {
+      const response = await fetch(`/api/personal-memory/${memoryId}/evidence-remediation`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Remediation plan could not be loaded.");
+      setPlan(body as RemediationPlan);
+    } finally {
+      if (planControllerRef.current === controller) planControllerRef.current = null;
     }
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Remediation plan could not be loaded.");
-    setPlan(body as RemediationPlan);
   }, []);
 
   const selectFromText = useCallback((text: string) => {
@@ -56,15 +72,21 @@ export function PersonalMemoryEvidenceRemediation() {
     setPlan(null);
     setError(null);
     void loadPlan(selected.memory_id).catch((requestError) => {
+      if (isAbortError(requestError)) return;
       setError(requestError instanceof Error ? requestError.message : "Remediation plan could not be loaded.");
     });
     return true;
   }, [loadPlan]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    inventoryControllerRef.current = controller;
     async function loadRecords() {
       try {
-        const response = await fetch("/api/personal-memory/evidence-health", { cache: "no-store" });
+        const response = await fetch("/api/personal-memory/evidence-health", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (response.status === 401) {
           window.location.href = "/login";
           return;
@@ -72,11 +94,17 @@ export function PersonalMemoryEvidenceRemediation() {
         if (!response.ok) throw new Error("inventory");
         recordsRef.current = ((await response.json()) as Inventory).items;
         if (pendingSelectionRef.current) selectFromText(pendingSelectionRef.current);
-      } catch {
+      } catch (requestError) {
+        if (isAbortError(requestError)) return;
         setError("Evidence remediation records could not be loaded.");
       }
     }
     void loadRecords();
+    return () => {
+      controller.abort();
+      if (inventoryControllerRef.current === controller) inventoryControllerRef.current = null;
+      planControllerRef.current?.abort();
+    };
   }, [selectFromText]);
 
   useEffect(() => {
@@ -110,6 +138,7 @@ export function PersonalMemoryEvidenceRemediation() {
       if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Research follow-up could not be created.");
       if (selectedMemoryId !== null) await loadPlan(selectedMemoryId);
     } catch (requestError) {
+      if (isAbortError(requestError)) return;
       setError(requestError instanceof Error ? requestError.message : "Research follow-up could not be created.");
     } finally {
       setBusyKey(null);
