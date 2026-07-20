@@ -115,6 +115,10 @@ function formatScore(value: number | null) {
   return value === null ? "Unavailable" : `${Math.round(value * 100)}%`;
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function PersonalMemoryControlCenter() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -129,8 +133,8 @@ export function PersonalMemoryControlCenter() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const loadSummary = useCallback(async () => {
-    const response = await fetch("/api/personal-memory/summary", { cache: "no-store" });
+  const loadSummary = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch("/api/personal-memory/summary", { cache: "no-store", signal });
     if (response.status === 401) {
       window.location.href = "/login";
       return;
@@ -139,14 +143,14 @@ export function PersonalMemoryControlCenter() {
     setSummary((await response.json()) as Summary);
   }, []);
 
-  const loadInventory = useCallback(async (scope: Filters) => {
+  const loadInventory = useCallback(async (scope: Filters, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (scope.projectId.trim()) params.set("project_id", scope.projectId.trim());
     if (scope.status) params.set("status", scope.status);
     if (scope.category.trim()) params.set("category", scope.category.trim());
     if (scope.query.trim()) params.set("query", scope.query.trim());
     const suffix = params.size ? `?${params.toString()}` : "";
-    const response = await fetch(`/api/personal-memory${suffix}`, { cache: "no-store" });
+    const response = await fetch(`/api/personal-memory${suffix}`, { cache: "no-store", signal });
     if (response.status === 401) {
       window.location.href = "/login";
       return;
@@ -158,9 +162,11 @@ export function PersonalMemoryControlCenter() {
   }, []);
 
   useEffect(() => {
-    void Promise.all([loadSummary(), loadInventory(emptyFilters)]).catch(() =>
-      setError("Personal memory controls could not be loaded."),
-    );
+    const controller = new AbortController();
+    void Promise.all([loadSummary(controller.signal), loadInventory(emptyFilters, controller.signal)]).catch((loadError) => {
+      if (!isAbortError(loadError)) setError("Personal memory controls could not be loaded.");
+    });
+    return () => controller.abort();
   }, [loadInventory, loadSummary]);
 
   function resetSelectionMode() {

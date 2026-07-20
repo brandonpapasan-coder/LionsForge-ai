@@ -53,6 +53,24 @@ afterEach(() => {
 });
 
 describe("PersonalMemoryControlCenter inventory", () => {
+  it("aborts both initial personal memory requests when the control center unmounts", () => {
+    const requestSignals: AbortSignal[] = [];
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.signal) requestSignals.push(init.signal);
+      return new Promise<Response>(() => undefined);
+    }));
+
+    const { unmount } = render(<PersonalMemoryControlCenter />);
+
+    expect(requestSignals).toHaveLength(2);
+    expect(requestSignals[0]).toBe(requestSignals[1]);
+    expect(requestSignals[0]?.aborted).toBe(false);
+
+    unmount();
+
+    expect(requestSignals[0]?.aborted).toBe(true);
+  });
+
   it("loads a browsable inventory and applies encoded filters", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
