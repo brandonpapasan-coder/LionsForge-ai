@@ -1,0 +1,150 @@
+name: Production Acceptance Validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      record_path:
+        description: Repository-relative path to the completed production acceptance Markdown record
+        required: true
+        default: docs/production-acceptance-record.md
+        type: string
+      release_sha:
+        description: Exact 40-character lowercase production release commit SHA
+        required: true
+        type: string
+      rollback_sha:
+        description: Exact 40-character lowercase previously deployed rollback commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate workflow inputs
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+        run: |
+          set -euo pipefail
+
+          for value in "${RELEASE_SHA}" "${ROLLBACK_SHA}"; do
+            if [[ ! "${value}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "release_sha and rollback_sha must be exact 40-character lowercase commit SHAs" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "${RELEASE_SHA}" == "${ROLLBACK_SHA}" ]]; then
+            echo "release_sha and rollback_sha must differ" >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          for value in "${RELEASE_SHA}" "${ROLLBACK_SHA}"; do
+            git cat-file -e "${value}^{commit}"
+            git merge-base --is-ancestor "${value}" origin/main
+          done
+
+          if [[ "${RECORD_PATH}" = /* || "${RECORD_PATH}" == *".."* || "${RECORD_PATH}" != docs/*.md ]]; then
+            echo "record_path must be a safe repository-relative Markdown path under docs/" >&2
+            exit 1
+          fi
+
+          test -f "${RECORD_PATH}"
+          resolved_path="$(realpath "${RECORD_PATH}")"
+          workspace_path="$(realpath "${GITHUB_WORKSPACE}")"
+          case "${resolved_path}" in
+            "${workspace_path}"/docs/*.md) ;;
+            *)
+              echo "record_path resolves outside the allowed docs directory" >&2
+              exit 1
+              ;;
+          esac
+
+          recorded_release_sha="$(sed -n 's/^- Release SHA:[[:space:]]*//p' "${RECORD_PATH}" | head -n 1)"
+          recorded_rollback_sha="$(sed -n 's/^- Rollback SHA:[[:space:]]*//p' "${RECORD_PATH}" | head -n 1)"
+          test "${recorded_release_sha}" = "${RELEASE_SHA}"
+          test "${recorded_rollback_sha}" = "${ROLLBACK_SHA}"
+
+      - name: Verify required release gates
+        id: release-gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -o pipefail
+          python scripts/verify_release_gates.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${RELEASE_SHA}" \
+            --output production-release-gate-evidence.json \
+            | tee production-release-gate-evidence.txt
+
+      - name: Validate production acceptance record
+        id: validate
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -o pipefail
+          python scripts/validate_production_acceptance.py "${RECORD_PATH}" \
+            | tee production-acceptance-validation.txt
+
+      - name: Publish validation summary
+        if: always()
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+          GATE_OUTCOME: ${{ steps.release-gates.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+        run: |
+          {
+            echo "## Production acceptance validation"
+            echo
+            echo "- Record path: \`${RECORD_PATH}\`"
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Rollback SHA: \`${ROLLBACK_SHA}\`"
+            echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
+            echo "- Record validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo
+            if [[ -f production-release-gate-evidence.json ]]; then
+              echo "### Required release gates"
+              echo
+              python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("production-release-gate-evidence.json").read_text(encoding="utf-8"))
+          print("| Gate | Event | Branch | Status | Conclusion | Run ID |")
+          print("|---|---|---|---|---|---|")
+          for gate in payload["gates"]:
+              print(
+                  f"| {gate['name']} | {gate['event'] or '-'} | "
+                  f"{gate['head_branch'] or '-'} | {gate['status']} | "
+                  f"{gate['conclusion'] or '-'} | {gate['run_id'] or '-'} |"
+              )
+          PY
+              echo
+            fi
+            if [[ -f production-acceptance-validation.txt ]]; then
+              echo "### Record validator"
+              echo
+              echo '```text'
+              cat production-acceptance-validation.txt
+              echo '```'
+            else
+              echo "Record validation did not run because an earlier safety or gate check failed."
+            fi
+            echo
+            echo "This workflow verifies exact-SHA GitHub Actions evidence and record consistency. It does not independently prove external production behavior."
+          } >> "${GITHUB_STEP_SUMMARY}"
