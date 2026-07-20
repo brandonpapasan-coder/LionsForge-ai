@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type EscalationState = "fresh" | "aging" | "overdue" | "critical";
 type EscalationItem = {
@@ -29,30 +29,52 @@ type Inventory = {
   disclaimer: string;
 };
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function PersonalMemoryEvidenceRemediationEscalations() {
   const [projectId, setProjectId] = useState("");
   const [state, setState] = useState("");
   const [inventory, setInventory] = useState<Inventory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
 
   const load = useCallback(async (project: string, escalationState: string) => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+
     const params = new URLSearchParams();
     if (project.trim()) params.set("project_id", project.trim());
     if (escalationState) params.set("escalation_state", escalationState);
     const suffix = params.size ? `?${params.toString()}` : "";
-    const response = await fetch(`/api/personal-memory/evidence-remediation/escalations${suffix}`, { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
+
+    try {
+      const response = await fetch(`/api/personal-memory/evidence-remediation/escalations${suffix}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const body = await response.json().catch(() => ({}));
+      if (controller.signal.aborted) return;
+      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Escalation inventory could not be loaded.");
+      setInventory(body as Inventory);
+    } finally {
+      if (activeRequest.current === controller) activeRequest.current = null;
     }
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Escalation inventory could not be loaded.");
-    setInventory(body as Inventory);
   }, []);
 
   useEffect(() => {
-    void load("", "").catch(() => setError("Evidence remediation escalations could not be loaded."));
+    void load("", "").catch((requestError) => {
+      if (!isAbortError(requestError)) setError("Evidence remediation escalations could not be loaded.");
+    });
+    return () => activeRequest.current?.abort();
   }, [load]);
 
   async function applyFilters() {
@@ -61,7 +83,9 @@ export function PersonalMemoryEvidenceRemediationEscalations() {
     try {
       await load(projectId, state);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Escalation inventory could not be loaded.");
+      if (!isAbortError(requestError)) {
+        setError(requestError instanceof Error ? requestError.message : "Escalation inventory could not be loaded.");
+      }
     } finally {
       setBusy(false);
     }

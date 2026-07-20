@@ -58,8 +58,8 @@ afterEach(() => {
 });
 
 describe("PersonalMemoryEvidenceRemediationEscalations", () => {
-  it("shows critical-first escalation details and applies filters", async () => {
-    const fetchMock = vi.fn(() => response(inventory));
+  it("shows critical-first escalation details and applies filters with a replaceable request signal", async () => {
+    const fetchMock = vi.fn((_url: RequestInfo | URL, _options?: RequestInit) => response(inventory));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<PersonalMemoryEvidenceRemediationEscalations />);
@@ -69,13 +69,49 @@ describe("PersonalMemoryEvidenceRemediationEscalations", () => {
     expect(list).toHaveTextContent("Review immediately");
     expect(screen.getByLabelText("Evidence remediation escalation metrics")).toHaveTextContent("critical1");
 
+    const initialSignal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
     fireEvent.change(screen.getByLabelText("Escalation project ID"), { target: { value: "7" } });
     fireEvent.change(screen.getByLabelText("Escalation state"), { target: { value: "critical" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const filteredSignal = fetchMock.mock.calls[1]?.[1]?.signal as AbortSignal;
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
       "/api/personal-memory/evidence-remediation/escalations?project_id=7&escalation_state=critical",
-      { cache: "no-store" },
-    ));
+    );
+    expect(fetchMock.mock.calls[1]?.[1]?.cache).toBe("no-store");
+    expect(initialSignal.aborted).toBe(false);
+    expect(filteredSignal).not.toBe(initialSignal);
+  });
+
+  it("aborts the active escalation request when unmounted", () => {
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { unmount } = render(<PersonalMemoryEvidenceRemediationEscalations />);
+    const signal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
+
+    expect(signal.aborted).toBe(false);
+    unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts the prior in-flight request before applying replacement filters", async () => {
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PersonalMemoryEvidenceRemediationEscalations />);
+    const initialSignal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
+
+    fireEvent.change(screen.getByLabelText("Escalation project ID"), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(initialSignal.aborted).toBe(true);
+    expect((fetchMock.mock.calls[1]?.[1]?.signal as AbortSignal).aborted).toBe(false);
   });
 });
