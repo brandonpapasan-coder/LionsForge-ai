@@ -25,23 +25,28 @@ export function ClaimEvidencePanel({ investigationId }: { investigationId: numbe
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+
     async function loadClaims() {
       try {
-        const response = await fetch(`/api/investigations/${investigationId}/claims`, { cache: "no-store" });
+        const response = await fetch(`/api/investigations/${investigationId}/claims`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (!response?.ok) throw new Error();
         const payload: unknown = await response.json();
         if (!Array.isArray(payload)) throw new Error();
-        if (active) setClaims(payload as InvestigationClaim[]);
+        setClaims(payload as InvestigationClaim[]);
       } catch {
-        if (active) {
+        if (!controller.signal.aborted) {
           setClaims([]);
           setError("Claims and evidence are temporarily unavailable.");
         }
       }
     }
+
     void loadClaims();
-    return () => { active = false; };
+    return () => controller.abort();
   }, [investigationId]);
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
