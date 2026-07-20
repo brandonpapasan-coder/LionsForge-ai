@@ -185,8 +185,10 @@ export function PersonalMemoryControlCenter() {
   }, [loadInventory, loadSummary]);
 
   function abortEvidenceLoad() {
+    const hadActiveLoad = evidenceControllerRef.current !== null;
     evidenceControllerRef.current?.abort();
     evidenceControllerRef.current = null;
+    if (hadActiveLoad) setBusy(false);
   }
 
   function resetSelectionMode() {
