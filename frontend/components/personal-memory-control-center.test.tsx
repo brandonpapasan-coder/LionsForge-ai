@@ -63,12 +63,52 @@ describe("PersonalMemoryControlCenter inventory", () => {
     const { unmount } = render(<PersonalMemoryControlCenter />);
 
     expect(requestSignals).toHaveLength(2);
-    expect(requestSignals[0]).toBe(requestSignals[1]);
-    expect(requestSignals[0]?.aborted).toBe(false);
+    expect(requestSignals[0]).not.toBe(requestSignals[1]);
+    expect(requestSignals.every((signal) => !signal.aborted)).toBe(true);
 
     unmount();
 
-    expect(requestSignals[0]?.aborted).toBe(true);
+    expect(requestSignals.every((signal) => signal.aborted)).toBe(true);
+  });
+
+  it("cancels a stale filtered inventory request before applying replacement filters", async () => {
+    let firstSignal: AbortSignal | undefined;
+    let resolveFirst: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/personal-memory/summary") return response(summary);
+      if (url === "/api/personal-memory") return response([activeMemory, archivedMemory]);
+      if (url.includes("query=first")) {
+        firstSignal = init?.signal;
+        return new Promise<Response>((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      if (url.includes("query=second")) return response([archivedMemory]);
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PersonalMemoryControlCenter />);
+    await screen.findByText("Prioritize primary evidence");
+    const form = screen.getByLabelText("Memory inventory filters");
+
+    fireEvent.change(screen.getByLabelText("Search memories"), { target: { value: "first" } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(firstSignal).toBeDefined());
+
+    fireEvent.change(screen.getByLabelText("Search memories"), { target: { value: "second" } });
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(firstSignal?.aborted).toBe(true));
+    await waitFor(() => expect(screen.getByText("Prefer concise explanations")).toBeInTheDocument());
+    expect(screen.queryByText("Prioritize primary evidence")).not.toBeInTheDocument();
+
+    resolveFirst?.(await response([activeMemory]));
+    await Promise.resolve();
+
+    expect(screen.getByText("Prefer concise explanations")).toBeInTheDocument();
+    expect(screen.queryByText("Prioritize primary evidence")).not.toBeInTheDocument();
   });
 
   it("loads a browsable inventory and applies encoded filters", async () => {
@@ -97,7 +137,7 @@ describe("PersonalMemoryControlCenter inventory", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/personal-memory?project_id=7&status=provisional&category=learning_goal&query=primary+sources",
-        { cache: "no-store" },
+        expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
       );
     });
     expect(screen.getByText("Prioritize primary evidence")).toBeInTheDocument();
