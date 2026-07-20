@@ -10,9 +10,11 @@ from app.models.investigation import Investigation, InvestigationSynthesis
 from app.models.investigation_evidence import ClaimEvidence, ClaimValidationJudgment, InvestigationClaim
 from app.models.user import User
 from app.schemas.investigation_report import (
+    InvestigationQualityAssessment,
     InvestigationSynthesisRead,
     InvestigationSynthesisUpdate,
     InvestigationValidationReport,
+    QualityAssessmentDimension,
     ReportClaim,
     ReportEvidence,
     ReportJudgment,
@@ -186,4 +188,148 @@ def validation_report(
         limitations=limitations,
         unresolved_questions=unresolved,
         generated_from_stored_state_at=latest_state if isinstance(latest_state, datetime) else investigation.updated_at,
+    )
+
+
+def _dimension(
+    key: str,
+    label: str,
+    status: str,
+    counts: dict[str, int],
+    explanation: str,
+) -> QualityAssessmentDimension:
+    return QualityAssessmentDimension(
+        key=key,
+        label=label,
+        status=status,
+        counts=counts,
+        explanation=explanation,
+    )
+
+
+@router.get("/{investigation_id}/quality-assessment", response_model=InvestigationQualityAssessment)
+def quality_assessment(
+    investigation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> InvestigationQualityAssessment:
+    report = validation_report(investigation_id, current_user, db)
+    claim_count = len(report.claims)
+    evidence_count = sum(len(claim.evidence) for claim in report.claims)
+    claims_with_evidence = sum(bool(claim.evidence) for claim in report.claims)
+    evidence_types = sorted({item.evidence_type for claim in report.claims for item in claim.evidence})
+    judgments = [claim.latest_judgment for claim in report.claims if claim.latest_judgment is not None]
+    current_judgments = sum(not judgment.is_stale for judgment in judgments)
+    synthesis = report.synthesis
+
+    if claim_count == 0:
+        claim_status = "missing"
+    else:
+        claim_status = "complete"
+
+    if evidence_count == 0:
+        evidence_status = "missing"
+    elif claims_with_evidence < claim_count:
+        evidence_status = "partial"
+    else:
+        evidence_status = "complete"
+
+    if not evidence_types:
+        diversity_status = "missing"
+    elif len(evidence_types) == 1:
+        diversity_status = "partial"
+    else:
+        diversity_status = "complete"
+
+    if not judgments:
+        judgment_status = "missing"
+    elif current_judgments < claim_count:
+        judgment_status = "partial"
+    else:
+        judgment_status = "complete"
+
+    synthesis_status = "complete" if synthesis and synthesis.findings else "missing"
+    limitations_status = "complete" if synthesis and synthesis.limitations else "missing"
+    unresolved_status = "complete" if synthesis and synthesis.unresolved_questions else "missing"
+
+    dimensions = [
+        _dimension(
+            "claim_coverage",
+            "Claim coverage",
+            claim_status,
+            {"claims": claim_count},
+            "At least one explicit claim is required to connect the research question to evidence.",
+        ),
+        _dimension(
+            "evidence_coverage",
+            "Evidence coverage",
+            evidence_status,
+            {
+                "claims": claim_count,
+                "claims_with_evidence": claims_with_evidence,
+                "evidence_items": evidence_count,
+            },
+            "Every claim should have attached evidence before it is treated as supported or contradicted.",
+        ),
+        _dimension(
+            "evidence_type_diversity",
+            "Evidence-type diversity",
+            diversity_status,
+            {"evidence_types": len(evidence_types), "evidence_items": evidence_count},
+            "Multiple evidence types can reduce dependence on a single source category.",
+        ),
+        _dimension(
+            "human_validation_judgments",
+            "Human validation judgments",
+            judgment_status,
+            {
+                "claims": claim_count,
+                "judgments": len(judgments),
+                "current_judgments": current_judgments,
+            },
+            "Each claim should have a current user-authored judgment after its latest evidence changes.",
+        ),
+        _dimension(
+            "synthesis_findings",
+            "Synthesis findings",
+            synthesis_status,
+            {"sections_present": int(bool(synthesis and synthesis.findings))},
+            "A synthesis should state what the stored evidence currently justifies.",
+        ),
+        _dimension(
+            "recorded_limitations",
+            "Recorded limitations",
+            limitations_status,
+            {"sections_present": int(bool(synthesis and synthesis.limitations))},
+            "Explicit limitations make the boundaries of the investigation visible.",
+        ),
+        _dimension(
+            "unresolved_questions",
+            "Unresolved questions",
+            unresolved_status,
+            {"sections_present": int(bool(synthesis and synthesis.unresolved_questions))},
+            "Open questions should be recorded rather than hidden by a completed narrative.",
+        ),
+    ]
+
+    recommendation_by_key = {
+        "claim_coverage": "Add at least one explicit claim that can be evaluated against evidence.",
+        "evidence_coverage": "Attach evidence to every claim, including evidence that may contradict it.",
+        "evidence_type_diversity": "Add evidence from another source type where it would materially test the claims.",
+        "human_validation_judgments": "Record or refresh a user-authored validation judgment for every claim.",
+        "synthesis_findings": "Write a synthesis that states only what the stored evidence currently supports.",
+        "recorded_limitations": "Document the investigation's evidence, method, and scope limitations.",
+        "unresolved_questions": "Record the important questions that remain unresolved.",
+    }
+    recommendations = [
+        recommendation_by_key[dimension.key]
+        for dimension in dimensions
+        if dimension.status != "complete"
+    ]
+
+    return InvestigationQualityAssessment(
+        investigation_id=report.investigation_id,
+        dimensions=dimensions,
+        recommendations=recommendations,
+        generated_from_stored_state_at=report.generated_from_stored_state_at,
     )

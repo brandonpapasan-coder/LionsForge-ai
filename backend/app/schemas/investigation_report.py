@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -81,4 +82,24 @@ class InvestigationValidationReport(BaseModel):
     interpretation_notice: str = (
         "This report organizes stored evidence and user-entered judgments. "
         "It does not present user judgments as automated truth."
+    )
+
+
+class QualityAssessmentDimension(BaseModel):
+    key: str
+    label: str
+    status: Literal["missing", "partial", "complete"]
+    counts: dict[str, int]
+    explanation: str
+
+
+class InvestigationQualityAssessment(BaseModel):
+    contract_version: str = "1.0"
+    investigation_id: int
+    dimensions: list[QualityAssessmentDimension]
+    recommendations: list[str]
+    generated_from_stored_state_at: datetime
+    interpretation_notice: str = (
+        "This checklist describes research completeness from stored state. "
+        "It is not a truth score, confidence probability, or automated validation judgment."
     )
