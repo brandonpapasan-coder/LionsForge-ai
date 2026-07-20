@@ -102,7 +102,10 @@ def _rows(lines: list[str]) -> dict[str, list[str]]:
 
 
 def _require_rows(
-    rows: dict[str, list[str]], names: set[str], findings: list[Finding], group: str
+    rows: dict[str, list[str]],
+    names: set[str],
+    findings: list[Finding],
+    group: str,
 ) -> None:
     for name in sorted(names):
         if name not in rows:
@@ -117,7 +120,13 @@ def validate_record(text: str) -> list[Finding]:
 
     sha = fields.get("Release candidate SHA", "")
     if not SHA_RE.fullmatch(sha):
-        findings.append(Finding("invalid-sha", "Release candidate SHA must be exactly 40 lowercase hexadecimal characters"))
+        findings.append(
+            Finding(
+                "invalid-sha",
+                "Release candidate SHA must be exactly 40 lowercase hexadecimal "
+                "characters",
+            )
+        )
 
     decision = fields.get("Decision", "")
     if decision not in {"GO", "NO-GO"}:
@@ -142,7 +151,9 @@ def validate_record(text: str) -> list[Finding]:
     ):
         value = fields.get(field, "")
         if not value or value in {"PENDING", "NOT VERIFIED", "NOT TESTED"}:
-            findings.append(Finding("missing-field", f"Required field is incomplete: {field}"))
+            findings.append(
+                Finding("missing-field", f"Required field is incomplete: {field}")
+            )
 
     _require_rows(rows, REQUIRED_POLICY_SURFACES, findings, "Policy")
     _require_rows(rows, REQUIRED_CHANNELS, findings, "Monitored channel")
@@ -153,37 +164,76 @@ def validate_record(text: str) -> list[Finding]:
     for name in REQUIRED_POLICY_SURFACES:
         cells = rows.get(name, [])
         if len(cells) < 5 or cells[4] != "APPROVED":
-            findings.append(Finding("policy-unapproved", f"Policy must be APPROVED: {name}"))
+            findings.append(
+                Finding("policy-unapproved", f"Policy must be APPROVED: {name}")
+            )
         if any(value in {"", "PENDING", "NOT APPROVED"} for value in cells[:4]):
-            findings.append(Finding("policy-incomplete", f"Policy metadata is incomplete: {name}"))
+            findings.append(
+                Finding("policy-incomplete", f"Policy metadata is incomplete: {name}")
+            )
 
     for name in REQUIRED_CHANNELS:
         cells = rows.get(name, [])
         if len(cells) < 4 or cells[2] != "VERIFIED":
-            findings.append(Finding("channel-unverified", f"Channel monitoring must be VERIFIED: {name}"))
+            findings.append(
+                Finding(
+                    "channel-unverified",
+                    f"Channel monitoring must be VERIFIED: {name}",
+                )
+            )
         if any(value in {"", "PENDING", "NOT VERIFIED"} for value in cells[:4]):
-            findings.append(Finding("channel-incomplete", f"Channel metadata is incomplete: {name}"))
+            findings.append(
+                Finding(
+                    "channel-incomplete", f"Channel metadata is incomplete: {name}"
+                )
+            )
 
     for name in REQUIRED_RETENTION_CLASSES:
         cells = rows.get(name, [])
         if len(cells) < 4 or cells[3] != "APPROVED":
-            findings.append(Finding("retention-unapproved", f"Retention configuration must be APPROVED: {name}"))
+            findings.append(
+                Finding(
+                    "retention-unapproved",
+                    f"Retention configuration must be APPROVED: {name}",
+                )
+            )
         if any(value in {"", "PENDING", "NOT APPROVED"} for value in cells[:4]):
-            findings.append(Finding("retention-incomplete", f"Retention metadata is incomplete: {name}"))
+            findings.append(
+                Finding(
+                    "retention-incomplete",
+                    f"Retention metadata is incomplete: {name}",
+                )
+            )
 
     for name in REQUIRED_WORKFLOWS:
         cells = rows.get(name, [])
         if len(cells) < 4 or cells[3] != "PASSED":
-            findings.append(Finding("workflow-untested", f"Workflow must be PASSED: {name}"))
+            findings.append(
+                Finding("workflow-untested", f"Workflow must be PASSED: {name}")
+            )
         if any(value in {"", "PENDING", "NOT TESTED"} for value in cells[:4]):
-            findings.append(Finding("workflow-incomplete", f"Workflow evidence is incomplete: {name}"))
+            findings.append(
+                Finding(
+                    "workflow-incomplete",
+                    f"Workflow evidence is incomplete: {name}",
+                )
+            )
 
     for name in REQUIRED_APPROVALS:
         cells = rows.get(name, [])
         if len(cells) < 3 or cells[2] != "APPROVED":
-            findings.append(Finding("approval-missing", f"Final approval must be APPROVED: {name}"))
+            findings.append(
+                Finding(
+                    "approval-missing", f"Final approval must be APPROVED: {name}"
+                )
+            )
         if any(value in {"", "PENDING", "NOT APPROVED"} for value in cells[:3]):
-            findings.append(Finding("approval-incomplete", f"Approval metadata is incomplete: {name}"))
+            findings.append(
+                Finding(
+                    "approval-incomplete",
+                    f"Approval metadata is incomplete: {name}",
+                )
+            )
 
     for field in (
         "Log-redaction review completed",
@@ -192,13 +242,32 @@ def validate_record(text: str) -> list[Finding]:
         "Analytics and cookie inventory completed",
     ):
         if fields.get(field) not in {"YES", "VERIFIED"}:
-            findings.append(Finding("privacy-control-incomplete", f"Privacy control is incomplete: {field}"))
+            findings.append(
+                Finding(
+                    "privacy-control-incomplete",
+                    f"Privacy control is incomplete: {field}",
+                )
+            )
 
-    if fields.get("Open high or critical privacy/security defects", "") not in {"0", "None", "none"}:
-        findings.append(Finding("blocking-defect", "GO requires zero open high or critical privacy/security defects"))
+    if fields.get("Open high or critical privacy/security defects", "") not in {
+        "0",
+        "None",
+        "none",
+    }:
+        findings.append(
+            Finding(
+                "blocking-defect",
+                "GO requires zero open high or critical privacy/security defects",
+            )
+        )
 
     if decision == "GO" and findings:
-        findings.append(Finding("invalid-go", "GO is not permitted while mandatory public-operations findings remain"))
+        findings.append(
+            Finding(
+                "invalid-go",
+                "GO is not permitted while mandatory public-operations findings remain",
+            )
+        )
 
     return findings
 
