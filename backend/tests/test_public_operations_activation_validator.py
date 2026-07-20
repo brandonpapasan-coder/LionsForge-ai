@@ -67,6 +67,8 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
         "- Intended effective date: 2026-08-01",
         f"- Decision: **{decision}**",
         "- Public legal entity name: LionsForge AI LLC",
+        "- Public business address or approved registered-agent address: "
+        "controlled-private-record",
         "- Governing-law and venue language approved: Yes",
         "- Supported launch jurisdictions: United States",
         "- Age eligibility and parental-consent position: Adults only",
@@ -126,6 +128,8 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
             "- Private prompts, evidence, education records, and support content "
             "excluded or minimized: VERIFIED",
             "- Analytics and cookie inventory completed: YES",
+            "- Consent control required: YES",
+            "- Consent control tested when required: PASSED",
             f"- Open high or critical privacy/security defects: {defects}",
             "| Approval | Approver role | Date | Status |",
             "|---|---|---|---|",
@@ -145,9 +149,22 @@ def test_valid_go_record_passes() -> None:
     assert validate_record(valid_record()) == []
 
 
+def test_complete_no_go_record_fails_activation() -> None:
+    assert "decision-no-go" in codes(valid_record(decision="NO-GO"))
+
+
 def test_invalid_release_sha_fails() -> None:
     text = valid_record().replace("a" * 40, "main", 1)
     assert "invalid-sha" in codes(text)
+
+
+def test_missing_public_address_fails() -> None:
+    text = valid_record().replace(
+        "- Public business address or approved registered-agent address: "
+        "controlled-private-record",
+        "- Public business address or approved registered-agent address: PENDING",
+    )
+    assert "missing-field" in codes(text)
 
 
 def test_unapproved_policy_and_unverified_channel_fail() -> None:
@@ -186,6 +203,14 @@ def test_incomplete_privacy_controls_fail() -> None:
         "- Log-redaction review completed: NO",
     )
     assert "privacy-control-incomplete" in codes(text)
+
+
+def test_required_consent_control_must_be_tested() -> None:
+    text = valid_record().replace(
+        "- Consent control tested when required: PASSED",
+        "- Consent control tested when required: NOT TESTED",
+    )
+    assert "consent-control-untested" in codes(text)
 
 
 def test_go_rejects_blocking_defects() -> None:
