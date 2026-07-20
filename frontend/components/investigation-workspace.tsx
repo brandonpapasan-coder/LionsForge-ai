@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { ClaimEvidencePanel } from "@/components/claim-evidence-panel";
+import { InvestigationQualityAssessmentPanel } from "@/components/investigation-quality-assessment-panel";
 import { InvestigationSynthesisPanel } from "@/components/investigation-synthesis-panel";
 import { ResearchLearningRecommendations } from "@/components/research-learning-recommendations";
 import { ValidationLedgerPanel } from "@/components/validation-ledger-panel";
@@ -77,6 +78,7 @@ export function InvestigationWorkspace() {
         <ClaimEvidencePanel investigationId={item.id} />
         <ValidationLedgerPanel investigationId={item.id} />
         <InvestigationSynthesisPanel investigationId={item.id} />
+        <InvestigationQualityAssessmentPanel investigationId={item.id} />
         <ResearchLearningRecommendations investigationId={item.id} />
       </article>)}</div> : null}
       {error ? <p role="alert">{error}</p> : null}
