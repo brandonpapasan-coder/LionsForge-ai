@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import sys
 from pathlib import Path
 
@@ -14,6 +15,27 @@ SPEC.loader.exec_module(MODULE)
 
 
 DEFAULT_SHA = "a" * 40
+
+
+class FakeHeaders:
+    def __init__(self, content_type="application/json"):
+        self.content_type = content_type
+
+    def get_content_type(self):
+        return self.content_type
+
+
+class FakeResponse(io.BytesIO):
+    def __init__(self, body, content_type="application/json"):
+        super().__init__(body)
+        self.headers = FakeHeaders(content_type)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
+        return False
 
 
 def run(
@@ -208,6 +230,42 @@ def test_validate_page_runs_rejects_malformed_entries_and_ids():
 def test_validate_page_runs_rejects_duplicate_ids_within_page():
     with pytest.raises(RuntimeError, match="duplicate run id 7"):
         MODULE._validate_page_runs([{"id": 7}, {"id": 7}], 2)
+
+
+def test_response_media_type_requires_readable_json_headers():
+    with pytest.raises(RuntimeError, match="did not include headers"):
+        MODULE._response_media_type(object())
+
+    response = FakeResponse(b"{}", content_type="text/html")
+    with pytest.raises(RuntimeError, match="unexpected content type: text/html"):
+        MODULE._response_media_type(response)
+
+
+def test_fetch_page_rejects_malformed_json(monkeypatch):
+    monkeypatch.setattr(MODULE, "urlopen", lambda request, timeout: FakeResponse(b"{"))
+
+    with pytest.raises(RuntimeError, match="returned malformed JSON"):
+        MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
+
+
+def test_fetch_page_rejects_timeout(monkeypatch):
+    def raise_timeout(request, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(MODULE, "urlopen", raise_timeout)
+
+    with pytest.raises(RuntimeError, match="request failed: timed out"):
+        MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
+
+
+def test_fetch_page_rejects_incomplete_read(monkeypatch):
+    def raise_incomplete_read(request, timeout):
+        raise MODULE.IncompleteRead(b"partial", 100)
+
+    monkeypatch.setattr(MODULE, "urlopen", raise_incomplete_read)
+
+    with pytest.raises(RuntimeError, match="request failed"):
+        MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
 
 
 def test_fetch_runs_paginates_until_partial_page(monkeypatch):
