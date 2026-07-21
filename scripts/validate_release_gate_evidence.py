@@ -94,6 +94,20 @@ def _contains_surrogate(value: str) -> bool:
     return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
 
+def _contains_control_character(value: str) -> bool:
+    return any(
+        ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F
+        for character in value
+    )
+
+
+def _validate_json_string(value: str) -> None:
+    if _contains_surrogate(value):
+        raise ValueError("evidence JSON contains an invalid Unicode surrogate")
+    if _contains_control_character(value):
+        raise ValueError("evidence JSON contains a control character")
+
+
 def _validate_json_tree(value: object) -> None:
     stack: list[tuple[object, int]] = [(value, 1)]
     node_count = 0
@@ -109,8 +123,7 @@ def _validate_json_tree(value: object) -> None:
                 f"evidence JSON exceeds the maximum nesting depth of {MAX_JSON_DEPTH}"
             )
         if isinstance(current, str):
-            if _contains_surrogate(current):
-                raise ValueError("evidence JSON contains an invalid Unicode surrogate")
+            _validate_json_string(current)
         elif isinstance(current, list):
             stack.extend((item, depth + 1) for item in current)
         elif isinstance(current, dict):
@@ -120,10 +133,7 @@ def _validate_json_tree(value: object) -> None:
                     raise ValueError(
                         f"evidence JSON exceeds the maximum node count of {MAX_JSON_NODES}"
                     )
-                if _contains_surrogate(key):
-                    raise ValueError(
-                        "evidence JSON contains an invalid Unicode surrogate"
-                    )
+                _validate_json_string(key)
                 stack.append((item, depth + 1))
 
 
