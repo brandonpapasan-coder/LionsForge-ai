@@ -9,6 +9,7 @@ import os
 import re
 import stat
 import sys
+import unicodedata
 from pathlib import Path
 
 REQUIRED_WORKFLOW_PATHS = {
@@ -26,6 +27,7 @@ MAX_JSON_DEPTH = 32
 MAX_JSON_NODES = 10_000
 MAX_JSON_INTEGER_DIGITS = 20
 MAX_JSON_STRING_CHARACTERS = 4_096
+MAX_PATH_COMPONENT_BYTES = 255
 UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 SPECIAL_PERMISSION_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
@@ -174,12 +176,32 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
         raise ValueError("evidence file must be owned by the effective user")
 
 
+def _validate_path_component(component: str) -> None:
+    if _contains_surrogate(component):
+        raise ValueError("evidence path components must contain valid Unicode scalars")
+    if _contains_control_character(component):
+        raise ValueError("evidence path components must not contain control characters")
+    if unicodedata.normalize("NFC", component) != component:
+        raise ValueError("evidence path components must use NFC Unicode normalization")
+    if component.endswith((" ", ".")):
+        raise ValueError("evidence path components must not end with a space or dot")
+    if len(component.encode("utf-8")) > MAX_PATH_COMPONENT_BYTES:
+        raise ValueError(
+            "evidence path component exceeds the maximum UTF-8 byte length of "
+            f"{MAX_PATH_COMPONENT_BYTES}"
+        )
+
+
 def _validate_evidence_path(path: Path) -> None:
     name = path.name
     if not name:
         raise ValueError("evidence path must identify a file")
     if ".." in path.parts:
         raise ValueError("evidence path must not contain parent traversal components")
+    anchor = path.anchor
+    for component in path.parts:
+        if component != anchor:
+            _validate_path_component(component)
     if name.startswith("."):
         raise ValueError("evidence filename must not be hidden")
     if name.startswith("-"):
