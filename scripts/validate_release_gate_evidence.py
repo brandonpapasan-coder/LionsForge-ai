@@ -88,6 +88,26 @@ def _reject_nonstandard_constant(value: str) -> object:
     raise ValueError(f"evidence JSON contains non-standard constant: {value}")
 
 
+def _contains_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+
+
+def _validate_unicode_scalars(value: object) -> None:
+    if isinstance(value, str):
+        if _contains_surrogate(value):
+            raise ValueError("evidence JSON contains an invalid Unicode surrogate")
+        return
+    if isinstance(value, list):
+        for item in value:
+            _validate_unicode_scalars(item)
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if _contains_surrogate(key):
+                raise ValueError("evidence JSON contains an invalid Unicode surrogate")
+            _validate_unicode_scalars(item)
+
+
 def _read_evidence(path: Path) -> object:
     try:
         before = path.lstat()
@@ -136,13 +156,15 @@ def _read_evidence(path: Path) -> object:
     except UnicodeDecodeError as exc:
         raise ValueError("evidence file is not valid UTF-8") from exc
     try:
-        return json.loads(
+        payload = json.loads(
             text,
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonstandard_constant,
         )
     except json.JSONDecodeError as exc:
         raise ValueError("evidence file contains malformed JSON") from exc
+    _validate_unicode_scalars(payload)
+    return payload
 
 
 def _validate_missing_gate(gate: dict, index: int) -> None:
