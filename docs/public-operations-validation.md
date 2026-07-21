@@ -15,6 +15,7 @@ Public registration must remain disabled unless the completed activation record 
 - `backend/tests/test_public_operations_activation_validator.py`
 - `backend/tests/test_public_operations_row_evidence_validator.py`
 - `backend/tests/test_public_operations_activation_template.py`
+- `backend/tests/test_verify_release_gate_response_limits.py`
 - `backend/tests/test_verify_release_gates.py`
 - `.github/workflows/public-operations-validate.yml`
 - `.github/workflows/backend-ci.yml`
@@ -34,7 +35,7 @@ Each gate must also come from its exact required workflow file. A different work
 
 Manual runs, pull-request runs, branch aliases, tags, shortened SHAs, and evidence from a different commit are not acceptable substitutes.
 
-The release-gate verifier treats malformed GitHub API responses, unexpected non-JSON media types, malformed JSON, timeouts, truncated reads, unreadable response headers, non-object run entries, invalid or duplicate run IDs, repeated pagination evidence, and pagination beyond the configured safety limit as blocking errors. These conditions must not be interpreted as successful or merely absent evidence.
+The release-gate verifier treats malformed GitHub API responses, unexpected non-JSON media types, malformed JSON, timeouts, truncated reads, unreadable response headers, invalid or mismatched `Content-Length` values, response bodies beyond the configured byte limit, non-object run entries, invalid or duplicate run IDs, repeated pagination evidence, and pagination beyond the configured safety limit as blocking errors. These conditions must not be interpreted as successful or merely absent evidence.
 
 ## Activation record requirements
 
