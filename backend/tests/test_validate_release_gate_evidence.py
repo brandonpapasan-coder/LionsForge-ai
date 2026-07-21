@@ -18,25 +18,40 @@ REPOSITORY = "owner/repository"
 SHA = "a" * 40
 
 
-def gate(name, *, passed=True, run_id=1):
-    return {
+def gate(name, *, state="success", run_id=1):
+    base = {
         "name": name,
         "path": MODULE.REQUIRED_WORKFLOW_PATHS[name],
-        "status": "completed" if passed else "in_progress",
-        "conclusion": "success" if passed else None,
-        "run_id": run_id if passed else None,
-        "html_url": f"https://github.com/owner/repository/actions/runs/{run_id}"
-        if passed
-        else None,
-        "event": "push" if passed else None,
-        "head_branch": "main" if passed else None,
-        "head_sha": SHA if passed else None,
+    }
+    if state == "missing":
+        return {
+            **base,
+            "status": "missing",
+            "conclusion": None,
+            "run_id": None,
+            "html_url": None,
+            "event": None,
+            "head_branch": None,
+            "head_sha": None,
+        }
+    status = "completed" if state in {"success", "failure"} else "in_progress"
+    conclusion = state if state in {"success", "failure"} else None
+    return {
+        **base,
+        "status": status,
+        "conclusion": conclusion,
+        "run_id": run_id,
+        "html_url": f"https://github.com/{REPOSITORY}/actions/runs/{run_id}",
+        "event": "push",
+        "head_branch": "main",
+        "head_sha": SHA,
     }
 
 
-def payload(*, passed=True):
+def payload(*, passed=True, state=None):
+    gate_state = state or ("success" if passed else "missing")
     gates = [
-        gate(name, passed=passed, run_id=index)
+        gate(name, state=gate_state, run_id=index)
         for index, name in enumerate(MODULE.REQUIRED_WORKFLOW_PATHS, start=1)
     ]
     return {
@@ -54,9 +69,14 @@ def write_payload(path: Path, evidence=None) -> None:
     path.write_text(json.dumps(evidence or payload()), encoding="utf-8")
 
 
-def test_accepts_consistent_passing_and_failing_evidence():
+def test_accepts_consistent_passing_missing_and_completed_failure_evidence():
     MODULE.validate_payload(payload(passed=True), REPOSITORY, SHA)
     MODULE.validate_payload(payload(passed=False), REPOSITORY, SHA)
+    MODULE.validate_payload(
+        payload(passed=False, state="failure"),
+        REPOSITORY,
+        SHA,
+    )
 
 
 def test_reads_regular_utf8_json_file(tmp_path):
@@ -167,19 +187,69 @@ def test_rejects_gate_reordering_and_path_spoofing():
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
 
-def test_rejects_invalid_gate_fields():
+def test_rejects_unknown_status_conclusion_and_premature_conclusion():
+    evidence = payload()
+    evidence["gates"][0]["status"] = "invented"
+    with pytest.raises(ValueError, match="status is invalid"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+    evidence = payload()
+    evidence["gates"][0]["conclusion"] = "invented"
+    with pytest.raises(ValueError, match="conclusion is invalid"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+    evidence = payload(passed=False, state="in_progress")
+    evidence["gates"][0]["conclusion"] = "success"
+    with pytest.raises(ValueError, match="must be null before completion"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+
+def test_rejects_incoherent_missing_evidence():
+    evidence = payload(passed=False)
+    evidence["gates"][0]["status"] = "in_progress"
+    with pytest.raises(ValueError, match="missing evidence status"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+    evidence = payload(passed=False)
+    evidence["gates"][0]["html_url"] = "https://github.com/owner/repository/actions/runs/1"
+    with pytest.raises(ValueError, match="missing evidence has invalid html_url"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+
+def test_rejects_invalid_run_identity_and_url_binding():
     evidence = payload()
     evidence["gates"][0]["run_id"] = True
     with pytest.raises(ValueError, match="run_id is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload()
-    evidence["gates"][0]["html_url"] = "https://example.test/run/1"
+    evidence["gates"][0]["html_url"] = (
+        "https://github.com/other/repository/actions/runs/1"
+    )
     with pytest.raises(ValueError, match="html_url is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload()
-    evidence["gates"][0]["head_sha"] = "not-a-sha"
+    evidence["gates"][0]["html_url"] = (
+        "https://github.com/owner/repository/actions/runs/999"
+    )
+    with pytest.raises(ValueError, match="html_url is invalid"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+
+def test_rejects_invalid_event_branch_and_sha_binding():
+    evidence = payload()
+    evidence["gates"][0]["event"] = "pull_request"
+    with pytest.raises(ValueError, match="event is invalid"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+    evidence = payload()
+    evidence["gates"][0]["head_branch"] = "dev/test"
+    with pytest.raises(ValueError, match="head_branch is invalid"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+    evidence = payload()
+    evidence["gates"][0]["head_sha"] = "b" * 40
     with pytest.raises(ValueError, match="head_sha is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
