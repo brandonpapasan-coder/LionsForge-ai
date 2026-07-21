@@ -12,6 +12,15 @@ from pathlib import Path
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 FIELD_RE = re.compile(r"^- ([^:]+):\s*(.*)$")
 TABLE_ROW_RE = re.compile(r"^\|(.+)\|$")
+AFFIRMATIVE_VALUES = {"YES", "APPROVED", "VERIFIED"}
+INCOMPLETE_VALUES = {
+    "",
+    "NO",
+    "PENDING",
+    "NOT APPROVED",
+    "NOT TESTED",
+    "NOT VERIFIED",
+}
 
 REQUIRED_POLICY_SURFACES = {
     "Privacy Notice",
@@ -20,14 +29,12 @@ REQUIRED_POLICY_SURFACES = {
     "Data retention and deletion policy",
     "Acceptable use and abuse reporting",
 }
-
 REQUIRED_CHANNELS = {
     "General support",
     "Privacy requests",
     "Security reports",
     "Abuse reports",
 }
-
 REQUIRED_RETENTION_CLASSES = {
     "Account records",
     "Investigation and workspace data",
@@ -37,7 +44,6 @@ REQUIRED_RETENTION_CLASSES = {
     "Backups",
     "Support and privacy-request records",
 }
-
 REQUIRED_WORKFLOWS = {
     "Privacy request intake",
     "Identity verification",
@@ -49,7 +55,6 @@ REQUIRED_WORKFLOWS = {
     "Security report intake and escalation",
     "Consent recording and policy-version capture",
 }
-
 REQUIRED_APPROVALS = {
     "Business owner",
     "Legal reviewer",
@@ -139,7 +144,7 @@ def validate_record(text: str) -> list[Finding]:
             )
         )
 
-    for field in (
+    required_fields = (
         "Record owner role",
         "Review date",
         "Intended effective date",
@@ -156,12 +161,21 @@ def validate_record(text: str) -> list[Finding]:
         "Abuse-report acknowledgment target",
         "After-hours critical incident coverage",
         "Escalation owner role",
-    ):
-        value = fields.get(field, "")
-        if not value or value in {"PENDING", "NOT VERIFIED", "NOT TESTED"}:
+    )
+    for field in required_fields:
+        if fields.get(field, "").upper() in INCOMPLETE_VALUES:
             findings.append(
                 Finding("missing-field", f"Required field is incomplete: {field}")
             )
+
+    governing_law = fields.get("Governing-law and venue language approved", "").upper()
+    if governing_law not in AFFIRMATIVE_VALUES:
+        findings.append(
+            Finding(
+                "legal-approval-incomplete",
+                "Governing-law and venue language must be affirmatively approved",
+            )
+        )
 
     _require_rows(rows, REQUIRED_POLICY_SURFACES, findings, "Policy")
     _require_rows(rows, REQUIRED_CHANNELS, findings, "Monitored channel")
@@ -249,7 +263,7 @@ def validate_record(text: str) -> list[Finding]:
         "Private prompts, evidence, education records, and support content excluded or minimized",
         "Analytics and cookie inventory completed",
     ):
-        if fields.get(field) not in {"YES", "VERIFIED"}:
+        if fields.get(field, "").upper() not in AFFIRMATIVE_VALUES:
             findings.append(
                 Finding(
                     "privacy-control-incomplete",
@@ -257,8 +271,8 @@ def validate_record(text: str) -> list[Finding]:
                 )
             )
 
-    consent_required = fields.get("Consent control required", "")
-    consent_tested = fields.get("Consent control tested when required", "")
+    consent_required = fields.get("Consent control required", "").upper()
+    consent_tested = fields.get("Consent control tested when required", "").upper()
     if consent_required not in {"YES", "NO", "NOT REQUIRED"}:
         findings.append(
             Finding(
