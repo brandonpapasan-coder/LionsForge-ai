@@ -194,8 +194,27 @@ def test_input_validation_rejects_malformed_repository_and_sha():
         MODULE.validate_inputs("owner/repository", "ABC123")
 
 
+def test_validate_page_runs_rejects_malformed_entries_and_ids():
+    with pytest.raises(RuntimeError, match="non-object run"):
+        MODULE._validate_page_runs(["not-an-object"], 1)
+
+    with pytest.raises(RuntimeError, match="invalid run id"):
+        MODULE._validate_page_runs([{"id": 0}], 1)
+
+    with pytest.raises(RuntimeError, match="invalid run id"):
+        MODULE._validate_page_runs([{"id": True}], 1)
+
+
+def test_validate_page_runs_rejects_duplicate_ids_within_page():
+    with pytest.raises(RuntimeError, match="duplicate run id 7"):
+        MODULE._validate_page_runs([{"id": 7}, {"id": 7}], 2)
+
+
 def test_fetch_runs_paginates_until_partial_page(monkeypatch):
-    first_page = [run("Backend CI", run_id=index) for index in range(MODULE.PER_PAGE)]
+    first_page = [
+        run("Backend CI", run_id=index)
+        for index in range(1, MODULE.PER_PAGE + 1)
+    ]
     second_page = [run("Frontend CI", run_id=1000)]
     requested_pages = []
 
@@ -211,3 +230,34 @@ def test_fetch_runs_paginates_until_partial_page(monkeypatch):
 
     assert requested_pages == [1, 2]
     assert runs == first_page + second_page
+
+
+def test_fetch_runs_rejects_repeated_ids_across_pages(monkeypatch):
+    monkeypatch.setattr(MODULE, "PER_PAGE", 2)
+    pages = {
+        1: [run("Backend CI", run_id=1), run("Frontend CI", run_id=2)],
+        2: [run("Security Gate", run_id=2)],
+    }
+    monkeypatch.setattr(
+        MODULE,
+        "_fetch_page",
+        lambda repository, sha, token, page: pages[page],
+    )
+
+    with pytest.raises(RuntimeError, match="repeated run id.*2"):
+        MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")
+
+
+def test_fetch_runs_enforces_maximum_page_limit(monkeypatch):
+    monkeypatch.setattr(MODULE, "PER_PAGE", 1)
+    monkeypatch.setattr(MODULE, "MAX_PAGES", 2)
+    monkeypatch.setattr(
+        MODULE,
+        "_fetch_page",
+        lambda repository, sha, token, page: [
+            run("Backend CI", run_id=page)
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="2-page safety limit"):
+        MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")
