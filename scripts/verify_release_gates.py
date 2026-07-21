@@ -28,6 +28,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PER_PAGE = 100
 MAX_PAGES = 100
+MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 EXPECTED_MEDIA_TYPES = {"application/json", "application/vnd.github+json"}
 
 
@@ -172,6 +173,50 @@ def _response_media_type(response: object) -> str:
     return media_type
 
 
+def _response_content_length(response: object) -> int | None:
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        raise RuntimeError("GitHub Actions API response did not include headers")
+    get_header = getattr(headers, "get", None)
+    if not callable(get_header):
+        raise RuntimeError("GitHub Actions API response headers were not readable")
+    raw_length = get_header("Content-Length")
+    if raw_length in (None, ""):
+        return None
+    try:
+        length = int(str(raw_length))
+    except ValueError as exc:
+        raise RuntimeError("GitHub Actions API returned an invalid Content-Length") from exc
+    if length < 0:
+        raise RuntimeError("GitHub Actions API returned an invalid Content-Length")
+    if length > MAX_RESPONSE_BYTES:
+        raise RuntimeError(
+            f"GitHub Actions API response exceeded the {MAX_RESPONSE_BYTES}-byte limit"
+        )
+    return length
+
+
+def _read_json_payload(response: object) -> object:
+    _response_media_type(response)
+    declared_length = _response_content_length(response)
+    read = getattr(response, "read", None)
+    if not callable(read):
+        raise RuntimeError("GitHub Actions API response body was not readable")
+    body = read(MAX_RESPONSE_BYTES + 1)
+    if not isinstance(body, bytes):
+        raise RuntimeError("GitHub Actions API response body was not bytes")
+    if len(body) > MAX_RESPONSE_BYTES:
+        raise RuntimeError(
+            f"GitHub Actions API response exceeded the {MAX_RESPONSE_BYTES}-byte limit"
+        )
+    if declared_length is not None and len(body) != declared_length:
+        raise RuntimeError("GitHub Actions API response body length did not match Content-Length")
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError("GitHub Actions API returned malformed JSON") from exc
+
+
 def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
     query = urlencode({"head_sha": sha, "per_page": PER_PAGE, "page": page})
     url = f"https://api.github.com/repos/{repository}/actions/runs?{query}"
@@ -186,12 +231,9 @@ def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
     )
     try:
         with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed GitHub API host
-            _response_media_type(response)
-            payload = json.load(response)
+            payload = _read_json_payload(response)
     except (HTTPError, URLError, SocketTimeout, TimeoutError, IncompleteRead) as exc:
         raise RuntimeError(f"GitHub Actions API request failed: {exc}") from exc
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise RuntimeError("GitHub Actions API returned malformed JSON") from exc
     except OSError as exc:
         raise RuntimeError(f"GitHub Actions API response read failed: {exc}") from exc
     if not isinstance(payload, dict):
