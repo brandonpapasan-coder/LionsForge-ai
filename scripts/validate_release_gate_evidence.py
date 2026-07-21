@@ -29,6 +29,7 @@ MAX_JSON_INTEGER_DIGITS = 20
 MAX_JSON_STRING_CHARACTERS = 4_096
 MAX_PATH_COMPONENT_BYTES = 255
 MAX_PATH_BYTES = 4_096
+MAX_PATH_COMPONENTS = 64
 UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 SPECIAL_PERMISSION_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
@@ -209,9 +210,14 @@ def _validate_evidence_path(path: Path) -> None:
             f"{MAX_PATH_BYTES}"
         )
     anchor = path.anchor
-    for component in path.parts:
-        if component != anchor:
-            _validate_path_component(component)
+    components = tuple(component for component in path.parts if component != anchor)
+    if len(components) > MAX_PATH_COMPONENTS:
+        raise ValueError(
+            "evidence path exceeds the maximum component count of "
+            f"{MAX_PATH_COMPONENTS}"
+        )
+    for component in components:
+        _validate_path_component(component)
     if name.startswith("."):
         raise ValueError("evidence filename must not be hidden")
     if name.startswith("-"):
