@@ -191,6 +191,61 @@ def _validate_parent_components(path: Path) -> None:
             raise ValueError("evidence parent path components must be directories")
 
 
+def _descriptor_relative_open_supported() -> bool:
+    return (
+        hasattr(os, "O_DIRECTORY")
+        and hasattr(os, "O_NOFOLLOW")
+        and os.open in getattr(os, "supports_dir_fd", set())
+    )
+
+
+def _open_evidence_descriptor(path: Path) -> int:
+    file_flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        file_flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        file_flags |= os.O_NOFOLLOW
+
+    if not _descriptor_relative_open_supported():
+        try:
+            return os.open(path, file_flags)
+        except OSError as exc:
+            raise ValueError(f"unable to open evidence file safely: {exc}") from exc
+
+    absolute = path.absolute()
+    parts = absolute.parts
+    if not parts or not absolute.anchor:
+        raise ValueError("unable to open evidence file safely: path has no absolute anchor")
+
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        directory_flags |= os.O_CLOEXEC
+
+    directory_descriptor: int | None = None
+    try:
+        directory_descriptor = os.open(absolute.anchor, directory_flags)
+        for component in parts[1:-1]:
+            next_descriptor = os.open(
+                component,
+                directory_flags,
+                dir_fd=directory_descriptor,
+            )
+            metadata = os.fstat(next_descriptor)
+            if not stat.S_ISDIR(metadata.st_mode):
+                os.close(next_descriptor)
+                raise ValueError("evidence parent path components must be directories")
+            os.close(directory_descriptor)
+            directory_descriptor = next_descriptor
+        return os.open(parts[-1], file_flags, dir_fd=directory_descriptor)
+    except ValueError:
+        raise
+    except OSError as exc:
+        raise ValueError(f"unable to open evidence file safely: {exc}") from exc
+    finally:
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)
+
+
 def _read_bounded_descriptor(descriptor: int) -> bytes:
     chunks: list[bytes] = []
     remaining = MAX_EVIDENCE_BYTES + 1
@@ -221,14 +276,7 @@ def _read_evidence(path: Path) -> object:
             f"evidence file exceeds the {MAX_EVIDENCE_BYTES}-byte safety limit"
         )
 
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise ValueError(f"unable to open evidence file safely: {exc}") from exc
-
+    descriptor = _open_evidence_descriptor(path)
     try:
         opened = os.fstat(descriptor)
         if not stat.S_ISREG(opened.st_mode):
