@@ -39,6 +39,7 @@ WINDOWS_RESERVED_NAMES = {
     *(f"COM{index}" for index in range(1, 10)),
     *(f"LPT{index}" for index in range(1, 10)),
 }
+PORTABLE_FORBIDDEN_PATH_CHARACTERS = frozenset('<>:"/\\|?*')
 ALLOWED_STATUSES = {
     "completed", "in_progress", "pending", "queued", "requested", "waiting"
 }
@@ -190,6 +191,8 @@ def _validate_path_component(component: str) -> None:
         raise ValueError("evidence path components must not contain control characters")
     if unicodedata.normalize("NFC", component) != component:
         raise ValueError("evidence path components must use NFC Unicode normalization")
+    if any(character in PORTABLE_FORBIDDEN_PATH_CHARACTERS for character in component):
+        raise ValueError("evidence path components contain a forbidden portable character")
     if component.endswith((" ", ".")):
         raise ValueError("evidence path components must not end with a space or dot")
     if len(component.encode("utf-8")) > MAX_PATH_COMPONENT_BYTES:
