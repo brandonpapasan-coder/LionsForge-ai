@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "verify_release_gates.py"
 SPEC = importlib.util.spec_from_file_location("verify_release_gates", SCRIPT)
@@ -17,6 +19,7 @@ def run(
     status="completed",
     conclusion="success",
     run_number=1,
+    run_attempt=1,
     run_id=1,
     event="push",
     head_branch="main",
@@ -26,6 +29,7 @@ def run(
         "status": status,
         "conclusion": conclusion,
         "run_number": run_number,
+        "run_attempt": run_attempt,
         "id": run_id,
         "html_url": f"https://example.test/runs/{run_id}",
         "event": event,
@@ -57,6 +61,32 @@ def test_latest_eligible_run_wins():
     results = MODULE.evaluate_runs(runs)
     backend = next(result for result in results if result.name == "Backend CI")
     assert backend.run_id == 11
+    assert backend.conclusion == "success"
+
+
+def test_latest_rerun_attempt_wins_for_same_run_number():
+    runs = [
+        run(
+            "Backend CI",
+            conclusion="failure",
+            run_number=5,
+            run_attempt=1,
+            run_id=50,
+        ),
+        run(
+            "Backend CI",
+            conclusion="success",
+            run_number=5,
+            run_attempt=2,
+            run_id=51,
+        ),
+    ]
+    backend = next(
+        result
+        for result in MODULE.evaluate_runs(runs)
+        if result.name == "Backend CI"
+    )
+    assert backend.run_id == 51
     assert backend.conclusion == "success"
 
 
@@ -99,3 +129,30 @@ def test_in_progress_or_failed_gate_fails():
 
     runs[0] = run("Backend CI", conclusion="failure")
     assert not MODULE.all_passed(MODULE.evaluate_runs(runs))
+
+
+def test_input_validation_rejects_malformed_repository_and_sha():
+    with pytest.raises(ValueError, match="owner/name"):
+        MODULE.validate_inputs("not-a-repository", "a" * 40)
+
+    with pytest.raises(ValueError, match="40 lowercase"):
+        MODULE.validate_inputs("owner/repository", "ABC123")
+
+
+def test_fetch_runs_paginates_until_partial_page(monkeypatch):
+    first_page = [run("Backend CI", run_id=index) for index in range(MODULE.PER_PAGE)]
+    second_page = [run("Frontend CI", run_id=1000)]
+    requested_pages = []
+
+    def fake_fetch_page(repository, sha, token, page):
+        assert repository == "owner/repository"
+        assert sha == "a" * 40
+        assert token == "token"
+        requested_pages.append(page)
+        return first_page if page == 1 else second_page
+
+    monkeypatch.setattr(MODULE, "_fetch_page", fake_fetch_page)
+    runs = MODULE.fetch_runs("owner/repository", "a" * 40, "token")
+
+    assert requested_pages == [1, 2]
+    assert runs == first_page + second_page
