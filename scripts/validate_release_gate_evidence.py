@@ -131,6 +131,13 @@ def _starts_with_combining_mark(value: str) -> bool:
     return bool(value) and unicodedata.category(value[0]) in {"Mn", "Mc", "Me"}
 
 
+def _contains_non_ascii_decimal_digit(value: str) -> bool:
+    return any(
+        unicodedata.category(character) == "Nd" and not ("0" <= character <= "9")
+        for character in value
+    )
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -225,6 +232,8 @@ def _validate_path_component(component: str) -> None:
         raise ValueError("evidence path components must not contain Unicode format characters")
     if _contains_non_ascii_whitespace(component):
         raise ValueError("evidence path components must not contain non-ASCII whitespace")
+    if _contains_non_ascii_decimal_digit(component):
+        raise ValueError("evidence path components must use ASCII decimal digits")
     if component.startswith(" ") or component.endswith(" "):
         raise ValueError("evidence path components must not begin or end with a space")
     if unicodedata.normalize("NFC", component) != component:
