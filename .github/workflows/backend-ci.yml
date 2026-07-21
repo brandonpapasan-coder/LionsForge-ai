@@ -76,6 +76,7 @@ jobs:
           tests/test_public_operations_activation_template.py
           tests/test_public_operations_activation_validator.py
           tests/test_public_operations_row_evidence_validator.py
+          tests/test_verify_release_gate_response_limits.py
           tests/test_verify_release_gates.py
 
       - name: Ruff format check
@@ -91,6 +92,7 @@ jobs:
           tests/test_public_operations_activation_template.py
           tests/test_public_operations_activation_validator.py
           tests/test_public_operations_row_evidence_validator.py
+          tests/test_verify_release_gate_response_limits.py
           tests/test_verify_release_gates.py
 
       - name: Type check
