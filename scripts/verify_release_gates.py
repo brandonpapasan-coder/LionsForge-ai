@@ -25,6 +25,7 @@ REQUIRED_BRANCH = "main"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PER_PAGE = 100
+MAX_PAGES = 100
 
 
 @dataclass(frozen=True)
@@ -128,6 +129,31 @@ def all_passed(
     )
 
 
+def _validate_page_runs(runs: object, page: int) -> list[dict]:
+    if not isinstance(runs, list):
+        raise RuntimeError("GitHub Actions API response did not contain workflow_runs")
+
+    validated: list[dict] = []
+    page_run_ids: set[int] = set()
+    for index, run in enumerate(runs):
+        if not isinstance(run, dict):
+            raise RuntimeError(
+                f"GitHub Actions API page {page} contained a non-object run at index {index}"
+            )
+        run_id = run.get("id")
+        if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
+            raise RuntimeError(
+                f"GitHub Actions API page {page} contained an invalid run id at index {index}"
+            )
+        if run_id in page_run_ids:
+            raise RuntimeError(
+                f"GitHub Actions API page {page} contained duplicate run id {run_id}"
+            )
+        page_run_ids.add(run_id)
+        validated.append(run)
+    return validated
+
+
 def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
     query = urlencode({"head_sha": sha, "per_page": PER_PAGE, "page": page})
     url = f"https://api.github.com/repos/{repository}/actions/runs?{query}"
@@ -145,22 +171,33 @@ def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
             payload = json.load(response)
     except (HTTPError, URLError) as exc:
         raise RuntimeError(f"GitHub Actions API request failed: {exc}") from exc
-    runs = payload.get("workflow_runs")
-    if not isinstance(runs, list):
-        raise RuntimeError("GitHub Actions API response did not contain workflow_runs")
-    return runs
+    if not isinstance(payload, dict):
+        raise RuntimeError("GitHub Actions API response was not an object")
+    return _validate_page_runs(payload.get("workflow_runs"), page)
 
 
 def fetch_runs(repository: str, sha: str, token: str) -> list[dict]:
     validate_inputs(repository, sha)
     runs: list[dict] = []
-    page = 1
-    while True:
+    seen_run_ids: set[int] = set()
+
+    for page in range(1, MAX_PAGES + 1):
         page_runs = _fetch_page(repository, sha, token, page)
+        page_ids = {run["id"] for run in page_runs}
+        duplicate_ids = page_ids & seen_run_ids
+        if duplicate_ids:
+            duplicate_list = ", ".join(str(run_id) for run_id in sorted(duplicate_ids))
+            raise RuntimeError(
+                f"GitHub Actions API pagination repeated run id(s): {duplicate_list}"
+            )
+        seen_run_ids.update(page_ids)
         runs.extend(page_runs)
         if len(page_runs) < PER_PAGE:
             return runs
-        page += 1
+
+    raise RuntimeError(
+        f"GitHub Actions API pagination exceeded the {MAX_PAGES}-page safety limit"
+    )
 
 
 def parse_args() -> argparse.Namespace:
