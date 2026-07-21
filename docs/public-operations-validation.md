@@ -11,11 +11,13 @@ Public registration must remain disabled unless the completed activation record 
 - `docs/public-operations-activation-record.md`
 - `scripts/validate_public_operations_activation.py`
 - `scripts/validate_public_operations_row_evidence.py`
+- `scripts/validate_release_gate_evidence.py`
 - `scripts/verify_release_gates.py`
 - `scripts/write_atomic_evidence.py`
 - `backend/tests/test_public_operations_activation_validator.py`
 - `backend/tests/test_public_operations_row_evidence_validator.py`
 - `backend/tests/test_public_operations_activation_template.py`
+- `backend/tests/test_validate_release_gate_evidence.py`
 - `backend/tests/test_verify_release_gate_response_limits.py`
 - `backend/tests/test_verify_release_gate_result_integrity.py`
 - `backend/tests/test_verify_release_gate_run_schema.py`
@@ -44,6 +46,8 @@ The release-gate verifier treats malformed GitHub API responses, unexpected non-
 The final gate-result set must contain exactly one result for every required workflow in the verifier's configured order. Empty, partial, duplicated, reordered, unknown-name, path-mismatched, invalid-SHA, or missing-run-ID result sets are blocking failures and must never be interpreted as passing.
 
 The workflow validates verifier output as a JSON object and writes the JSON evidence artifact atomically. Symbolic-link destinations, symbolic-link parents, non-regular targets, missing parent directories, invalid JSON, interrupted replacement operations, and filesystem write failures are blocking errors. The final file is written with owner-only permissions before artifact upload.
+
+The persisted artifact is then independently schema-validated before it may be summarized or uploaded. Repository and release-SHA mismatches, missing or unexpected fields, altered required workflow maps, reordered or spoofed gates, invalid IDs or URLs, malformed gate fields, and a top-level `passed` value that disagrees with the gate evidence are blocking failures. A structurally valid failure artifact may be retained for diagnosis, but it does not satisfy the release gates.
 
 ## Activation record requirements
 
@@ -124,11 +128,13 @@ The workflow:
 2. verifies the release SHA belongs to `main`
 3. confirms the activation record contains the same SHA
 4. verifies exact-SHA required release-gate evidence
-5. validates and atomically persists the release-gate JSON artifact
-6. validates activation-record structure and decisions
-7. validates row-level dates and evidence references
-8. publishes both validator outcomes in the workflow summary
-9. uploads release-gate and validator evidence with 90-day retention
+5. atomically persists the release-gate JSON artifact
+6. independently validates the persisted artifact's schema and internal consistency
+7. preserves the original release-gate pass or failure result
+8. validates activation-record structure and decisions
+9. validates row-level dates and evidence references
+10. publishes validator outcomes in the workflow summary
+11. uploads release-gate and validator evidence with 90-day retention
 
 A successful workflow run verifies repository evidence and record consistency only. It does not independently prove that external support mailboxes are monitored, deletion occurred in a live environment, legal review was performed, a public or registered-agent address is valid, or production infrastructure behaves as recorded. Those facts require separate controlled evidence.
 
