@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
@@ -20,6 +21,9 @@ REQUIRED_WORKFLOWS = (
 )
 REQUIRED_EVENT = "push"
 REQUIRED_BRANCH = "main"
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+PER_PAGE = 100
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,13 @@ class GateResult:
     html_url: str | None
     event: str | None
     head_branch: str | None
+
+
+def validate_inputs(repository: str, sha: str) -> None:
+    if not REPOSITORY_RE.fullmatch(repository):
+        raise ValueError("repository must use owner/name format")
+    if not SHA_RE.fullmatch(sha):
+        raise ValueError("sha must be exactly 40 lowercase hexadecimal characters")
 
 
 def is_eligible_run(run: dict) -> bool:
@@ -45,7 +56,14 @@ def evaluate_runs(runs: list[dict]) -> list[GateResult]:
             for run in runs
             if run.get("name") == workflow_name and is_eligible_run(run)
         ]
-        matches.sort(key=lambda run: run.get("run_number", 0), reverse=True)
+        matches.sort(
+            key=lambda run: (
+                int(run.get("run_number") or 0),
+                int(run.get("run_attempt") or 0),
+                int(run.get("id") or 0),
+            ),
+            reverse=True,
+        )
         if not matches:
             results.append(
                 GateResult(workflow_name, "missing", None, None, None, None, None)
@@ -76,8 +94,8 @@ def all_passed(results: list[GateResult]) -> bool:
     )
 
 
-def fetch_runs(repository: str, sha: str, token: str) -> list[dict]:
-    query = urlencode({"head_sha": sha, "per_page": 100})
+def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
+    query = urlencode({"head_sha": sha, "per_page": PER_PAGE, "page": page})
     url = f"https://api.github.com/repos/{repository}/actions/runs?{query}"
     request = Request(
         url,
@@ -99,6 +117,18 @@ def fetch_runs(repository: str, sha: str, token: str) -> list[dict]:
     return runs
 
 
+def fetch_runs(repository: str, sha: str, token: str) -> list[dict]:
+    validate_inputs(repository, sha)
+    runs: list[dict] = []
+    page = 1
+    while True:
+        page_runs = _fetch_page(repository, sha, token, page)
+        runs.extend(page_runs)
+        if len(page_runs) < PER_PAGE:
+            return runs
+        page += 1
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", required=True)
@@ -113,7 +143,12 @@ def main() -> int:
     if not token:
         print("ERROR: GITHUB_TOKEN is required", file=sys.stderr)
         return 2
-    runs = fetch_runs(args.repository, args.sha, token)
+    try:
+        validate_inputs(args.repository, args.sha)
+        runs = fetch_runs(args.repository, args.sha, token)
+    except (RuntimeError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     results = evaluate_runs(runs)
     payload = {
         "repository": args.repository,
