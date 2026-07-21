@@ -167,6 +167,14 @@ def test_missing_public_address_fails() -> None:
     assert "missing-field" in codes(text)
 
 
+def test_nonaffirmative_legal_approval_fails() -> None:
+    text = valid_record().replace(
+        "- Governing-law and venue language approved: Yes",
+        "- Governing-law and venue language approved: No",
+    )
+    assert {"missing-field", "legal-approval-incomplete"}.issubset(codes(text))
+
+
 def test_unapproved_policy_and_unverified_channel_fail() -> None:
     text = valid_record().replace(
         "| Privacy Notice | v1 | 2026-08-01 | Business Owner | Legal Reviewer | "
