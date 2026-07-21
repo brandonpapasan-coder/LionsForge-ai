@@ -26,6 +26,7 @@ MAX_JSON_DEPTH = 32
 MAX_JSON_NODES = 10_000
 MAX_JSON_INTEGER_DIGITS = 20
 MAX_JSON_STRING_CHARACTERS = 4_096
+UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 ALLOWED_STATUSES = {
     "completed",
     "in_progress",
@@ -173,6 +174,13 @@ def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
     )
 
 
+def _validate_file_trust(metadata: os.stat_result) -> None:
+    if metadata.st_nlink != 1:
+        raise ValueError("evidence file must not have multiple hard links")
+    if metadata.st_mode & UNTRUSTED_WRITE_BITS:
+        raise ValueError("evidence file must not be group- or world-writable")
+
+
 def _read_bounded_descriptor(descriptor: int) -> bytes:
     chunks: list[bytes] = []
     remaining = MAX_EVIDENCE_BYTES + 1
@@ -194,6 +202,7 @@ def _read_evidence(path: Path) -> object:
         raise ValueError("evidence file must not be a symbolic link")
     if not stat.S_ISREG(before.st_mode):
         raise ValueError("evidence file must be a regular file")
+    _validate_file_trust(before)
     if before.st_size <= 0:
         raise ValueError("evidence file must not be empty")
     if before.st_size > MAX_EVIDENCE_BYTES:
@@ -213,6 +222,7 @@ def _read_evidence(path: Path) -> object:
         opened = os.fstat(descriptor)
         if not stat.S_ISREG(opened.st_mode):
             raise ValueError("evidence file must be a regular file")
+        _validate_file_trust(opened)
         if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
             raise ValueError("evidence file changed before it could be read")
 
@@ -226,6 +236,8 @@ def _read_evidence(path: Path) -> object:
     finally:
         os.close(descriptor)
 
+    _validate_file_trust(first_after)
+    _validate_file_trust(second_after)
     if len(body) > MAX_EVIDENCE_BYTES:
         raise ValueError(
             f"evidence file exceeds the {MAX_EVIDENCE_BYTES}-byte safety limit"
