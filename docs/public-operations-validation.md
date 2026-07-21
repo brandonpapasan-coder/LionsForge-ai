@@ -31,16 +31,29 @@ Manual runs, pull-request runs, branch aliases, tags, shortened SHAs, and eviden
 The activation record must include:
 
 - approved policy versions and effective dates
-- approved legal entity and jurisdiction configuration
+- the approved public legal entity name
+- a public business address or approved registered-agent address; never record a private home address
+- governing-law and venue language explicitly approved
+- supported launch jurisdictions and an approved age-eligibility position
 - monitored public support, privacy, security, and abuse-reporting channels
-- approved retention and deletion behavior for all required data classes
+- approved retention and deletion behavior for every required data class
 - passed account closure, deletion, support, abuse, security, and consent workflows
-- completed privacy and logging controls
+- completed privacy, logging, analytics, and consent-control decisions
 - zero open High or Critical privacy or security defects
 - final approvals from business, legal, privacy, security, support operations, and release owners
 - a release candidate SHA matching the exact build being reviewed
 
-Any `PENDING`, `NOT VERIFIED`, `NOT TESTED`, `NOT APPROVED`, unresolved exception, missing evidence reference, or mismatched release SHA keeps the decision at **NO-GO**.
+The final `Decision` field must be `GO`. A complete record that remains marked `NO-GO` does not pass activation validation.
+
+Approval fields must express affirmative approval, not merely contain text. For example, `Governing-law and venue language approved` must record an affirmative approved value rather than `NO`, `PENDING`, or an unresolved exception.
+
+Consent controls must be explicit:
+
+- use `YES` when consent controls are required, and record successful testing as `YES`, `VERIFIED`, or `PASSED`
+- use `NO` or `NOT REQUIRED` only when the approved legal/privacy position supports that decision
+- record `NOT APPLICABLE`, `YES`, `VERIFIED`, or `PASSED` for the corresponding testing-status field when consent is not required
+
+Any `PENDING`, `NOT VERIFIED`, `NOT TESTED`, `NOT APPROVED`, unresolved exception, missing evidence reference, mismatched release SHA, non-affirmative mandatory approval, or final `NO-GO` decision keeps public registration disabled.
 
 ## Local validation
 
@@ -76,11 +89,11 @@ The workflow:
 6. publishes a workflow summary
 7. uploads validation evidence with 90-day retention
 
-A successful workflow run verifies repository evidence and record consistency only. It does not independently prove that external support mailboxes are monitored, deletion occurred in a live environment, legal review was performed, or production infrastructure behaves as recorded. Those facts require separate controlled evidence.
+A successful workflow run verifies repository evidence and record consistency only. It does not independently prove that external support mailboxes are monitored, deletion occurred in a live environment, legal review was performed, a public or registered-agent address is valid, or production infrastructure behaves as recorded. Those facts require separate controlled evidence.
 
 ## Decision rule
 
-Set the activation record decision to **GO** only when all mandatory fields, approvals, tests, release gates, and evidence references are complete and accurate.
+Set the activation record decision to **GO** only when all mandatory fields, affirmative approvals, tests, release gates, and evidence references are complete and accurate.
 
 Otherwise retain **NO-GO** and keep public registration disabled.
 
