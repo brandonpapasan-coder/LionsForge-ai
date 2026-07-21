@@ -138,6 +138,14 @@ def _contains_non_ascii_decimal_digit(value: str) -> bool:
     )
 
 
+def _contains_unicode_variation_selector(value: str) -> bool:
+    return any(
+        0xFE00 <= ord(character) <= 0xFE0F
+        or 0xE0100 <= ord(character) <= 0xE01EF
+        for character in value
+    )
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -224,6 +232,8 @@ def _validate_path_component(component: str) -> None:
         raise ValueError(
             "evidence path components must not contain private-use or unassigned Unicode characters"
         )
+    if _contains_unicode_variation_selector(component):
+        raise ValueError("evidence path components must not contain Unicode variation selectors")
     if _starts_with_combining_mark(component):
         raise ValueError("evidence path components must not begin with a Unicode combining mark")
     if _contains_control_character(component):
