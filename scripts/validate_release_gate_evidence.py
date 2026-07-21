@@ -29,6 +29,7 @@ MAX_JSON_STRING_CHARACTERS = 4_096
 UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 SPECIAL_PERMISSION_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
+VIRTUAL_FILESYSTEM_ROOTS = (Path("/proc"), Path("/sys"), Path("/dev"))
 ALLOWED_STATUSES = {
     "completed", "in_progress", "pending", "queued", "requested", "waiting"
 }
@@ -180,6 +181,32 @@ def _validate_evidence_path(path: Path) -> None:
         raise ValueError("evidence path must not contain parent traversal components")
 
 
+def _validate_filesystem_path(path: Path) -> None:
+    if os.name != "posix":
+        return
+    absolute = path.absolute()
+    for root in VIRTUAL_FILESYSTEM_ROOTS:
+        if absolute == root or root in absolute.parents:
+            raise ValueError("evidence file must not reside on a virtual filesystem")
+
+
+def _filesystem_identity(descriptor: int) -> tuple[int, ...] | None:
+    getter = getattr(os, "fstatvfs", None)
+    if getter is None:
+        return None
+    try:
+        metadata = getter(descriptor)
+    except OSError as exc:
+        raise ValueError(f"unable to inspect evidence filesystem: {exc}") from exc
+    fields = (
+        "f_bsize", "f_frsize", "f_blocks", "f_bfree", "f_bavail",
+        "f_files", "f_ffree", "f_favail", "f_flag", "f_namemax",
+    )
+    identity = tuple(int(getattr(metadata, field)) for field in fields)
+    fsid = getattr(metadata, "f_fsid", None)
+    return identity if fsid is None else (int(fsid), *identity)
+
+
 def _validate_parent_components(path: Path) -> None:
     _validate_evidence_path(path)
     absolute = path.absolute()
@@ -209,6 +236,7 @@ def _descriptor_relative_open_supported() -> bool:
 
 def _open_evidence_descriptor(path: Path) -> int:
     _validate_evidence_path(path)
+    _validate_filesystem_path(path)
     file_flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         file_flags |= os.O_CLOEXEC
@@ -269,6 +297,7 @@ def _read_bounded_descriptor(descriptor: int) -> bytes:
 
 def _read_evidence(path: Path) -> object:
     _validate_evidence_path(path)
+    _validate_filesystem_path(path)
     _validate_parent_components(path)
     try:
         before = path.lstat()
@@ -294,11 +323,14 @@ def _read_evidence(path: Path) -> object:
         _validate_file_trust(opened)
         if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
             raise ValueError("evidence file changed before it could be read")
+        filesystem_opened = _filesystem_identity(descriptor)
         body = _read_bounded_descriptor(descriptor)
         first_after = os.fstat(descriptor)
+        filesystem_first_after = _filesystem_identity(descriptor)
         os.lseek(descriptor, 0, os.SEEK_SET)
         verification_body = _read_bounded_descriptor(descriptor)
         second_after = os.fstat(descriptor)
+        filesystem_second_after = _filesystem_identity(descriptor)
     except OSError as exc:
         raise ValueError(f"unable to read evidence file: {exc}") from exc
     finally:
@@ -306,6 +338,10 @@ def _read_evidence(path: Path) -> object:
 
     _validate_file_trust(first_after)
     _validate_file_trust(second_after)
+    if not (
+        filesystem_opened == filesystem_first_after == filesystem_second_after
+    ):
+        raise ValueError("evidence filesystem changed during reading")
     if len(body) > MAX_EVIDENCE_BYTES:
         raise ValueError(
             f"evidence file exceeds the {MAX_EVIDENCE_BYTES}-byte safety limit"
