@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -48,9 +50,87 @@ def payload(*, passed=True):
     }
 
 
+def write_payload(path: Path, evidence=None) -> None:
+    path.write_text(json.dumps(evidence or payload()), encoding="utf-8")
+
+
 def test_accepts_consistent_passing_and_failing_evidence():
     MODULE.validate_payload(payload(passed=True), REPOSITORY, SHA)
     MODULE.validate_payload(payload(passed=False), REPOSITORY, SHA)
+
+
+def test_reads_regular_utf8_json_file(tmp_path):
+    evidence_path = tmp_path / "evidence.json"
+    write_payload(evidence_path)
+    assert MODULE._read_evidence(evidence_path) == payload()
+
+
+def test_rejects_empty_oversized_and_non_utf8_files(tmp_path):
+    empty = tmp_path / "empty.json"
+    empty.write_bytes(b"")
+    with pytest.raises(ValueError, match="must not be empty"):
+        MODULE._read_evidence(empty)
+
+    oversized = tmp_path / "oversized.json"
+    oversized.write_bytes(b"x" * (MODULE.MAX_EVIDENCE_BYTES + 1))
+    with pytest.raises(ValueError, match="safety limit"):
+        MODULE._read_evidence(oversized)
+
+    invalid_utf8 = tmp_path / "invalid-utf8.json"
+    invalid_utf8.write_bytes(b"\xff")
+    with pytest.raises(ValueError, match="valid UTF-8"):
+        MODULE._read_evidence(invalid_utf8)
+
+
+def test_rejects_malformed_json_and_non_regular_targets(tmp_path):
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text("{", encoding="utf-8")
+    with pytest.raises(ValueError, match="malformed JSON"):
+        MODULE._read_evidence(malformed)
+
+    directory = tmp_path / "directory"
+    directory.mkdir()
+    with pytest.raises(ValueError, match="regular file"):
+        MODULE._read_evidence(directory)
+
+
+def test_rejects_symbolic_link_evidence(tmp_path):
+    target = tmp_path / "target.json"
+    write_payload(target)
+    link = tmp_path / "link.json"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="symbolic link"):
+        MODULE._read_evidence(link)
+
+
+def test_rejects_file_replacement_before_open(tmp_path, monkeypatch):
+    evidence_path = tmp_path / "evidence.json"
+    write_payload(evidence_path)
+    real_open = os.open
+
+    def replacing_open(path, flags):
+        replacement = tmp_path / "replacement.json"
+        write_payload(replacement, payload(passed=False))
+        replacement.replace(evidence_path)
+        return real_open(path, flags)
+
+    monkeypatch.setattr(MODULE.os, "open", replacing_open)
+    with pytest.raises(ValueError, match="changed before"):
+        MODULE._read_evidence(evidence_path)
+
+
+def test_rejects_truncation_during_read(tmp_path, monkeypatch):
+    evidence_path = tmp_path / "evidence.json"
+    write_payload(evidence_path)
+    real_read = os.read
+
+    def truncated_read(descriptor, count):
+        body = real_read(descriptor, count)
+        return body[:-1]
+
+    monkeypatch.setattr(MODULE.os, "read", truncated_read)
+    with pytest.raises(ValueError, match="truncated during reading"):
+        MODULE._read_evidence(evidence_path)
 
 
 def test_rejects_top_level_field_changes():
