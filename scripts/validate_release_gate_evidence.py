@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 
@@ -19,6 +21,7 @@ REQUIRED_EVENT = "push"
 REQUIRED_BRANCH = "main"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+MAX_EVIDENCE_BYTES = 1024 * 1024
 TOP_LEVEL_KEYS = {
     "repository",
     "release_sha",
@@ -51,6 +54,59 @@ def _optional_string(value: object, field: str) -> str | None:
     if value is None:
         return None
     return _required_string(value, field)
+
+
+def _read_evidence(path: Path) -> object:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise ValueError(f"unable to inspect evidence file: {exc}") from exc
+    if stat.S_ISLNK(before.st_mode):
+        raise ValueError("evidence file must not be a symbolic link")
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError("evidence file must be a regular file")
+    if before.st_size <= 0:
+        raise ValueError("evidence file must not be empty")
+    if before.st_size > MAX_EVIDENCE_BYTES:
+        raise ValueError(
+            f"evidence file exceeds the {MAX_EVIDENCE_BYTES}-byte safety limit"
+        )
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"unable to open evidence file safely: {exc}") from exc
+
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise ValueError("evidence file must be a regular file")
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise ValueError("evidence file changed before it could be read")
+        body = os.read(descriptor, MAX_EVIDENCE_BYTES + 1)
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        raise ValueError(f"unable to read evidence file: {exc}") from exc
+    finally:
+        os.close(descriptor)
+
+    if len(body) > MAX_EVIDENCE_BYTES:
+        raise ValueError(
+            f"evidence file exceeds the {MAX_EVIDENCE_BYTES}-byte safety limit"
+        )
+    if len(body) != opened.st_size or opened.st_size != after.st_size:
+        raise ValueError("evidence file changed or was truncated during reading")
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("evidence file is not valid UTF-8") from exc
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("evidence file contains malformed JSON") from exc
 
 
 def validate_payload(payload: object, repository: str, release_sha: str) -> None:
@@ -131,9 +187,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        payload = json.loads(args.evidence.read_text(encoding="utf-8"))
+        payload = _read_evidence(args.evidence)
         validate_payload(payload, args.repository, args.sha)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
+    except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     print("VALID: release gate evidence artifact is internally consistent")
