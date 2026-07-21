@@ -22,6 +22,25 @@ REQUIRED_BRANCH = "main"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MAX_EVIDENCE_BYTES = 1024 * 1024
+ALLOWED_STATUSES = {
+    "completed",
+    "in_progress",
+    "pending",
+    "queued",
+    "requested",
+    "waiting",
+}
+ALLOWED_CONCLUSIONS = {
+    "action_required",
+    "cancelled",
+    "failure",
+    "neutral",
+    "skipped",
+    "stale",
+    "startup_failure",
+    "success",
+    "timed_out",
+}
 TOP_LEVEL_KEYS = {
     "repository",
     "release_sha",
@@ -109,6 +128,59 @@ def _read_evidence(path: Path) -> object:
         raise ValueError("evidence file contains malformed JSON") from exc
 
 
+def _validate_missing_gate(gate: dict, index: int) -> None:
+    if gate["status"] != "missing":
+        raise ValueError(f"gate {index} missing evidence status is invalid")
+    for field in (
+        "conclusion",
+        "run_id",
+        "html_url",
+        "event",
+        "head_branch",
+        "head_sha",
+    ):
+        if gate[field] is not None:
+            raise ValueError(f"gate {index} missing evidence has invalid {field}")
+
+
+def _validate_real_gate(
+    gate: dict,
+    index: int,
+    repository: str,
+    release_sha: str,
+) -> bool:
+    status = _required_string(gate["status"], f"gate {index} status")
+    if status not in ALLOWED_STATUSES:
+        raise ValueError(f"gate {index} status is invalid")
+
+    conclusion = _optional_string(gate["conclusion"], f"gate {index} conclusion")
+    if status == "completed":
+        if conclusion not in ALLOWED_CONCLUSIONS:
+            raise ValueError(f"gate {index} conclusion is invalid")
+    elif conclusion is not None:
+        raise ValueError(f"gate {index} conclusion must be null before completion")
+
+    event = _required_string(gate["event"], f"gate {index} event")
+    branch = _required_string(gate["head_branch"], f"gate {index} head_branch")
+    head_sha = _required_string(gate["head_sha"], f"gate {index} head_sha")
+    if event != REQUIRED_EVENT:
+        raise ValueError(f"gate {index} event is invalid")
+    if branch != REQUIRED_BRANCH:
+        raise ValueError(f"gate {index} head_branch is invalid")
+    if not SHA_RE.fullmatch(head_sha) or head_sha != release_sha:
+        raise ValueError(f"gate {index} head_sha is invalid")
+
+    run_id = gate["run_id"]
+    if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
+        raise ValueError(f"gate {index} run_id is invalid")
+    html_url = _required_string(gate["html_url"], f"gate {index} html_url")
+    expected_url = f"https://github.com/{repository}/actions/runs/{run_id}"
+    if html_url != expected_url:
+        raise ValueError(f"gate {index} html_url is invalid")
+
+    return status == "completed" and conclusion == "success"
+
+
 def validate_payload(payload: object, repository: str, release_sha: str) -> None:
     if not REPOSITORY_RE.fullmatch(repository):
         raise ValueError("repository must use owner/name format")
@@ -145,31 +217,16 @@ def validate_payload(payload: object, repository: str, release_sha: str) -> None
         if gate["name"] != workflow_name or gate["path"] != workflow_path:
             raise ValueError(f"gate {index} identity or path is invalid")
 
-        status = _required_string(gate["status"], f"gate {index} status")
-        conclusion = _optional_string(gate["conclusion"], f"gate {index} conclusion")
-        event = _optional_string(gate["event"], f"gate {index} event")
-        branch = _optional_string(gate["head_branch"], f"gate {index} head_branch")
-        head_sha = _optional_string(gate["head_sha"], f"gate {index} head_sha")
-        html_url = _optional_string(gate["html_url"], f"gate {index} html_url")
-        run_id = gate["run_id"]
-
-        if head_sha is not None and not SHA_RE.fullmatch(head_sha):
-            raise ValueError(f"gate {index} head_sha is invalid")
-        if run_id is not None and (
-            not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0
-        ):
-            raise ValueError(f"gate {index} run_id is invalid")
-        if html_url is not None and not html_url.startswith("https://github.com/"):
-            raise ValueError(f"gate {index} html_url is invalid")
-
-        gate_passed = (
-            status == "completed"
-            and conclusion == "success"
-            and event == REQUIRED_EVENT
-            and branch == REQUIRED_BRANCH
-            and head_sha == release_sha
-            and run_id is not None
-        )
+        if gate["run_id"] is None:
+            _validate_missing_gate(gate, index)
+            gate_passed = False
+        else:
+            gate_passed = _validate_real_gate(
+                gate,
+                index,
+                repository,
+                release_sha,
+            )
         recomputed_passed = recomputed_passed and gate_passed
 
     if payload["passed"] != recomputed_passed:
