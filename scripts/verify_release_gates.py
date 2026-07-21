@@ -118,15 +118,36 @@ def evaluate_runs(
 def all_passed(
     results: list[GateResult], expected_sha: str | None = None
 ) -> bool:
-    return all(
-        result.status == "completed"
-        and result.conclusion == "success"
-        and result.event == REQUIRED_EVENT
-        and result.head_branch == REQUIRED_BRANCH
-        and result.path == REQUIRED_WORKFLOW_PATHS[result.name]
-        and (expected_sha is None or result.head_sha == expected_sha)
-        for result in results
-    )
+    if expected_sha is not None and not SHA_RE.fullmatch(expected_sha):
+        return False
+    if len(results) != len(REQUIRED_WORKFLOWS):
+        return False
+
+    results_by_name: dict[str, GateResult] = {}
+    for result in results:
+        if result.name not in REQUIRED_WORKFLOW_PATHS or result.name in results_by_name:
+            return False
+        results_by_name[result.name] = result
+
+    if tuple(results_by_name) != REQUIRED_WORKFLOWS:
+        return False
+
+    for workflow_name, workflow_path in REQUIRED_WORKFLOW_PATHS.items():
+        result = results_by_name[workflow_name]
+        if not (
+            result.path == workflow_path
+            and result.status == "completed"
+            and result.conclusion == "success"
+            and result.run_id is not None
+            and result.run_id > 0
+            and result.event == REQUIRED_EVENT
+            and result.head_branch == REQUIRED_BRANCH
+            and isinstance(result.head_sha, str)
+            and SHA_RE.fullmatch(result.head_sha)
+            and (expected_sha is None or result.head_sha == expected_sha)
+        ):
+            return False
+    return True
 
 
 def _positive_int(value: object, field: str, page: int, index: int) -> int:
