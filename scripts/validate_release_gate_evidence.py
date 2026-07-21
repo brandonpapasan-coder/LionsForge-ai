@@ -34,6 +34,11 @@ UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 SPECIAL_PERMISSION_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
 VIRTUAL_FILESYSTEM_ROOTS = (Path("/proc"), Path("/sys"), Path("/dev"))
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
 ALLOWED_STATUSES = {
     "completed", "in_progress", "pending", "queued", "requested", "waiting"
 }
@@ -192,6 +197,9 @@ def _validate_path_component(component: str) -> None:
             "evidence path component exceeds the maximum UTF-8 byte length of "
             f"{MAX_PATH_COMPONENT_BYTES}"
         )
+    reserved_stem = component.split(".", 1)[0].upper()
+    if reserved_stem in WINDOWS_RESERVED_NAMES:
+        raise ValueError("evidence path components must not use reserved device names")
 
 
 def _validate_evidence_path(path: Path) -> None:
