@@ -127,6 +127,10 @@ def _contains_unstable_unicode_assignment(value: str) -> bool:
     return any(unicodedata.category(character) in {"Cn", "Co"} for character in value)
 
 
+def _starts_with_combining_mark(value: str) -> bool:
+    return bool(value) and unicodedata.category(value[0]) in {"Mn", "Mc", "Me"}
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -213,6 +217,8 @@ def _validate_path_component(component: str) -> None:
         raise ValueError(
             "evidence path components must not contain private-use or unassigned Unicode characters"
         )
+    if _starts_with_combining_mark(component):
+        raise ValueError("evidence path components must not begin with a Unicode combining mark")
     if _contains_control_character(component):
         raise ValueError("evidence path components must not contain control characters")
     if _contains_format_character(component):
