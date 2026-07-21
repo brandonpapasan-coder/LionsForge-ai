@@ -28,6 +28,7 @@ MAX_JSON_NODES = 10_000
 MAX_JSON_INTEGER_DIGITS = 20
 MAX_JSON_STRING_CHARACTERS = 4_096
 MAX_PATH_COMPONENT_BYTES = 255
+MAX_PATH_BYTES = 4_096
 UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 SPECIAL_PERMISSION_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
@@ -198,6 +199,15 @@ def _validate_evidence_path(path: Path) -> None:
         raise ValueError("evidence path must identify a file")
     if ".." in path.parts:
         raise ValueError("evidence path must not contain parent traversal components")
+    try:
+        encoded_path = os.fspath(path).encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError("evidence path must contain valid Unicode scalars") from exc
+    if len(encoded_path) > MAX_PATH_BYTES:
+        raise ValueError(
+            "evidence path exceeds the maximum UTF-8 byte length of "
+            f"{MAX_PATH_BYTES}"
+        )
     anchor = path.anchor
     for component in path.parts:
         if component != anchor:
