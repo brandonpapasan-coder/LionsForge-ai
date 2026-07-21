@@ -114,6 +114,26 @@ def test_rejects_malformed_json_and_non_regular_targets(tmp_path):
         MODULE._read_evidence(directory)
 
 
+def test_rejects_duplicate_json_keys_at_every_object_level(tmp_path):
+    top_level = tmp_path / "duplicate-top-level.json"
+    top_level.write_text('{"repository":"owner/repository","repository":"other/repo"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate key: repository"):
+        MODULE._read_evidence(top_level)
+
+    gate_level = tmp_path / "duplicate-gate.json"
+    gate_level.write_text('{"gates":[{"name":"Backend CI","name":"Frontend CI"}]}', encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate key: name"):
+        MODULE._read_evidence(gate_level)
+
+    workflow_map = tmp_path / "duplicate-workflow-map.json"
+    workflow_map.write_text(
+        '{"required_workflow_paths":{"Backend CI":"a","Backend CI":"b"}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="duplicate key: Backend CI"):
+        MODULE._read_evidence(workflow_map)
+
+
 def test_rejects_symbolic_link_evidence(tmp_path):
     target = tmp_path / "target.json"
     write_payload(target)
