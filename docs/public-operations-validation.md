@@ -47,7 +47,7 @@ The final gate-result set must contain exactly one result for every required wor
 
 The workflow validates verifier output as a JSON object and writes the JSON evidence artifact atomically. Symbolic-link destinations, symbolic-link parents, non-regular targets, missing parent directories, invalid JSON, interrupted replacement operations, and filesystem write failures are blocking errors. The final file is written with owner-only permissions before artifact upload.
 
-The persisted artifact is then independently schema-validated before it may be summarized or uploaded. Repository and release-SHA mismatches, missing or unexpected fields, altered required workflow maps, reordered or spoofed gates, invalid IDs or URLs, malformed gate fields, and a top-level `passed` value that disagrees with the gate evidence are blocking failures. A structurally valid failure artifact may be retained for diagnosis, but it does not satisfy the release gates.
+The persisted artifact is then independently schema-validated before it may be summarized or uploaded. The validator performs a bounded no-follow read and rejects empty files, oversized files, symbolic links, non-regular files, invalid UTF-8, malformed JSON, replacement races, and truncation or mutation during reading. Repository and release-SHA mismatches, missing or unexpected fields, altered required workflow maps, reordered or spoofed gates, invalid IDs or URLs, malformed gate fields, and a top-level `passed` value that disagrees with the gate evidence are also blocking failures. A structurally valid failure artifact may be retained for diagnosis, but it does not satisfy the release gates.
 
 ## Activation record requirements
 
@@ -129,7 +129,7 @@ The workflow:
 3. confirms the activation record contains the same SHA
 4. verifies exact-SHA required release-gate evidence
 5. atomically persists the release-gate JSON artifact
-6. independently validates the persisted artifact's schema and internal consistency
+6. independently validates the persisted artifact's file safety, schema, and internal consistency
 7. preserves the original release-gate pass or failure result
 8. validates activation-record structure and decisions
 9. validates row-level dates and evidence references
