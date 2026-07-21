@@ -67,12 +67,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ inputs.release_sha }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           python scripts/verify_release_gates.py \
             --repository "${GITHUB_REPOSITORY}" \
             --sha "${RELEASE_SHA}" \
-            --output public-operations-release-gate-evidence.json \
-            | tee public-operations-release-gate-evidence.txt
+            | tee public-operations-release-gate-evidence.txt \
+            | python scripts/write_atomic_evidence.py \
+                public-operations-release-gate-evidence.json
 
       - name: Validate public operations activation record
         id: validate
