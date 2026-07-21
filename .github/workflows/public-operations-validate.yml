@@ -83,6 +83,15 @@ jobs:
           python scripts/validate_public_operations_activation.py "${RECORD_PATH}" \
             | tee public-operations-validation.txt
 
+      - name: Validate row-level public operations evidence
+        id: row-evidence
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -o pipefail
+          python scripts/validate_public_operations_row_evidence.py "${RECORD_PATH}" \
+            | tee public-operations-row-evidence-validation.txt
+
       - name: Publish validation summary
         if: always()
         env:
@@ -90,6 +99,7 @@ jobs:
           RELEASE_SHA: ${{ inputs.release_sha }}
           GATE_OUTCOME: ${{ steps.release-gates.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+          ROW_EVIDENCE_OUTCOME: ${{ steps.row-evidence.outcome }}
         run: |
           {
             echo "## Public operations activation validation"
@@ -98,6 +108,7 @@ jobs:
             echo "- Release SHA: \`${RELEASE_SHA}\`"
             echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
             echo "- Record validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo "- Row-evidence validator outcome: \`${ROW_EVIDENCE_OUTCOME:-not-run}\`"
             echo
             if [[ -f public-operations-release-gate-evidence.json ]]; then
               echo "### Required release gates"
@@ -130,6 +141,16 @@ jobs:
               echo "Record validation did not run because an earlier safety or release-gate check failed."
             fi
             echo
+            if [[ -f public-operations-row-evidence-validation.txt ]]; then
+              echo "### Row-level evidence validator"
+              echo
+              echo '```text'
+              cat public-operations-row-evidence-validation.txt
+              echo '```'
+            else
+              echo "Row-level evidence validation did not run because an earlier check failed."
+            fi
+            echo
             echo "This workflow validates repository evidence and record consistency. It does not provide legal advice or independently prove external operational readiness."
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -142,5 +163,6 @@ jobs:
             public-operations-release-gate-evidence.json
             public-operations-release-gate-evidence.txt
             public-operations-validation.txt
+            public-operations-row-evidence-validation.txt
           if-no-files-found: warn
           retention-days: 90
