@@ -25,6 +25,7 @@ MAX_EVIDENCE_BYTES = 1024 * 1024
 MAX_JSON_DEPTH = 32
 MAX_JSON_NODES = 10_000
 MAX_JSON_INTEGER_DIGITS = 20
+MAX_JSON_STRING_CHARACTERS = 4_096
 ALLOWED_STATUSES = {
     "completed",
     "in_progress",
@@ -117,6 +118,11 @@ def _contains_control_character(value: str) -> bool:
 
 
 def _validate_json_string(value: str) -> None:
+    if len(value) > MAX_JSON_STRING_CHARACTERS:
+        raise ValueError(
+            "evidence JSON string exceeds the maximum character count of "
+            f"{MAX_JSON_STRING_CHARACTERS}"
+        )
     if _contains_surrogate(value):
         raise ValueError("evidence JSON contains an invalid Unicode surrogate")
     if _contains_control_character(value):
