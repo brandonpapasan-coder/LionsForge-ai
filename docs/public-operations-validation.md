@@ -39,7 +39,7 @@ Manual runs, pull-request runs, branch aliases, tags, shortened SHAs, and eviden
 
 The release-gate verifier treats malformed GitHub API responses, unexpected non-JSON media types, malformed JSON, timeouts, truncated reads, unreadable response headers, invalid or mismatched `Content-Length` values, response bodies beyond the configured byte limit, non-object run entries, invalid or duplicate run IDs, malformed workflow identity or state fields, invalid `run_number` or `run_attempt` values, invalid run-level SHAs, repeated pagination evidence, and pagination beyond the configured safety limit as blocking errors. These conditions must not be interpreted as successful or merely absent evidence.
 
-The final gate-result set must contain exactly one result for every required workflow in the configured order. Empty, partial, duplicated, reordered, unknown-name, path-mismatched, invalid-SHA, or missing-run-ID result sets are blocking failures and must never be interpreted as passing.
+The final gate-result set must contain exactly one result for every required workflow in the verifier's configured order. Empty, partial, duplicated, reordered, unknown-name, path-mismatched, invalid-SHA, or missing-run-ID result sets are blocking failures and must never be interpreted as passing.
 
 ## Activation record requirements
 
