@@ -120,14 +120,14 @@ jobs:
           payload = json.loads(
               Path("public-operations-release-gate-evidence.json").read_text(encoding="utf-8")
           )
-          print("| Gate | Event | Branch | Head SHA | Status | Conclusion | Run ID |")
-          print("|---|---|---|---|---|---|---|")
+          print("| Gate | Workflow path | Event | Branch | Head SHA | Status | Conclusion | Run ID |")
+          print("|---|---|---|---|---|---|---|---|")
           for gate in payload["gates"]:
               print(
-                  f"| {gate['name']} | {gate['event'] or '-'} | "
-                  f"{gate['head_branch'] or '-'} | {gate['head_sha'] or '-'} | "
-                  f"{gate['status']} | {gate['conclusion'] or '-'} | "
-                  f"{gate['run_id'] or '-'} |"
+                  f"| {gate['name']} | {gate['path'] or '-'} | "
+                  f"{gate['event'] or '-'} | {gate['head_branch'] or '-'} | "
+                  f"{gate['head_sha'] or '-'} | {gate['status']} | "
+                  f"{gate['conclusion'] or '-'} | {gate['run_id'] or '-'} |"
               )
           PY
               echo
