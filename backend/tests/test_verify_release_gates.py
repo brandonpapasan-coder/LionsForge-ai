@@ -13,6 +13,9 @@ sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
+DEFAULT_SHA = "a" * 40
+
+
 def run(
     name,
     *,
@@ -23,6 +26,7 @@ def run(
     run_id=1,
     event="push",
     head_branch="main",
+    head_sha=DEFAULT_SHA,
 ):
     return {
         "name": name,
@@ -34,6 +38,7 @@ def run(
         "html_url": f"https://example.test/runs/{run_id}",
         "event": event,
         "head_branch": head_branch,
+        "head_sha": head_sha,
     }
 
 
@@ -44,6 +49,16 @@ def test_all_required_main_push_workflows_pass():
     ]
     results = MODULE.evaluate_runs(runs)
     assert MODULE.all_passed(results)
+
+
+def test_all_required_exact_sha_workflows_pass():
+    runs = [
+        run(name, run_id=index)
+        for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
+    ]
+    results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
+    assert MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
+    assert {result.head_sha for result in results} == {DEFAULT_SHA}
 
 
 def test_missing_required_workflow_fails():
@@ -122,6 +137,26 @@ def test_pull_request_run_does_not_satisfy_gate():
     assert not MODULE.all_passed(MODULE.evaluate_runs(runs))
 
 
+def test_wrong_head_sha_does_not_satisfy_gate():
+    runs = [run(name) for name in MODULE.REQUIRED_WORKFLOWS]
+    runs[0] = run("Backend CI", head_sha="b" * 40)
+
+    results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
+    backend = next(result for result in results if result.name == "Backend CI")
+
+    assert backend.status == "missing"
+    assert backend.head_sha is None
+    assert not MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
+
+
+def test_all_passed_rechecks_recorded_head_sha():
+    results = MODULE.evaluate_runs(
+        [run(name) for name in MODULE.REQUIRED_WORKFLOWS],
+        expected_sha=DEFAULT_SHA,
+    )
+    assert not MODULE.all_passed(results, expected_sha="b" * 40)
+
+
 def test_in_progress_or_failed_gate_fails():
     runs = [run(name) for name in MODULE.REQUIRED_WORKFLOWS]
     runs[0] = run("Backend CI", status="in_progress", conclusion=None)
@@ -146,13 +181,13 @@ def test_fetch_runs_paginates_until_partial_page(monkeypatch):
 
     def fake_fetch_page(repository, sha, token, page):
         assert repository == "owner/repository"
-        assert sha == "a" * 40
+        assert sha == DEFAULT_SHA
         assert token == "token"
         requested_pages.append(page)
         return first_page if page == 1 else second_page
 
     monkeypatch.setattr(MODULE, "_fetch_page", fake_fetch_page)
-    runs = MODULE.fetch_runs("owner/repository", "a" * 40, "token")
+    runs = MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")
 
     assert requested_pages == [1, 2]
     assert runs == first_page + second_page
