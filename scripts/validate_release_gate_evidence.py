@@ -84,6 +84,10 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
     return result
 
 
+def _reject_nonstandard_constant(value: str) -> object:
+    raise ValueError(f"evidence JSON contains non-standard constant: {value}")
+
+
 def _read_evidence(path: Path) -> object:
     try:
         before = path.lstat()
@@ -132,7 +136,11 @@ def _read_evidence(path: Path) -> object:
     except UnicodeDecodeError as exc:
         raise ValueError("evidence file is not valid UTF-8") from exc
     try:
-        return json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+        return json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonstandard_constant,
+        )
     except json.JSONDecodeError as exc:
         raise ValueError("evidence file contains malformed JSON") from exc
 
