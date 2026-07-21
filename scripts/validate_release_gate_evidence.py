@@ -34,6 +34,8 @@ def _validate_json_string(value: str) -> None:
         raise ValueError(
             "evidence JSON contains private-use or unassigned Unicode characters"
         )
+    if _CORE._contains_unicode_variation_selector(value):
+        raise ValueError("evidence JSON contains a Unicode variation selector")
     if _CORE._contains_control_character(value):
         raise ValueError("evidence JSON contains a control character")
 
