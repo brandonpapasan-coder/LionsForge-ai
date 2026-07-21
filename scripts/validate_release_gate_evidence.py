@@ -208,6 +208,8 @@ def validate_payload(payload: object, repository: str, release_sha: str) -> None
         raise ValueError("evidence must contain exactly one gate per required workflow")
 
     recomputed_passed = True
+    seen_run_ids: set[int] = set()
+    seen_run_urls: set[str] = set()
     for index, (workflow_name, workflow_path) in enumerate(
         REQUIRED_WORKFLOW_PATHS.items()
     ):
@@ -227,6 +229,14 @@ def validate_payload(payload: object, repository: str, release_sha: str) -> None
                 repository,
                 release_sha,
             )
+            run_id = gate["run_id"]
+            html_url = gate["html_url"]
+            if run_id in seen_run_ids:
+                raise ValueError(f"gate {index} reuses a prior run_id")
+            if html_url in seen_run_urls:
+                raise ValueError(f"gate {index} reuses a prior html_url")
+            seen_run_ids.add(run_id)
+            seen_run_urls.add(html_url)
         recomputed_passed = recomputed_passed and gate_passed
 
     if payload["passed"] != recomputed_passed:
