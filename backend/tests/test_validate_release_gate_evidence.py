@@ -134,6 +134,22 @@ def test_rejects_duplicate_json_keys_at_every_object_level(tmp_path):
         MODULE._read_evidence(workflow_map)
 
 
+def test_rejects_nonstandard_json_constants(tmp_path):
+    for constant in ("NaN", "Infinity", "-Infinity"):
+        evidence_path = tmp_path / f"constant-{constant.replace('-', 'negative-')}.json"
+        evidence_path.write_text(
+            f'{{"passed":{constant}}}',
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match=f"non-standard constant: {constant}"):
+            MODULE._read_evidence(evidence_path)
+
+    nested = tmp_path / "nested-constant.json"
+    nested.write_text('{"gates":[{"run_id":NaN}]}', encoding="utf-8")
+    with pytest.raises(ValueError, match="non-standard constant: NaN"):
+        MODULE._read_evidence(nested)
+
+
 def test_rejects_symbolic_link_evidence(tmp_path):
     target = tmp_path / "target.json"
     write_payload(target)
