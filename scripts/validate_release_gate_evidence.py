@@ -199,8 +199,7 @@ def _filesystem_identity(descriptor: int) -> tuple[int, ...] | None:
     except OSError as exc:
         raise ValueError(f"unable to inspect evidence filesystem: {exc}") from exc
     fields = (
-        "f_bsize", "f_frsize", "f_blocks", "f_bfree", "f_bavail",
-        "f_files", "f_ffree", "f_favail", "f_flag", "f_namemax",
+        "f_bsize", "f_frsize", "f_blocks", "f_files", "f_flag", "f_namemax",
     )
     identity = tuple(int(getattr(metadata, field)) for field in fields)
     fsid = getattr(metadata, "f_fsid", None)
