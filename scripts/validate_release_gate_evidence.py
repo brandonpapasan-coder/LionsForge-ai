@@ -24,6 +24,7 @@ REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MAX_EVIDENCE_BYTES = 1024 * 1024
 MAX_JSON_DEPTH = 32
 MAX_JSON_NODES = 10_000
+MAX_JSON_INTEGER_DIGITS = 20
 ALLOWED_STATUSES = {
     "completed",
     "in_progress",
@@ -88,6 +89,20 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
 
 def _reject_nonstandard_constant(value: str) -> object:
     raise ValueError(f"evidence JSON contains non-standard constant: {value}")
+
+
+def _parse_bounded_integer(value: str) -> int:
+    digits = value[1:] if value.startswith("-") else value
+    if len(digits) > MAX_JSON_INTEGER_DIGITS:
+        raise ValueError(
+            "evidence JSON integer exceeds the maximum digit count of "
+            f"{MAX_JSON_INTEGER_DIGITS}"
+        )
+    return int(value)
+
+
+def _reject_float(value: str) -> object:
+    raise ValueError(f"evidence JSON contains unsupported floating-point value: {value}")
 
 
 def _contains_surrogate(value: str) -> bool:
@@ -194,6 +209,8 @@ def _read_evidence(path: Path) -> object:
             text,
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonstandard_constant,
+            parse_int=_parse_bounded_integer,
+            parse_float=_reject_float,
         )
     except json.JSONDecodeError as exc:
         raise ValueError("evidence file contains malformed JSON") from exc
