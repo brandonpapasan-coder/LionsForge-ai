@@ -175,10 +175,17 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
 
 
 def _validate_evidence_path(path: Path) -> None:
-    if not path.name:
+    name = path.name
+    if not name:
         raise ValueError("evidence path must identify a file")
     if ".." in path.parts:
         raise ValueError("evidence path must not contain parent traversal components")
+    if name.startswith("."):
+        raise ValueError("evidence filename must not be hidden")
+    if name.startswith("-"):
+        raise ValueError("evidence filename must not begin with a hyphen")
+    if path.suffix != ".json":
+        raise ValueError("evidence filename must use the lowercase .json suffix")
 
 
 def _validate_filesystem_path(path: Path) -> None:
