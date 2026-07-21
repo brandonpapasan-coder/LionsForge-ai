@@ -70,6 +70,7 @@ jobs:
           ../scripts/validate_public_operations_activation.py
           ../scripts/validate_public_operations_row_evidence.py
           ../scripts/verify_release_gates.py
+          ../scripts/write_atomic_evidence.py
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
           tests/test_production_acceptance_validator.py
@@ -80,6 +81,7 @@ jobs:
           tests/test_verify_release_gate_result_integrity.py
           tests/test_verify_release_gate_run_schema.py
           tests/test_verify_release_gates.py
+          tests/test_write_atomic_evidence.py
 
       - name: Ruff format check
         run: >-
@@ -90,6 +92,7 @@ jobs:
           ../scripts/validate_public_operations_activation.py
           ../scripts/validate_public_operations_row_evidence.py
           ../scripts/verify_release_gates.py
+          ../scripts/write_atomic_evidence.py
           tests/test_production_acceptance_validator.py
           tests/test_public_operations_activation_template.py
           tests/test_public_operations_activation_validator.py
@@ -98,6 +101,7 @@ jobs:
           tests/test_verify_release_gate_result_integrity.py
           tests/test_verify_release_gate_run_schema.py
           tests/test_verify_release_gates.py
+          tests/test_write_atomic_evidence.py
 
       - name: Type check
         run: >-
@@ -111,6 +115,7 @@ jobs:
           ../scripts/validate_public_operations_activation.py
           ../scripts/validate_public_operations_row_evidence.py
           ../scripts/verify_release_gates.py
+          ../scripts/write_atomic_evidence.py
 
       - name: Validate Alembic migrations on PostgreSQL
         run: |
