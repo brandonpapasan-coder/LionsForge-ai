@@ -27,44 +27,21 @@ MAX_JSON_NODES = 10_000
 MAX_JSON_INTEGER_DIGITS = 20
 MAX_JSON_STRING_CHARACTERS = 4_096
 UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
+EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 ALLOWED_STATUSES = {
-    "completed",
-    "in_progress",
-    "pending",
-    "queued",
-    "requested",
-    "waiting",
+    "completed", "in_progress", "pending", "queued", "requested", "waiting"
 }
 ALLOWED_CONCLUSIONS = {
-    "action_required",
-    "cancelled",
-    "failure",
-    "neutral",
-    "skipped",
-    "stale",
-    "startup_failure",
-    "success",
-    "timed_out",
+    "action_required", "cancelled", "failure", "neutral", "skipped", "stale",
+    "startup_failure", "success", "timed_out",
 }
 TOP_LEVEL_KEYS = {
-    "repository",
-    "release_sha",
-    "required_event",
-    "required_branch",
-    "required_workflow_paths",
-    "passed",
-    "gates",
+    "repository", "release_sha", "required_event", "required_branch",
+    "required_workflow_paths", "passed", "gates",
 }
 GATE_KEYS = {
-    "name",
-    "path",
-    "status",
-    "conclusion",
-    "run_id",
-    "html_url",
-    "event",
-    "head_branch",
-    "head_sha",
+    "name", "path", "status", "conclusion", "run_id", "html_url", "event",
+    "head_branch", "head_sha",
 }
 
 
@@ -186,6 +163,8 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
         raise ValueError("evidence file must not have multiple hard links")
     if metadata.st_mode & UNTRUSTED_WRITE_BITS:
         raise ValueError("evidence file must not be group- or world-writable")
+    if metadata.st_mode & EXECUTE_BITS:
+        raise ValueError("evidence file must not be executable")
     effective_uid = _effective_uid()
     if effective_uid is not None and metadata.st_uid != effective_uid:
         raise ValueError("evidence file must be owned by the effective user")
@@ -283,22 +262,14 @@ def _validate_missing_gate(gate: dict, index: int) -> None:
     if gate["status"] != "missing":
         raise ValueError(f"gate {index} missing evidence status is invalid")
     for field in (
-        "conclusion",
-        "run_id",
-        "html_url",
-        "event",
-        "head_branch",
-        "head_sha",
+        "conclusion", "run_id", "html_url", "event", "head_branch", "head_sha"
     ):
         if gate[field] is not None:
             raise ValueError(f"gate {index} missing evidence has invalid {field}")
 
 
 def _validate_real_gate(
-    gate: dict,
-    index: int,
-    repository: str,
-    release_sha: str,
+    gate: dict, index: int, repository: str, release_sha: str
 ) -> bool:
     status = _required_string(gate["status"], f"gate {index} status")
     if status not in ALLOWED_STATUSES:
@@ -371,12 +342,7 @@ def validate_payload(payload: object, repository: str, release_sha: str) -> None
             _validate_missing_gate(gate, index)
             gate_passed = False
         else:
-            gate_passed = _validate_real_gate(
-                gate,
-                index,
-                repository,
-                release_sha,
-            )
+            gate_passed = _validate_real_gate(gate, index, repository, release_sha)
             run_id = gate["run_id"]
             html_url = gate["html_url"]
             if run_id in seen_run_ids:
