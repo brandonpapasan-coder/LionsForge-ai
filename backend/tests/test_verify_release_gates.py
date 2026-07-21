@@ -27,9 +27,11 @@ def run(
     event="push",
     head_branch="main",
     head_sha=DEFAULT_SHA,
+    path=None,
 ):
     return {
         "name": name,
+        "path": path or MODULE.REQUIRED_WORKFLOW_PATHS[name],
         "status": status,
         "conclusion": conclusion,
         "run_number": run_number,
@@ -59,6 +61,9 @@ def test_all_required_exact_sha_workflows_pass():
     results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
     assert MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
     assert {result.head_sha for result in results} == {DEFAULT_SHA}
+    assert {result.path for result in results} == set(
+        MODULE.REQUIRED_WORKFLOW_PATHS.values()
+    )
 
 
 def test_missing_required_workflow_fails():
@@ -146,6 +151,21 @@ def test_wrong_head_sha_does_not_satisfy_gate():
 
     assert backend.status == "missing"
     assert backend.head_sha is None
+    assert not MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
+
+
+def test_spoofed_workflow_name_with_wrong_path_does_not_satisfy_gate():
+    runs = [run(name) for name in MODULE.REQUIRED_WORKFLOWS]
+    runs[0] = run(
+        "Backend CI",
+        path=".github/workflows/spoofed-backend-ci.yml",
+    )
+
+    results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
+    backend = next(result for result in results if result.name == "Backend CI")
+
+    assert backend.status == "missing"
+    assert backend.path == MODULE.REQUIRED_WORKFLOW_PATHS["Backend CI"]
     assert not MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
 
 
