@@ -9,6 +9,8 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from http.client import IncompleteRead
+from socket import timeout as SocketTimeout
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -26,6 +28,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PER_PAGE = 100
 MAX_PAGES = 100
+EXPECTED_MEDIA_TYPES = {"application/json", "application/vnd.github+json"}
 
 
 @dataclass(frozen=True)
@@ -154,6 +157,21 @@ def _validate_page_runs(runs: object, page: int) -> list[dict]:
     return validated
 
 
+def _response_media_type(response: object) -> str:
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        raise RuntimeError("GitHub Actions API response did not include headers")
+    get_content_type = getattr(headers, "get_content_type", None)
+    if not callable(get_content_type):
+        raise RuntimeError("GitHub Actions API response headers were not readable")
+    media_type = str(get_content_type()).lower()
+    if media_type not in EXPECTED_MEDIA_TYPES:
+        raise RuntimeError(
+            f"GitHub Actions API returned unexpected content type: {media_type}"
+        )
+    return media_type
+
+
 def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
     query = urlencode({"head_sha": sha, "per_page": PER_PAGE, "page": page})
     url = f"https://api.github.com/repos/{repository}/actions/runs?{query}"
@@ -168,9 +186,14 @@ def _fetch_page(repository: str, sha: str, token: str, page: int) -> list[dict]:
     )
     try:
         with urlopen(request, timeout=30) as response:  # noqa: S310 - fixed GitHub API host
+            _response_media_type(response)
             payload = json.load(response)
-    except (HTTPError, URLError) as exc:
+    except (HTTPError, URLError, SocketTimeout, TimeoutError, IncompleteRead) as exc:
         raise RuntimeError(f"GitHub Actions API request failed: {exc}") from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError("GitHub Actions API returned malformed JSON") from exc
+    except OSError as exc:
+        raise RuntimeError(f"GitHub Actions API response read failed: {exc}") from exc
     if not isinstance(payload, dict):
         raise RuntimeError("GitHub Actions API response was not an object")
     return _validate_page_runs(payload.get("workflow_runs"), page)
