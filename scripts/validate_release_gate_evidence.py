@@ -173,6 +173,24 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
         raise ValueError("evidence file must be owned by the effective user")
 
 
+def _validate_parent_components(path: Path) -> None:
+    absolute = path.absolute()
+    parent = absolute.parent
+    anchor = Path(parent.anchor)
+    current = anchor
+    parts = parent.parts[1:] if parent.anchor else parent.parts
+    for component in parts:
+        current = current / component
+        try:
+            metadata = current.lstat()
+        except OSError as exc:
+            raise ValueError(f"unable to inspect evidence parent path: {exc}") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError("evidence parent path must not contain symbolic links")
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError("evidence parent path components must be directories")
+
+
 def _read_bounded_descriptor(descriptor: int) -> bytes:
     chunks: list[bytes] = []
     remaining = MAX_EVIDENCE_BYTES + 1
@@ -186,6 +204,7 @@ def _read_bounded_descriptor(descriptor: int) -> bytes:
 
 
 def _read_evidence(path: Path) -> object:
+    _validate_parent_components(path)
     try:
         before = path.lstat()
     except OSError as exc:
