@@ -13,12 +13,13 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-REQUIRED_WORKFLOWS = (
-    "Backend CI",
-    "Frontend CI",
-    "Security Gate",
-    "Deployment Validation",
-)
+REQUIRED_WORKFLOW_PATHS = {
+    "Backend CI": ".github/workflows/backend-ci.yml",
+    "Frontend CI": ".github/workflows/frontend-ci.yml",
+    "Security Gate": ".github/workflows/security-gate.yml",
+    "Deployment Validation": ".github/workflows/deployment-validation.yml",
+}
+REQUIRED_WORKFLOWS = tuple(REQUIRED_WORKFLOW_PATHS)
 REQUIRED_EVENT = "push"
 REQUIRED_BRANCH = "main"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -29,6 +30,7 @@ PER_PAGE = 100
 @dataclass(frozen=True)
 class GateResult:
     name: str
+    path: str | None
     status: str
     conclusion: str | None
     run_id: int | None
@@ -45,22 +47,32 @@ def validate_inputs(repository: str, sha: str) -> None:
         raise ValueError("sha must be exactly 40 lowercase hexadecimal characters")
 
 
-def is_eligible_run(run: dict, expected_sha: str | None = None) -> bool:
+def is_eligible_run(
+    run: dict,
+    expected_sha: str | None = None,
+    expected_path: str | None = None,
+) -> bool:
     if run.get("event") != REQUIRED_EVENT or run.get("head_branch") != REQUIRED_BRANCH:
         return False
-    return expected_sha is None or run.get("head_sha") == expected_sha
+    if expected_sha is not None and run.get("head_sha") != expected_sha:
+        return False
+    return expected_path is None or run.get("path") == expected_path
 
 
 def evaluate_runs(
     runs: list[dict], expected_sha: str | None = None
 ) -> list[GateResult]:
     results: list[GateResult] = []
-    for workflow_name in REQUIRED_WORKFLOWS:
+    for workflow_name, workflow_path in REQUIRED_WORKFLOW_PATHS.items():
         matches = [
             run
             for run in runs
             if run.get("name") == workflow_name
-            and is_eligible_run(run, expected_sha)
+            and is_eligible_run(
+                run,
+                expected_sha=expected_sha,
+                expected_path=workflow_path,
+            )
         ]
         matches.sort(
             key=lambda run: (
@@ -74,6 +86,7 @@ def evaluate_runs(
             results.append(
                 GateResult(
                     workflow_name,
+                    workflow_path,
                     "missing",
                     None,
                     None,
@@ -88,6 +101,7 @@ def evaluate_runs(
         results.append(
             GateResult(
                 workflow_name,
+                run.get("path"),
                 str(run.get("status") or "unknown"),
                 run.get("conclusion"),
                 run.get("id"),
@@ -108,6 +122,7 @@ def all_passed(
         and result.conclusion == "success"
         and result.event == REQUIRED_EVENT
         and result.head_branch == REQUIRED_BRANCH
+        and result.path == REQUIRED_WORKFLOW_PATHS[result.name]
         and (expected_sha is None or result.head_sha == expected_sha)
         for result in results
     )
@@ -174,6 +189,7 @@ def main() -> int:
         "release_sha": args.sha,
         "required_event": REQUIRED_EVENT,
         "required_branch": REQUIRED_BRANCH,
+        "required_workflow_paths": REQUIRED_WORKFLOW_PATHS,
         "passed": all_passed(results, expected_sha=args.sha),
         "gates": [result.__dict__ for result in results],
     }
