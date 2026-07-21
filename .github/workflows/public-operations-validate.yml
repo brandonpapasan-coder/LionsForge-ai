@@ -67,13 +67,30 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ inputs.release_sha }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
           python scripts/verify_release_gates.py \
             --repository "${GITHUB_REPOSITORY}" \
             --sha "${RELEASE_SHA}" \
             | tee public-operations-release-gate-evidence.txt \
             | python scripts/write_atomic_evidence.py \
                 public-operations-release-gate-evidence.json
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+
+          verifier_status="${pipeline_status[0]}"
+          writer_status="${pipeline_status[2]}"
+          if [[ "${writer_status}" -ne 0 ]]; then
+            echo "release gate evidence could not be persisted safely" >&2
+            exit "${writer_status}"
+          fi
+
+          python scripts/validate_release_gate_evidence.py \
+            public-operations-release-gate-evidence.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${RELEASE_SHA}"
+
+          exit "${verifier_status}"
 
       - name: Validate public operations activation record
         id: validate
