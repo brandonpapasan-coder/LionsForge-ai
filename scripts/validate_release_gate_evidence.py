@@ -23,6 +23,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MAX_EVIDENCE_BYTES = 1024 * 1024
 MAX_JSON_DEPTH = 32
+MAX_JSON_NODES = 10_000
 ALLOWED_STATUSES = {
     "completed",
     "in_progress",
@@ -95,8 +96,14 @@ def _contains_surrogate(value: str) -> bool:
 
 def _validate_json_tree(value: object) -> None:
     stack: list[tuple[object, int]] = [(value, 1)]
+    node_count = 0
     while stack:
         current, depth = stack.pop()
+        node_count += 1
+        if node_count > MAX_JSON_NODES:
+            raise ValueError(
+                f"evidence JSON exceeds the maximum node count of {MAX_JSON_NODES}"
+            )
         if depth > MAX_JSON_DEPTH:
             raise ValueError(
                 f"evidence JSON exceeds the maximum nesting depth of {MAX_JSON_DEPTH}"
@@ -108,6 +115,11 @@ def _validate_json_tree(value: object) -> None:
             stack.extend((item, depth + 1) for item in current)
         elif isinstance(current, dict):
             for key, item in current.items():
+                node_count += 1
+                if node_count > MAX_JSON_NODES:
+                    raise ValueError(
+                        f"evidence JSON exceeds the maximum node count of {MAX_JSON_NODES}"
+                    )
                 if _contains_surrogate(key):
                     raise ValueError(
                         "evidence JSON contains an invalid Unicode surrogate"
