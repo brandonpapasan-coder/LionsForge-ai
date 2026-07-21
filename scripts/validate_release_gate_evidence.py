@@ -197,6 +197,8 @@ def _validate_path_component(component: str) -> None:
         raise ValueError("evidence path components must not contain Unicode format characters")
     if unicodedata.normalize("NFC", component) != component:
         raise ValueError("evidence path components must use NFC Unicode normalization")
+    if unicodedata.normalize("NFKC", component) != component:
+        raise ValueError("evidence path components must not use Unicode compatibility forms")
     if any(character in PORTABLE_FORBIDDEN_PATH_CHARACTERS for character in component):
         raise ValueError("evidence path components contain a forbidden portable character")
     if component.endswith((" ", ".")):
