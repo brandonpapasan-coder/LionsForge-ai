@@ -146,6 +146,10 @@ def _contains_unicode_variation_selector(value: str) -> bool:
     )
 
 
+def _contains_unicode_tag_character(value: str) -> bool:
+    return any(0xE0000 <= ord(character) <= 0xE007F for character in value)
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -234,6 +238,8 @@ def _validate_path_component(component: str) -> None:
         )
     if _contains_unicode_variation_selector(component):
         raise ValueError("evidence path components must not contain Unicode variation selectors")
+    if _contains_unicode_tag_character(component):
+        raise ValueError("evidence path components must not contain Unicode tag characters")
     if _starts_with_combining_mark(component):
         raise ValueError("evidence path components must not begin with a Unicode combining mark")
     if _contains_control_character(component):
