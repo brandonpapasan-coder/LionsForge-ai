@@ -115,6 +115,14 @@ def _contains_non_ascii_whitespace(value: str) -> bool:
     return any(character != " " and character.isspace() for character in value)
 
 
+def _contains_unicode_noncharacter(value: str) -> bool:
+    for character in value:
+        codepoint = ord(character)
+        if 0xFDD0 <= codepoint <= 0xFDEF or codepoint & 0xFFFF in (0xFFFE, 0xFFFF):
+            return True
+    return False
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -195,6 +203,8 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
 def _validate_path_component(component: str) -> None:
     if _contains_surrogate(component):
         raise ValueError("evidence path components must contain valid Unicode scalars")
+    if _contains_unicode_noncharacter(component):
+        raise ValueError("evidence path components must not contain Unicode noncharacters")
     if _contains_control_character(component):
         raise ValueError("evidence path components must not contain control characters")
     if _contains_format_character(component):
