@@ -164,14 +164,21 @@ def _validate_unicode_scalars(value: object) -> None:
     _validate_json_tree(value)
 
 
-def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, int, int]:
     return (
         metadata.st_dev,
         metadata.st_ino,
         metadata.st_size,
         metadata.st_mtime_ns,
         metadata.st_ctime_ns,
+        metadata.st_uid,
+        metadata.st_mode,
     )
+
+
+def _effective_uid() -> int | None:
+    getter = getattr(os, "geteuid", None)
+    return getter() if getter is not None else None
 
 
 def _validate_file_trust(metadata: os.stat_result) -> None:
@@ -179,6 +186,9 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
         raise ValueError("evidence file must not have multiple hard links")
     if metadata.st_mode & UNTRUSTED_WRITE_BITS:
         raise ValueError("evidence file must not be group- or world-writable")
+    effective_uid = _effective_uid()
+    if effective_uid is not None and metadata.st_uid != effective_uid:
+        raise ValueError("evidence file must be owned by the effective user")
 
 
 def _read_bounded_descriptor(descriptor: int) -> bytes:
@@ -225,7 +235,6 @@ def _read_evidence(path: Path) -> object:
         _validate_file_trust(opened)
         if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
             raise ValueError("evidence file changed before it could be read")
-
         body = _read_bounded_descriptor(descriptor)
         first_after = os.fstat(descriptor)
         os.lseek(descriptor, 0, os.SEEK_SET)
@@ -294,7 +303,6 @@ def _validate_real_gate(
     status = _required_string(gate["status"], f"gate {index} status")
     if status not in ALLOWED_STATUSES:
         raise ValueError(f"gate {index} status is invalid")
-
     conclusion = _optional_string(gate["conclusion"], f"gate {index} conclusion")
     if status == "completed":
         if conclusion not in ALLOWED_CONCLUSIONS:
@@ -319,7 +327,6 @@ def _validate_real_gate(
     expected_url = f"https://github.com/{repository}/actions/runs/{run_id}"
     if html_url != expected_url:
         raise ValueError(f"gate {index} html_url is invalid")
-
     return status == "completed" and conclusion == "success"
 
 
@@ -360,7 +367,6 @@ def validate_payload(payload: object, repository: str, release_sha: str) -> None
             raise ValueError(f"gate {index} has missing or unexpected fields")
         if gate["name"] != workflow_name or gate["path"] != workflow_path:
             raise ValueError(f"gate {index} identity or path is invalid")
-
         if gate["run_id"] is None:
             _validate_missing_gate(gate, index)
             gate_passed = False
