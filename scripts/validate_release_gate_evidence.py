@@ -28,6 +28,7 @@ MAX_JSON_INTEGER_DIGITS = 20
 MAX_JSON_STRING_CHARACTERS = 4_096
 UNTRUSTED_WRITE_BITS = stat.S_IWGRP | stat.S_IWOTH
 EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+SPECIAL_PERMISSION_BITS = stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
 ALLOWED_STATUSES = {
     "completed", "in_progress", "pending", "queued", "requested", "waiting"
 }
@@ -165,6 +166,8 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
         raise ValueError("evidence file must not be group- or world-writable")
     if metadata.st_mode & EXECUTE_BITS:
         raise ValueError("evidence file must not be executable")
+    if metadata.st_mode & SPECIAL_PERMISSION_BITS:
+        raise ValueError("evidence file must not have special permission bits")
     effective_uid = _effective_uid()
     if effective_uid is not None and metadata.st_uid != effective_uid:
         raise ValueError("evidence file must be owned by the effective user")
