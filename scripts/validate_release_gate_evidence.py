@@ -162,6 +162,8 @@ def _validate_json_string(value: str) -> None:
         )
     if _contains_surrogate(value):
         raise ValueError("evidence JSON contains an invalid Unicode surrogate")
+    if _contains_unicode_noncharacter(value):
+        raise ValueError("evidence JSON contains a Unicode noncharacter")
     if _contains_control_character(value):
         raise ValueError("evidence JSON contains a control character")
 
