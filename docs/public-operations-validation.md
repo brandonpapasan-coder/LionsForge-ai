@@ -34,7 +34,7 @@ Each gate must also come from its exact required workflow file. A different work
 
 Manual runs, pull-request runs, branch aliases, tags, shortened SHAs, and evidence from a different commit are not acceptable substitutes.
 
-The release-gate verifier treats malformed GitHub API responses, non-object run entries, invalid or duplicate run IDs, repeated pagination evidence, and pagination beyond the configured safety limit as blocking errors. These conditions must not be interpreted as successful or merely absent evidence.
+The release-gate verifier treats malformed GitHub API responses, unexpected non-JSON media types, malformed JSON, timeouts, truncated reads, unreadable response headers, non-object run entries, invalid or duplicate run IDs, repeated pagination evidence, and pagination beyond the configured safety limit as blocking errors. These conditions must not be interpreted as successful or merely absent evidence.
 
 ## Activation record requirements
 
