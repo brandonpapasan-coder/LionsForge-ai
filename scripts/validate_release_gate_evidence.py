@@ -173,7 +173,15 @@ def _validate_file_trust(metadata: os.stat_result) -> None:
         raise ValueError("evidence file must be owned by the effective user")
 
 
+def _validate_evidence_path(path: Path) -> None:
+    if not path.name:
+        raise ValueError("evidence path must identify a file")
+    if ".." in path.parts:
+        raise ValueError("evidence path must not contain parent traversal components")
+
+
 def _validate_parent_components(path: Path) -> None:
+    _validate_evidence_path(path)
     absolute = path.absolute()
     parent = absolute.parent
     anchor = Path(parent.anchor)
@@ -200,6 +208,7 @@ def _descriptor_relative_open_supported() -> bool:
 
 
 def _open_evidence_descriptor(path: Path) -> int:
+    _validate_evidence_path(path)
     file_flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         file_flags |= os.O_CLOEXEC
@@ -259,6 +268,7 @@ def _read_bounded_descriptor(descriptor: int) -> bytes:
 
 
 def _read_evidence(path: Path) -> object:
+    _validate_evidence_path(path)
     _validate_parent_components(path)
     try:
         before = path.lstat()
