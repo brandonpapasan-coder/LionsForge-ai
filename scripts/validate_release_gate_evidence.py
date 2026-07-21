@@ -22,6 +22,7 @@ REQUIRED_BRANCH = "main"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MAX_EVIDENCE_BYTES = 1024 * 1024
+MAX_JSON_DEPTH = 32
 ALLOWED_STATUSES = {
     "completed",
     "in_progress",
@@ -92,20 +93,31 @@ def _contains_surrogate(value: str) -> bool:
     return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
 
-def _validate_unicode_scalars(value: object) -> None:
-    if isinstance(value, str):
-        if _contains_surrogate(value):
-            raise ValueError("evidence JSON contains an invalid Unicode surrogate")
-        return
-    if isinstance(value, list):
-        for item in value:
-            _validate_unicode_scalars(item)
-        return
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if _contains_surrogate(key):
+def _validate_json_tree(value: object) -> None:
+    stack: list[tuple[object, int]] = [(value, 1)]
+    while stack:
+        current, depth = stack.pop()
+        if depth > MAX_JSON_DEPTH:
+            raise ValueError(
+                f"evidence JSON exceeds the maximum nesting depth of {MAX_JSON_DEPTH}"
+            )
+        if isinstance(current, str):
+            if _contains_surrogate(current):
                 raise ValueError("evidence JSON contains an invalid Unicode surrogate")
-            _validate_unicode_scalars(item)
+        elif isinstance(current, list):
+            stack.extend((item, depth + 1) for item in current)
+        elif isinstance(current, dict):
+            for key, item in current.items():
+                if _contains_surrogate(key):
+                    raise ValueError(
+                        "evidence JSON contains an invalid Unicode surrogate"
+                    )
+                stack.append((item, depth + 1))
+
+
+def _validate_unicode_scalars(value: object) -> None:
+    """Compatibility wrapper retained for direct unit tests."""
+    _validate_json_tree(value)
 
 
 def _read_evidence(path: Path) -> object:
@@ -163,7 +175,9 @@ def _read_evidence(path: Path) -> object:
         )
     except json.JSONDecodeError as exc:
         raise ValueError("evidence file contains malformed JSON") from exc
-    _validate_unicode_scalars(payload)
+    except RecursionError as exc:
+        raise ValueError("evidence JSON nesting exceeds parser safety limits") from exc
+    _validate_json_tree(payload)
     return payload
 
 
