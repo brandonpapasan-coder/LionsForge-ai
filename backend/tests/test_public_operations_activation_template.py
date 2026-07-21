@@ -1,13 +1,17 @@
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE = ROOT / "docs" / "public-operations-activation-record.md"
 
 
-def _load_validator(module_name: str, script_name: str):
+Validator = Callable[[str], list[object]]
+
+
+def _load_validator(module_name: str, script_name: str) -> Validator:
     script = ROOT / "scripts" / script_name
     spec = spec_from_file_location(module_name, script)
     assert spec and spec.loader
@@ -62,6 +66,10 @@ REQUIRED_ROWS = {
 }
 
 
+def _codes(findings: list[object]) -> set[str]:
+    return {str(getattr(finding, "code")) for finding in findings}
+
+
 def test_template_remains_fail_closed() -> None:
     text = TEMPLATE.read_text(encoding="utf-8")
 
@@ -69,8 +77,29 @@ def test_template_remains_fail_closed() -> None:
     assert "Public registration remains disabled" in text
     assert "private home-address" in text
     assert "deployed public build" not in text
-    assert validate_activation(text)
-    assert validate_row_evidence(text)
+
+    activation_codes = _codes(validate_activation(text))
+    assert {
+        "invalid-sha",
+        "decision-no-go",
+        "invalid-date",
+        "legal-approval-incomplete",
+        "invalid-reference",
+        "policy-unapproved",
+        "channel-unverified",
+        "retention-unapproved",
+        "workflow-untested",
+        "approval-missing",
+        "privacy-control-incomplete",
+        "consent-decision-incomplete",
+        "blocking-defect",
+    }.issubset(activation_codes)
+
+    row_codes = _codes(validate_row_evidence(text))
+    assert {
+        "invalid-row-date",
+        "invalid-row-reference",
+    }.issubset(row_codes)
 
 
 def test_template_contains_all_required_rows() -> None:
