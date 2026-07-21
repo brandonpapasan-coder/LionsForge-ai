@@ -72,6 +72,7 @@ jobs:
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
           tests/test_production_acceptance_validator.py
+          tests/test_public_operations_activation_template.py
           tests/test_public_operations_activation_validator.py
           tests/test_public_operations_row_evidence_validator.py
 
@@ -84,6 +85,7 @@ jobs:
           ../scripts/validate_public_operations_activation.py
           ../scripts/validate_public_operations_row_evidence.py
           tests/test_production_acceptance_validator.py
+          tests/test_public_operations_activation_template.py
           tests/test_public_operations_activation_validator.py
           tests/test_public_operations_row_evidence_validator.py
 
