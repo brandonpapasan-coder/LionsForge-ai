@@ -167,12 +167,37 @@ def test_missing_public_address_fails() -> None:
     assert "missing-field" in codes(text)
 
 
-def test_nonaffirmative_legal_approval_fails() -> None:
+def test_negative_legal_approval_fails() -> None:
     text = valid_record().replace(
         "- Governing-law and venue language approved: Yes",
         "- Governing-law and venue language approved: No",
     )
-    assert {"missing-field", "legal-approval-incomplete"}.issubset(codes(text))
+    assert "legal-approval-incomplete" in codes(text)
+
+
+def test_invalid_review_date_fails() -> None:
+    text = valid_record().replace(
+        "- Review date: 2026-07-20",
+        "- Review date: July 20, 2026",
+    )
+    assert "invalid-date" in codes(text)
+
+
+def test_effective_date_before_review_fails() -> None:
+    text = valid_record().replace(
+        "- Intended effective date: 2026-08-01",
+        "- Intended effective date: 2026-07-01",
+        1,
+    )
+    assert "invalid-date-order" in codes(text)
+
+
+def test_placeholder_controlled_reference_fails() -> None:
+    text = valid_record().replace(
+        "- Jurisdiction-specific privacy-rights matrix reference: controlled-record-1",
+        "- Jurisdiction-specific privacy-rights matrix reference: TODO",
+    )
+    assert "invalid-reference" in codes(text)
 
 
 def test_unapproved_policy_and_unverified_channel_fail() -> None:
