@@ -75,6 +75,15 @@ def _optional_string(value: object, field: str) -> str | None:
     return _required_string(value, field)
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"evidence JSON contains duplicate key: {key}")
+        result[key] = value
+    return result
+
+
 def _read_evidence(path: Path) -> object:
     try:
         before = path.lstat()
@@ -123,7 +132,7 @@ def _read_evidence(path: Path) -> object:
     except UnicodeDecodeError as exc:
         raise ValueError("evidence file is not valid UTF-8") from exc
     try:
-        return json.loads(text)
+        return json.loads(text, object_pairs_hook=_reject_duplicate_keys)
     except json.JSONDecodeError as exc:
         raise ValueError("evidence file contains malformed JSON") from exc
 
