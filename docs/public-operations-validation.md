@@ -15,6 +15,7 @@ Public registration must remain disabled unless the completed activation record 
 - `backend/tests/test_public_operations_activation_validator.py`
 - `backend/tests/test_public_operations_row_evidence_validator.py`
 - `backend/tests/test_public_operations_activation_template.py`
+- `backend/tests/test_verify_release_gates.py`
 - `.github/workflows/public-operations-validate.yml`
 - `.github/workflows/backend-ci.yml`
 
@@ -29,7 +30,11 @@ The following workflows must have completed successfully for that exact SHA as `
 - Security Gate
 - Deployment Validation
 
+Each gate must also come from its exact required workflow file. A different workflow that reuses the same displayed name is not acceptable evidence.
+
 Manual runs, pull-request runs, branch aliases, tags, shortened SHAs, and evidence from a different commit are not acceptable substitutes.
+
+The release-gate verifier treats malformed GitHub API responses, non-object run entries, invalid or duplicate run IDs, repeated pagination evidence, and pagination beyond the configured safety limit as blocking errors. These conditions must not be interpreted as successful or merely absent evidence.
 
 ## Activation record requirements
 
