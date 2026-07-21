@@ -14,6 +14,7 @@ Public registration must remain disabled unless the completed activation record 
 - `scripts/verify_release_gates.py`
 - `backend/tests/test_public_operations_activation_validator.py`
 - `backend/tests/test_public_operations_row_evidence_validator.py`
+- `backend/tests/test_public_operations_activation_template.py`
 - `.github/workflows/public-operations-validate.yml`
 - `.github/workflows/backend-ci.yml`
 
@@ -70,6 +71,10 @@ The row-evidence validator independently enforces:
 - final approval dates use valid `YYYY-MM-DD` values and are not later than the record review date
 
 Repository-visible references must contain only non-sensitive identifiers. Detailed or sensitive evidence must remain in controlled internal systems.
+
+## Template contract
+
+The activation template contract test verifies that the repository template remains fail-closed, retains every mandatory row, documents the required date and evidence rules, and is rejected by both validators until operators replace all placeholder values with completed evidence.
 
 ## Local validation
 
