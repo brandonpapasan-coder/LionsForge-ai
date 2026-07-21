@@ -107,6 +107,10 @@ def _contains_control_character(value: str) -> bool:
     )
 
 
+def _contains_format_character(value: str) -> bool:
+    return any(unicodedata.category(character) == "Cf" for character in value)
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -189,6 +193,8 @@ def _validate_path_component(component: str) -> None:
         raise ValueError("evidence path components must contain valid Unicode scalars")
     if _contains_control_character(component):
         raise ValueError("evidence path components must not contain control characters")
+    if _contains_format_character(component):
+        raise ValueError("evidence path components must not contain Unicode format characters")
     if unicodedata.normalize("NFC", component) != component:
         raise ValueError("evidence path components must use NFC Unicode normalization")
     if any(character in PORTABLE_FORBIDDEN_PATH_CHARACTERS for character in component):
