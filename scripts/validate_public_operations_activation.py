@@ -7,19 +7,22 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 FIELD_RE = re.compile(r"^- ([^:]+):\s*(.*)$")
 TABLE_ROW_RE = re.compile(r"^\|(.+)\|$")
-AFFIRMATIVE_VALUES = {"YES", "APPROVED", "VERIFIED"}
-INCOMPLETE_VALUES = {
+PLACEHOLDERS = {
     "",
-    "NO",
     "PENDING",
-    "NOT APPROVED",
-    "NOT TESTED",
     "NOT VERIFIED",
+    "NOT TESTED",
+    "NOT APPROVED",
+    "TBD",
+    "TODO",
+    "N/A OR PENDING",
+    "NOT APPLICABLE OR PENDING",
 }
 
 REQUIRED_POLICY_SURFACES = {
@@ -75,6 +78,14 @@ def _normalize(value: str) -> str:
     return value.strip().strip("`").strip("*").strip()
 
 
+def _upper(value: str) -> str:
+    return _normalize(value).upper()
+
+
+def _is_placeholder(value: str) -> bool:
+    return _upper(value) in PLACEHOLDERS
+
+
 def _fields(lines: list[str]) -> dict[str, str]:
     result: dict[str, str] = {}
     for line in lines:
@@ -117,6 +128,29 @@ def _require_rows(
             findings.append(Finding("missing-row", f"{group} row is missing: {name}"))
 
 
+def _require_iso_date(
+    fields: dict[str, str], field: str, findings: list[Finding]
+) -> date | None:
+    value = fields.get(field, "")
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        findings.append(
+            Finding("invalid-date", f"{field} must use a valid YYYY-MM-DD date")
+        )
+        return None
+
+
+def _require_reference(
+    fields: dict[str, str], field: str, findings: list[Finding]
+) -> None:
+    value = fields.get(field, "")
+    if _is_placeholder(value) or len(value.strip()) < 3:
+        findings.append(
+            Finding("invalid-reference", f"Evidence reference is incomplete: {field}")
+        )
+
+
 def validate_record(text: str) -> list[Finding]:
     lines = text.splitlines()
     fields = _fields(lines)
@@ -128,12 +162,11 @@ def validate_record(text: str) -> list[Finding]:
         findings.append(
             Finding(
                 "invalid-sha",
-                "Release candidate SHA must be exactly 40 lowercase hexadecimal "
-                "characters",
+                "Release candidate SHA must be exactly 40 lowercase hexadecimal characters",
             )
         )
 
-    decision = fields.get("Decision", "")
+    decision = _upper(fields.get("Decision", ""))
     if decision not in {"GO", "NO-GO"}:
         findings.append(Finding("invalid-decision", "Decision must be GO or NO-GO"))
     elif decision != "GO":
@@ -144,17 +177,12 @@ def validate_record(text: str) -> list[Finding]:
             )
         )
 
-    required_fields = (
+    ordinary_fields = (
         "Record owner role",
-        "Review date",
-        "Intended effective date",
         "Public legal entity name",
         "Public business address or approved registered-agent address",
-        "Governing-law and venue language approved",
         "Supported launch jurisdictions",
         "Age eligibility and parental-consent position",
-        "Jurisdiction-specific privacy-rights matrix reference",
-        "Subprocessor and AI-provider disclosure reference",
         "Support response target",
         "Privacy-request response target",
         "Security-report acknowledgment target",
@@ -162,20 +190,39 @@ def validate_record(text: str) -> list[Finding]:
         "After-hours critical incident coverage",
         "Escalation owner role",
     )
-    for field in required_fields:
-        if fields.get(field, "").upper() in INCOMPLETE_VALUES:
+    for field in ordinary_fields:
+        if _is_placeholder(fields.get(field, "")):
             findings.append(
                 Finding("missing-field", f"Required field is incomplete: {field}")
             )
 
-    governing_law = fields.get("Governing-law and venue language approved", "").upper()
-    if governing_law not in AFFIRMATIVE_VALUES:
+    review_date = _require_iso_date(fields, "Review date", findings)
+    effective_date = _require_iso_date(fields, "Intended effective date", findings)
+    if review_date and effective_date and effective_date < review_date:
+        findings.append(
+            Finding(
+                "invalid-date-order",
+                "Intended effective date cannot be earlier than the review date",
+            )
+        )
+
+    if _upper(fields.get("Governing-law and venue language approved", "")) not in {
+        "YES",
+        "APPROVED",
+        "VERIFIED",
+    }:
         findings.append(
             Finding(
                 "legal-approval-incomplete",
                 "Governing-law and venue language must be affirmatively approved",
             )
         )
+
+    for field in (
+        "Jurisdiction-specific privacy-rights matrix reference",
+        "Subprocessor and AI-provider disclosure reference",
+    ):
+        _require_reference(fields, field, findings)
 
     _require_rows(rows, REQUIRED_POLICY_SURFACES, findings, "Policy")
     _require_rows(rows, REQUIRED_CHANNELS, findings, "Monitored channel")
@@ -185,77 +232,42 @@ def validate_record(text: str) -> list[Finding]:
 
     for name in REQUIRED_POLICY_SURFACES:
         cells = rows.get(name, [])
-        if len(cells) < 5 or cells[4] != "APPROVED":
-            findings.append(
-                Finding("policy-unapproved", f"Policy must be APPROVED: {name}")
-            )
-        if any(value in {"", "PENDING", "NOT APPROVED"} for value in cells[:4]):
-            findings.append(
-                Finding("policy-incomplete", f"Policy metadata is incomplete: {name}")
-            )
+        if len(cells) < 5 or _upper(cells[4]) != "APPROVED":
+            findings.append(Finding("policy-unapproved", f"Policy must be APPROVED: {name}"))
+        if len(cells) < 4 or any(_is_placeholder(value) for value in cells[:4]):
+            findings.append(Finding("policy-incomplete", f"Policy metadata is incomplete: {name}"))
 
     for name in REQUIRED_CHANNELS:
         cells = rows.get(name, [])
-        if len(cells) < 4 or cells[2] != "VERIFIED":
+        if len(cells) < 4 or _upper(cells[2]) != "VERIFIED":
             findings.append(
-                Finding(
-                    "channel-unverified",
-                    f"Channel monitoring must be VERIFIED: {name}",
-                )
+                Finding("channel-unverified", f"Channel monitoring must be VERIFIED: {name}")
             )
-        if any(value in {"", "PENDING", "NOT VERIFIED"} for value in cells[:4]):
-            findings.append(
-                Finding(
-                    "channel-incomplete", f"Channel metadata is incomplete: {name}"
-                )
-            )
+        if len(cells) < 4 or any(_is_placeholder(value) for value in cells[:4]):
+            findings.append(Finding("channel-incomplete", f"Channel metadata is incomplete: {name}"))
 
     for name in REQUIRED_RETENTION_CLASSES:
         cells = rows.get(name, [])
-        if len(cells) < 4 or cells[3] != "APPROVED":
+        if len(cells) < 4 or _upper(cells[3]) != "APPROVED":
             findings.append(
-                Finding(
-                    "retention-unapproved",
-                    f"Retention configuration must be APPROVED: {name}",
-                )
+                Finding("retention-unapproved", f"Retention configuration must be APPROVED: {name}")
             )
-        if any(value in {"", "PENDING", "NOT APPROVED"} for value in cells[:4]):
-            findings.append(
-                Finding(
-                    "retention-incomplete",
-                    f"Retention metadata is incomplete: {name}",
-                )
-            )
+        if len(cells) < 4 or any(_is_placeholder(value) for value in cells[:4]):
+            findings.append(Finding("retention-incomplete", f"Retention metadata is incomplete: {name}"))
 
     for name in REQUIRED_WORKFLOWS:
         cells = rows.get(name, [])
-        if len(cells) < 4 or cells[3] != "PASSED":
-            findings.append(
-                Finding("workflow-untested", f"Workflow must be PASSED: {name}")
-            )
-        if any(value in {"", "PENDING", "NOT TESTED"} for value in cells[:4]):
-            findings.append(
-                Finding(
-                    "workflow-incomplete",
-                    f"Workflow evidence is incomplete: {name}",
-                )
-            )
+        if len(cells) < 4 or _upper(cells[3]) != "PASSED":
+            findings.append(Finding("workflow-untested", f"Workflow must be PASSED: {name}"))
+        if len(cells) < 4 or any(_is_placeholder(value) for value in cells[:4]):
+            findings.append(Finding("workflow-incomplete", f"Workflow evidence is incomplete: {name}"))
 
     for name in REQUIRED_APPROVALS:
         cells = rows.get(name, [])
-        if len(cells) < 3 or cells[2] != "APPROVED":
-            findings.append(
-                Finding(
-                    "approval-missing", f"Final approval must be APPROVED: {name}"
-                )
-            )
-        if any(value in {"", "PENDING", "NOT APPROVED"} for value in cells[:3]):
-            findings.append(
-                Finding(
-                    "approval-incomplete",
-                    f"Approval metadata is incomplete: {name}",
-                )
-            )
+        if len(cells) < 3 or _upper(cells[2]) != "APPROVED":
+            findings.append(Finding("approval-missing", f"Final approval must be APPROVED: {name}"))
+        if len(cells) < 3 or any(_is_placeholder(value) for value in cells[:3]):
+            findings.append(Finding("approval-incomplete", f"Approval metadata is incomplete: {name}"))
 
     for field in (
         "Log-redaction review completed",
@@ -263,16 +275,11 @@ def validate_record(text: str) -> list[Finding]:
         "Private prompts, evidence, education records, and support content excluded or minimized",
         "Analytics and cookie inventory completed",
     ):
-        if fields.get(field, "").upper() not in AFFIRMATIVE_VALUES:
-            findings.append(
-                Finding(
-                    "privacy-control-incomplete",
-                    f"Privacy control is incomplete: {field}",
-                )
-            )
+        if _upper(fields.get(field, "")) not in {"YES", "VERIFIED"}:
+            findings.append(Finding("privacy-control-incomplete", f"Privacy control is incomplete: {field}"))
 
-    consent_required = fields.get("Consent control required", "").upper()
-    consent_tested = fields.get("Consent control tested when required", "").upper()
+    consent_required = _upper(fields.get("Consent control required", ""))
+    consent_tested = _upper(fields.get("Consent control tested when required", ""))
     if consent_required not in {"YES", "NO", "NOT REQUIRED"}:
         findings.append(
             Finding(
@@ -280,16 +287,9 @@ def validate_record(text: str) -> list[Finding]:
                 "Consent control requirement must be explicitly YES, NO, or NOT REQUIRED",
             )
         )
-    elif consent_required == "YES" and consent_tested not in {
-        "YES",
-        "VERIFIED",
-        "PASSED",
-    }:
+    elif consent_required == "YES" and consent_tested not in {"YES", "VERIFIED", "PASSED"}:
         findings.append(
-            Finding(
-                "consent-control-untested",
-                "Required consent controls must be tested successfully",
-            )
+            Finding("consent-control-untested", "Required consent controls must be tested successfully")
         )
     elif consent_required in {"NO", "NOT REQUIRED"} and consent_tested not in {
         "NOT APPLICABLE",
@@ -304,10 +304,9 @@ def validate_record(text: str) -> list[Finding]:
             )
         )
 
-    if fields.get("Open high or critical privacy/security defects", "") not in {
+    if _upper(fields.get("Open high or critical privacy/security defects", "")) not in {
         "0",
-        "None",
-        "none",
+        "NONE",
     }:
         findings.append(
             Finding(
