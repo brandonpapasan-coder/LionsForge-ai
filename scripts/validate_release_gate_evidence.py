@@ -163,6 +163,28 @@ def _validate_unicode_scalars(value: object) -> None:
     _validate_json_tree(value)
 
 
+def _file_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _read_bounded_descriptor(descriptor: int) -> bytes:
+    chunks: list[bytes] = []
+    remaining = MAX_EVIDENCE_BYTES + 1
+    while remaining > 0:
+        chunk = os.read(descriptor, min(64 * 1024, remaining))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
 def _read_evidence(path: Path) -> object:
     try:
         before = path.lstat()
@@ -193,8 +215,12 @@ def _read_evidence(path: Path) -> object:
             raise ValueError("evidence file must be a regular file")
         if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
             raise ValueError("evidence file changed before it could be read")
-        body = os.read(descriptor, MAX_EVIDENCE_BYTES + 1)
-        after = os.fstat(descriptor)
+
+        body = _read_bounded_descriptor(descriptor)
+        first_after = os.fstat(descriptor)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        verification_body = _read_bounded_descriptor(descriptor)
+        second_after = os.fstat(descriptor)
     except OSError as exc:
         raise ValueError(f"unable to read evidence file: {exc}") from exc
     finally:
@@ -204,8 +230,14 @@ def _read_evidence(path: Path) -> object:
         raise ValueError(
             f"evidence file exceeds the {MAX_EVIDENCE_BYTES}-byte safety limit"
         )
-    if len(body) != opened.st_size or opened.st_size != after.st_size:
-        raise ValueError("evidence file changed or was truncated during reading")
+    if (
+        len(body) != opened.st_size
+        or _file_identity(opened) != _file_identity(first_after)
+        or _file_identity(first_after) != _file_identity(second_after)
+        or verification_body != body
+    ):
+        raise ValueError("evidence file changed during reading")
+
     try:
         text = body.decode("utf-8")
     except UnicodeDecodeError as exc:
