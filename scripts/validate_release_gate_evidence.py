@@ -111,6 +111,10 @@ def _contains_format_character(value: str) -> bool:
     return any(unicodedata.category(character) == "Cf" for character in value)
 
 
+def _contains_non_ascii_whitespace(value: str) -> bool:
+    return any(character != " " and character.isspace() for character in value)
+
+
 def _validate_json_string(value: str) -> None:
     if len(value) > MAX_JSON_STRING_CHARACTERS:
         raise ValueError(
@@ -195,14 +199,18 @@ def _validate_path_component(component: str) -> None:
         raise ValueError("evidence path components must not contain control characters")
     if _contains_format_character(component):
         raise ValueError("evidence path components must not contain Unicode format characters")
+    if _contains_non_ascii_whitespace(component):
+        raise ValueError("evidence path components must not contain non-ASCII whitespace")
+    if component.startswith(" ") or component.endswith(" "):
+        raise ValueError("evidence path components must not begin or end with a space")
     if unicodedata.normalize("NFC", component) != component:
         raise ValueError("evidence path components must use NFC Unicode normalization")
     if unicodedata.normalize("NFKC", component) != component:
         raise ValueError("evidence path components must not use Unicode compatibility forms")
     if any(character in PORTABLE_FORBIDDEN_PATH_CHARACTERS for character in component):
         raise ValueError("evidence path components contain a forbidden portable character")
-    if component.endswith((" ", ".")):
-        raise ValueError("evidence path components must not end with a space or dot")
+    if component.endswith("."):
+        raise ValueError("evidence path components must not end with a dot")
     if len(component.encode("utf-8")) > MAX_PATH_COMPONENT_BYTES:
         raise ValueError(
             "evidence path component exceeds the maximum UTF-8 byte length of "
