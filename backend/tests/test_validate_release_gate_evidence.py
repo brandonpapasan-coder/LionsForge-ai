@@ -237,6 +237,20 @@ def test_rejects_invalid_run_identity_and_url_binding():
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
 
+def test_rejects_duplicate_run_ids_and_urls_across_gates():
+    evidence = payload()
+    evidence["gates"][1]["run_id"] = evidence["gates"][0]["run_id"]
+    evidence["gates"][1]["html_url"] = evidence["gates"][0]["html_url"]
+    with pytest.raises(ValueError, match="reuses a prior run_id"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+    evidence = payload(passed=False, state="failure")
+    evidence["gates"][2]["run_id"] = evidence["gates"][1]["run_id"]
+    evidence["gates"][2]["html_url"] = evidence["gates"][1]["html_url"]
+    with pytest.raises(ValueError, match="reuses a prior run_id"):
+        MODULE.validate_payload(evidence, REPOSITORY, SHA)
+
+
 def test_rejects_invalid_event_branch_and_sha_binding():
     evidence = payload()
     evidence["gates"][0]["event"] = "pull_request"
