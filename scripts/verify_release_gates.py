@@ -72,7 +72,7 @@ def evaluate_runs(
         matches = [
             run
             for run in runs
-            if run.get("name") == workflow_name
+            if run["name"] == workflow_name
             and is_eligible_run(
                 run,
                 expected_sha=expected_sha,
@@ -80,11 +80,7 @@ def evaluate_runs(
             )
         ]
         matches.sort(
-            key=lambda run: (
-                int(run.get("run_number") or 0),
-                int(run.get("run_attempt") or 0),
-                int(run.get("id") or 0),
-            ),
+            key=lambda run: (run["run_number"], run["run_attempt"], run["id"]),
             reverse=True,
         )
         if not matches:
@@ -106,14 +102,14 @@ def evaluate_runs(
         results.append(
             GateResult(
                 workflow_name,
-                run.get("path"),
-                str(run.get("status") or "unknown"),
-                run.get("conclusion"),
-                run.get("id"),
-                run.get("html_url"),
-                run.get("event"),
-                run.get("head_branch"),
-                run.get("head_sha"),
+                run["path"],
+                run["status"],
+                run["conclusion"],
+                run["id"],
+                run["html_url"],
+                run["event"],
+                run["head_branch"],
+                run["head_sha"],
             )
         )
     return results
@@ -133,6 +129,66 @@ def all_passed(
     )
 
 
+def _positive_int(value: object, field: str, page: int, index: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise RuntimeError(
+            f"GitHub Actions API page {page} contained an invalid {field} at index {index}"
+        )
+    return value
+
+
+def _required_string(value: object, field: str, page: int, index: int) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(
+            f"GitHub Actions API page {page} contained an invalid {field} at index {index}"
+        )
+    return value
+
+
+def _optional_string(
+    value: object, field: str, page: int, index: int
+) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(
+            f"GitHub Actions API page {page} contained an invalid {field} at index {index}"
+        )
+    return value
+
+
+def _validate_run(run: dict, page: int, index: int) -> dict:
+    run_id = _positive_int(run.get("id"), "run id", page, index)
+    run_number = _positive_int(run.get("run_number"), "run_number", page, index)
+    run_attempt = _positive_int(run.get("run_attempt"), "run_attempt", page, index)
+    name = _required_string(run.get("name"), "name", page, index)
+    path = _required_string(run.get("path"), "path", page, index)
+    status = _required_string(run.get("status"), "status", page, index)
+    event = _required_string(run.get("event"), "event", page, index)
+    head_branch = _required_string(run.get("head_branch"), "head_branch", page, index)
+    head_sha = _required_string(run.get("head_sha"), "head_sha", page, index)
+    if not SHA_RE.fullmatch(head_sha):
+        raise RuntimeError(
+            f"GitHub Actions API page {page} contained an invalid head_sha at index {index}"
+        )
+    conclusion = _optional_string(run.get("conclusion"), "conclusion", page, index)
+    html_url = _optional_string(run.get("html_url"), "html_url", page, index)
+    return {
+        **run,
+        "id": run_id,
+        "run_number": run_number,
+        "run_attempt": run_attempt,
+        "name": name,
+        "path": path,
+        "status": status,
+        "event": event,
+        "head_branch": head_branch,
+        "head_sha": head_sha,
+        "conclusion": conclusion,
+        "html_url": html_url,
+    }
+
+
 def _validate_page_runs(runs: object, page: int) -> list[dict]:
     if not isinstance(runs, list):
         raise RuntimeError("GitHub Actions API response did not contain workflow_runs")
@@ -144,17 +200,14 @@ def _validate_page_runs(runs: object, page: int) -> list[dict]:
             raise RuntimeError(
                 f"GitHub Actions API page {page} contained a non-object run at index {index}"
             )
-        run_id = run.get("id")
-        if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
-            raise RuntimeError(
-                f"GitHub Actions API page {page} contained an invalid run id at index {index}"
-            )
+        normalized = _validate_run(run, page, index)
+        run_id = normalized["id"]
         if run_id in page_run_ids:
             raise RuntimeError(
                 f"GitHub Actions API page {page} contained duplicate run id {run_id}"
             )
         page_run_ids.add(run_id)
-        validated.append(run)
+        validated.append(normalized)
     return validated
 
 
@@ -282,10 +335,10 @@ def main() -> int:
     try:
         validate_inputs(args.repository, args.sha)
         runs = fetch_runs(args.repository, args.sha, token)
-    except (RuntimeError, ValueError) as exc:
+        results = evaluate_runs(runs, expected_sha=args.sha)
+    except (RuntimeError, ValueError, KeyError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    results = evaluate_runs(runs, expected_sha=args.sha)
     payload = {
         "repository": args.repository,
         "release_sha": args.sha,
