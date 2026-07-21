@@ -35,6 +35,7 @@ class GateResult:
     html_url: str | None
     event: str | None
     head_branch: str | None
+    head_sha: str | None
 
 
 def validate_inputs(repository: str, sha: str) -> None:
@@ -44,17 +45,22 @@ def validate_inputs(repository: str, sha: str) -> None:
         raise ValueError("sha must be exactly 40 lowercase hexadecimal characters")
 
 
-def is_eligible_run(run: dict) -> bool:
-    return run.get("event") == REQUIRED_EVENT and run.get("head_branch") == REQUIRED_BRANCH
+def is_eligible_run(run: dict, expected_sha: str | None = None) -> bool:
+    if run.get("event") != REQUIRED_EVENT or run.get("head_branch") != REQUIRED_BRANCH:
+        return False
+    return expected_sha is None or run.get("head_sha") == expected_sha
 
 
-def evaluate_runs(runs: list[dict]) -> list[GateResult]:
+def evaluate_runs(
+    runs: list[dict], expected_sha: str | None = None
+) -> list[GateResult]:
     results: list[GateResult] = []
     for workflow_name in REQUIRED_WORKFLOWS:
         matches = [
             run
             for run in runs
-            if run.get("name") == workflow_name and is_eligible_run(run)
+            if run.get("name") == workflow_name
+            and is_eligible_run(run, expected_sha)
         ]
         matches.sort(
             key=lambda run: (
@@ -66,7 +72,16 @@ def evaluate_runs(runs: list[dict]) -> list[GateResult]:
         )
         if not matches:
             results.append(
-                GateResult(workflow_name, "missing", None, None, None, None, None)
+                GateResult(
+                    workflow_name,
+                    "missing",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
             )
             continue
         run = matches[0]
@@ -79,17 +94,21 @@ def evaluate_runs(runs: list[dict]) -> list[GateResult]:
                 run.get("html_url"),
                 run.get("event"),
                 run.get("head_branch"),
+                run.get("head_sha"),
             )
         )
     return results
 
 
-def all_passed(results: list[GateResult]) -> bool:
+def all_passed(
+    results: list[GateResult], expected_sha: str | None = None
+) -> bool:
     return all(
         result.status == "completed"
         and result.conclusion == "success"
         and result.event == REQUIRED_EVENT
         and result.head_branch == REQUIRED_BRANCH
+        and (expected_sha is None or result.head_sha == expected_sha)
         for result in results
     )
 
@@ -149,13 +168,13 @@ def main() -> int:
     except (RuntimeError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    results = evaluate_runs(runs)
+    results = evaluate_runs(runs, expected_sha=args.sha)
     payload = {
         "repository": args.repository,
         "release_sha": args.sha,
         "required_event": REQUIRED_EVENT,
         "required_branch": REQUIRED_BRANCH,
-        "passed": all_passed(results),
+        "passed": all_passed(results, expected_sha=args.sha),
         "gates": [result.__dict__ for result in results],
     }
     rendered = json.dumps(payload, indent=2, sort_keys=True)
