@@ -35,7 +35,10 @@ def test_rejects_private_use_and_unassigned_unicode_in_json_values(character):
         MODULE._validate_json_tree({"value": f"release{character}evidence"})
 
 
-@pytest.mark.parametrize("character", ["\ue000", "\U000f0000", "\u0378"])
+@pytest.mark.parametrize(
+    "character",
+    ["\ue000", "\U000f0000", "\u0378"],
+)
 def test_rejects_private_use_and_unassigned_unicode_in_json_object_keys(character):
     with pytest.raises(
         ValueError,
