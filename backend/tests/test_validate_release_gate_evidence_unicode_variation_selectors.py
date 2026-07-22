@@ -18,9 +18,9 @@ SPEC.loader.exec_module(MODULE)
 @pytest.mark.parametrize(
     "selector",
     [
-        "\ufe00",       # variation selector-1
-        "\ufe0e",       # text presentation selector
-        "\ufe0f",       # emoji presentation selector
+        "\ufe00",  # variation selector-1
+        "\ufe0e",  # text presentation selector
+        "\ufe0f",  # emoji presentation selector
         "\U000e0100",  # supplementary variation selector-17
         "\U000e01ef",  # supplementary variation selector-256
     ],
