@@ -162,21 +162,18 @@ def build_learning_plan(db: Session, user_id: int) -> AdaptiveLearningPlanRead:
             )
 
         if failure_streak >= REPEATED_FAILURE_THRESHOLD:
-            recommendation_type = "remediation"
             priority_score = 1000 + (failure_streak * 100) + (100 - (score or 0))
             reason = (
                 f"Rebuild {lesson['competency'].replace('-', ' ')} after {failure_streak} consecutive "
                 "unsuccessful attempts; use reduced difficulty until mastery is demonstrated."
             )
         elif score is not None and score < MASTERY_THRESHOLD:
-            recommendation_type = "remediation"
             priority_score = 800 + (MASTERY_THRESHOLD - score)
             reason = (
                 f"Review {lesson['title']} because the latest score of {score}% is below the "
                 f"{MASTERY_THRESHOLD}% mastery threshold."
             )
         else:
-            recommendation_type = "progression"
             priority_score = 500 - curriculum_index
             reason = (
                 f"Continue with {lesson['title']}; prerequisites are satisfied and no unresolved "
