@@ -66,6 +66,7 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          ../scripts/validate_internal_alpha_readiness.py
           ../scripts/validate_production_acceptance.py
           ../scripts/validate_public_operations_activation.py
           ../scripts/validate_public_operations_row_evidence.py
@@ -74,6 +75,7 @@ jobs:
           ../scripts/write_atomic_evidence.py
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
+          tests/test_internal_alpha_readiness_validator.py
           tests/test_production_acceptance_validator.py
           tests/test_public_operations_activation_template.py
           tests/test_public_operations_activation_validator.py
@@ -92,12 +94,14 @@ jobs:
           ruff format --check --diff \
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
+            ../scripts/validate_internal_alpha_readiness.py \
             ../scripts/validate_production_acceptance.py \
             ../scripts/validate_public_operations_activation.py \
             ../scripts/validate_public_operations_row_evidence.py \
             ../scripts/validate_release_gate_evidence.py \
             ../scripts/verify_release_gates.py \
             ../scripts/write_atomic_evidence.py \
+            tests/test_internal_alpha_readiness_validator.py \
             tests/test_production_acceptance_validator.py \
             tests/test_public_operations_activation_template.py \
             tests/test_public_operations_activation_validator.py \
@@ -120,6 +124,7 @@ jobs:
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
             scripts/validate_openapi.py \
+            ../scripts/validate_internal_alpha_readiness.py \
             ../scripts/validate_production_acceptance.py \
             ../scripts/validate_public_operations_activation.py \
             ../scripts/validate_public_operations_row_evidence.py \
