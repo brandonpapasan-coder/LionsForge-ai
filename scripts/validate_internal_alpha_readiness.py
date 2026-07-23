@@ -134,7 +134,10 @@ def validate_record(text: str) -> list[Finding]:
     )
     if required_signoff not in text:
         findings.append(
-            Finding("missing-signoff", "GO requires the Internal Alpha provenance sign-off statement")
+            Finding(
+                "missing-signoff",
+                "GO requires the Internal Alpha provenance sign-off statement",
+            )
         )
 
     return findings
