@@ -111,7 +111,9 @@ def _parse_date(value: str, *, label: str, findings: list[Finding]) -> date | No
 
 def _require_reference(value: str, *, label: str, findings: list[Finding]) -> None:
     if _is_placeholder(value) or len(value.strip()) < 3:
-        findings.append(Finding("invalid-row-reference", f"Evidence reference is incomplete: {label}"))
+        findings.append(
+            Finding("invalid-row-reference", f"Evidence reference is incomplete: {label}")
+        )
 
 
 def validate_record(text: str) -> list[Finding]:
@@ -120,9 +122,7 @@ def validate_record(text: str) -> list[Finding]:
     rows = _rows(lines)
     findings: list[Finding] = []
 
-    review_date = _parse_date(
-        fields.get("Review date", ""), label="Review date", findings=findings
-    )
+    review_date = _parse_date(fields.get("Review date", ""), label="Review date", findings=findings)
     launch_date = _parse_date(
         fields.get("Intended effective date", ""),
         label="Intended effective date",
@@ -150,9 +150,7 @@ def validate_record(text: str) -> list[Finding]:
         if len(cells) < 4:
             findings.append(Finding("missing-row-evidence", f"Channel row is incomplete: {name}"))
             continue
-        _require_reference(
-            cells[3], label=f"Channel test evidence for {name}", findings=findings
-        )
+        _require_reference(cells[3], label=f"Channel test evidence for {name}", findings=findings)
 
     for name in sorted(WORKFLOW_ROWS):
         cells = rows.get(name, [])
@@ -167,9 +165,7 @@ def validate_record(text: str) -> list[Finding]:
                     f"Workflow test date is after review date: {name}",
                 )
             )
-        _require_reference(
-            cells[2], label=f"Workflow evidence for {name}", findings=findings
-        )
+        _require_reference(cells[2], label=f"Workflow evidence for {name}", findings=findings)
 
     for name in sorted(APPROVAL_ROWS):
         cells = rows.get(name, [])
