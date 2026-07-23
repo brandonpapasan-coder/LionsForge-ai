@@ -30,14 +30,17 @@ def test_reads_evidence_from_ordinary_filesystem(tmp_path):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX virtual roots are not applicable")
-@pytest.mark.parametrize("path", [Path("/proc/evidence.json"), Path("/sys/evidence.json"), Path("/dev/evidence.json")])
+@pytest.mark.parametrize(
+    "path",
+    [Path("/proc/evidence.json"), Path("/sys/evidence.json"), Path("/dev/evidence.json")],
+)
 def test_rejects_known_virtual_filesystem_roots(path):
     with pytest.raises(ValueError, match="virtual filesystem"):
         MODULE._validate_filesystem_path(path)
 
 
 def test_non_posix_platform_skips_virtual_root_rule(monkeypatch):
-    monkeypatch.setattr(MODULE.os, "name", "nt")
+    monkeypatch.setattr(MODULE._CORE, "os", SimpleNamespace(name="nt"))
     MODULE._validate_filesystem_path(Path("/proc/evidence.json"))
 
 
