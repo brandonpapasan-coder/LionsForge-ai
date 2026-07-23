@@ -52,6 +52,20 @@ UNIQUE_FIELDS = frozenset(REQUIRED_BASE_FIELDS) | {
     "Candidate backend image digest",
     "Candidate frontend image digest",
 }
+PROVENANCE_ALIAS_GROUPS = (
+    (
+        "candidate SHA",
+        ("Candidate commit SHA", "Protected-main implementation merge"),
+    ),
+    (
+        "backend image digest",
+        ("Candidate backend image digest", "Backend image digest"),
+    ),
+    (
+        "frontend image digest",
+        ("Candidate frontend image digest", "Frontend image digest"),
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -128,6 +142,16 @@ def validate_record(text: str) -> list[Finding]:
                 f"Authorization-critical field must appear exactly once: {field}",
             )
         )
+
+    for label, names in PROVENANCE_ALIAS_GROUPS:
+        values = {fields[name] for name in names if fields.get(name)}
+        if len(values) > 1:
+            findings.append(
+                Finding(
+                    "conflicting-alias",
+                    f"Provenance aliases must agree on one {label}: {', '.join(names)}",
+                )
+            )
 
     for section in REQUIRED_SECTIONS:
         if section not in lines:
