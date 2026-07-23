@@ -1,0 +1,70 @@
+name: Frontend Dependency Remediation
+
+on:
+  push:
+    branches:
+      - fix/frontend-dependency-security
+  pull_request:
+    branches:
+      - main
+    paths:
+      - frontend/package.json
+      - frontend/package-lock.json
+      - .github/workflows/frontend-dependency-remediation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate-lockfile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Regenerate patched manifest and lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set overrides.sharp=0.35.0
+          npm pkg set overrides.postcss=8.5.10
+          npm install --package-lock-only --save-exact next@15.5.21
+          npm ci
+          git diff --exit-code -- package.json package-lock.json
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Record resolved security package versions
+        shell: bash
+        run: |
+          npm ls next sharp postcss --all > dependency-versions.txt 2>&1 || true
+          npm audit --omit=dev --json > npm-audit-production.json
+
+      - name: Upload dependency validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-patched-dependency-evidence
+          path: |
+            frontend/dependency-versions.txt
+            frontend/npm-audit-production.json
+          if-no-files-found: error
+          retention-days: 30
