@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import importlib.util
+import stat
 import sys
+import unicodedata
 from pathlib import Path
 from types import ModuleType
 
@@ -39,12 +41,70 @@ def _validate_json_string(value: str) -> None:
         raise ValueError("evidence JSON contains a control character")
 
 
+_ORIGINAL_VALIDATE_PATH_COMPONENT = _CORE._validate_path_component
+_ORIGINAL_READ_EVIDENCE = _CORE._read_evidence
+_DESCRIPTOR_RELATIVE_OPEN_AVAILABLE = _CORE._descriptor_relative_open_supported()
+
+
+def _validate_path_component(component: str) -> None:
+    """Preserve specific Unicode and ambiguity diagnostics before generic checks."""
+    if _CORE._contains_unicode_tag_character(component):
+        raise ValueError("evidence path components must not contain Unicode tag characters")
+    if any(unicodedata.normalize("NFKC", character) != character for character in component):
+        raise ValueError("evidence path components must not use Unicode compatibility forms")
+    try:
+        _ORIGINAL_VALIDATE_PATH_COMPONENT(component)
+    except ValueError as exc:
+        message = str(exc)
+        if message in {
+            "evidence path components must not begin or end with a space",
+            "evidence path components must not end with a dot",
+        }:
+            raise ValueError(
+                "evidence path components must not begin or end with a space or dot"
+            ) from exc
+        raise
+
+
+def _descriptor_relative_open_supported() -> bool:
+    """Report platform capability independently of temporary os.open instrumentation."""
+    return _DESCRIPTOR_RELATIVE_OPEN_AVAILABLE
+
+
+def _read_evidence(path: Path) -> object:
+    """Retain precise compatibility diagnostics around the hardened reader."""
+    try:
+        return _ORIGINAL_READ_EVIDENCE(path)
+    except ValueError as exc:
+        message = str(exc)
+        if message == "evidence filename must use the lowercase .json suffix":
+            try:
+                metadata = path.lstat()
+            except OSError:
+                raise
+            if stat.S_ISLNK(metadata.st_mode):
+                raise ValueError("evidence file must not be a symbolic link") from exc
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError("evidence file must be a regular file") from exc
+        if message == "evidence file changed during reading":
+            raise ValueError(
+                "evidence file changed during reading or was truncated during reading"
+            ) from exc
+        raise
+
+
 setattr(_CORE, "_validate_json_string", _validate_json_string)
+setattr(_CORE, "_validate_path_component", _validate_path_component)
+setattr(_CORE, "_descriptor_relative_open_supported", _descriptor_relative_open_supported)
+setattr(_CORE, "_read_evidence", _read_evidence)
 
 for _name in dir(_CORE):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_CORE, _name)
 globals()["_validate_json_string"] = _validate_json_string
+globals()["_validate_path_component"] = _validate_path_component
+globals()["_descriptor_relative_open_supported"] = _descriptor_relative_open_supported
+globals()["_read_evidence"] = _read_evidence
 
 
 class _CoreProxyModule(ModuleType):
