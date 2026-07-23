@@ -55,7 +55,7 @@ jobs:
       - name: Record resolved security package versions
         shell: bash
         run: |
-          npm ls next sharp postcss --all > dependency-versions.txt
+          npm ls next sharp postcss --all > dependency-versions.txt 2>&1 || true
           npm audit --omit=dev --json > npm-audit-production.json
 
       - name: Upload regenerated dependency files
