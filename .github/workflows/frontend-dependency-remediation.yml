@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   regenerate-lockfile:
@@ -42,6 +42,7 @@ jobs:
           npm pkg set overrides.postcss=8.5.10
           npm install --package-lock-only --save-exact next@15.5.21
           npm ci
+          git diff --exit-code -- package.json package-lock.json
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=moderate
@@ -58,30 +59,12 @@ jobs:
           npm ls next sharp postcss --all > dependency-versions.txt 2>&1 || true
           npm audit --omit=dev --json > npm-audit-production.json
 
-      - name: Upload regenerated dependency files
+      - name: Upload dependency validation evidence
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-patched-dependency-files
+          name: frontend-patched-dependency-evidence
           path: |
-            frontend/package.json
-            frontend/package-lock.json
             frontend/dependency-versions.txt
             frontend/npm-audit-production.json
           if-no-files-found: error
           retention-days: 30
-
-      - name: Commit validated manifest and lockfile
-        if: github.event_name == 'push'
-        shell: bash
-        working-directory: .
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/package.json frontend/package-lock.json
-          if git diff --cached --quiet; then
-            echo "Validated dependency files are already committed."
-            exit 0
-          fi
-          git commit -m "Patch frontend dependency vulnerabilities"
-          git push origin HEAD:fix/frontend-dependency-security
