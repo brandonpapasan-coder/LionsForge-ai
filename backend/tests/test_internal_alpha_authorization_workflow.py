@@ -25,7 +25,9 @@ def test_workflow_requires_protected_main_dispatch_and_checkout():
     assert "ref: refs/heads/main" in text
     assert 'checked_out_sha="$(git rev-parse HEAD)"' in text
     assert 'protected_main_sha="$(git rev-parse origin/main)"' in text
-    assert '[[ "${checked_out_sha}" == "${protected_main_sha}" ]]' in text
+    assert (
+        '[[ "${checked_out_sha}" == "${protected_main_sha}" ]]' in text
+    )
     assert 'WORKFLOW_SHA: ${{ github.workflow_sha }}' in text
 
 
