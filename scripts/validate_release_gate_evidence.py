@@ -44,10 +44,13 @@ def _validate_json_string(value: str) -> None:
 
 _ORIGINAL_VALIDATE_PATH_COMPONENT = _CORE._validate_path_component
 _ORIGINAL_READ_EVIDENCE = _CORE._read_evidence
+_DESCRIPTOR_RELATIVE_OPEN_PLATFORM_SUPPORTED = _CORE._descriptor_relative_open_supported()
 
 
 def _validate_path_component(component: str) -> None:
     """Preserve specific Unicode and ambiguity diagnostics before generic checks."""
+    if _CORE._contains_control_character(component):
+        raise ValueError("evidence path components must not contain control characters")
     if _CORE._contains_unicode_tag_character(component):
         raise ValueError("evidence path components must not contain Unicode tag characters")
     if _CORE._contains_non_ascii_whitespace(component):
@@ -71,12 +74,8 @@ def _validate_path_component(component: str) -> None:
 
 
 def _descriptor_relative_open_supported() -> bool:
-    """Use descriptor traversal only when the active os.open accepts dir_fd."""
-    if not (
-        hasattr(_CORE.os, "O_DIRECTORY")
-        and hasattr(_CORE.os, "O_NOFOLLOW")
-        and _CORE.os.open in getattr(_CORE.os, "supports_dir_fd", set())
-    ):
+    """Use descriptor traversal when supported and the active open accepts dir_fd."""
+    if not _DESCRIPTOR_RELATIVE_OPEN_PLATFORM_SUPPORTED:
         return False
     try:
         signature = inspect.signature(_CORE.os.open)
