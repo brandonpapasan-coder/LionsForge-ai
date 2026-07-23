@@ -144,8 +144,8 @@ def validate_record(text: str) -> list[Finding]:
         )
 
     for label, names in PROVENANCE_ALIAS_GROUPS:
-        values = {fields[name] for name in names if fields.get(name)}
-        if len(values) > 1:
+        alias_values = {fields[name] for name in names if fields.get(name)}
+        if len(alias_values) > 1:
             findings.append(
                 Finding(
                     "conflicting-alias",
@@ -199,8 +199,8 @@ def validate_record(text: str) -> list[Finding]:
 
     for cells in rows:
         name = cells[0]
-        values = cells[1:]
-        if any(_record_incomplete(value) for value in values):
+        row_values = cells[1:]
+        if any(_record_incomplete(value) for value in row_values):
             findings.append(Finding("incomplete-control", f"GO control is incomplete: {name}"))
 
     for line in lines:
