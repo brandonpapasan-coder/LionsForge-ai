@@ -117,7 +117,9 @@ def validate_record(text: str) -> list[Finding]:
 
     for field in REQUIRED_BASE_FIELDS:
         if field not in fields:
-            findings.append(Finding("missing-field", f"Required baseline field is missing: {field}"))
+            findings.append(
+                Finding("missing-field", f"Required baseline field is missing: {field}")
+            )
 
     decision = fields.get("Decision", "")
     if decision not in {"GO", "NO-GO"}:
@@ -165,9 +167,7 @@ def validate_record(text: str) -> list[Finding]:
             continue
         key, value = stripped[1:].split(":", 1)
         if _record_incomplete(value):
-            findings.append(
-                Finding("incomplete-field", f"GO field is incomplete: {key.strip()}")
-            )
+            findings.append(Finding("incomplete-field", f"GO field is incomplete: {key.strip()}"))
 
     if "| OPEN |" in text or "| BLOCKING |" in text:
         findings.append(Finding("open-blocker", "GO cannot include open blocking items"))
