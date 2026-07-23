@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import stat
 import sys
 import unicodedata
@@ -43,13 +44,16 @@ def _validate_json_string(value: str) -> None:
 
 _ORIGINAL_VALIDATE_PATH_COMPONENT = _CORE._validate_path_component
 _ORIGINAL_READ_EVIDENCE = _CORE._read_evidence
-_DESCRIPTOR_RELATIVE_OPEN_AVAILABLE = _CORE._descriptor_relative_open_supported()
 
 
 def _validate_path_component(component: str) -> None:
     """Preserve specific Unicode and ambiguity diagnostics before generic checks."""
     if _CORE._contains_unicode_tag_character(component):
         raise ValueError("evidence path components must not contain Unicode tag characters")
+    if _CORE._contains_non_ascii_whitespace(component):
+        raise ValueError("evidence path components must not contain non-ASCII whitespace")
+    if _CORE._contains_non_ascii_decimal_digit(component):
+        raise ValueError("evidence path components must use ASCII decimal digits")
     if any(unicodedata.normalize("NFKC", character) != character for character in component):
         raise ValueError("evidence path components must not use Unicode compatibility forms")
     try:
@@ -67,12 +71,27 @@ def _validate_path_component(component: str) -> None:
 
 
 def _descriptor_relative_open_supported() -> bool:
-    """Report platform capability independently of temporary os.open instrumentation."""
-    return _DESCRIPTOR_RELATIVE_OPEN_AVAILABLE
+    """Use descriptor traversal only when the active os.open accepts dir_fd."""
+    if not (
+        hasattr(_CORE.os, "O_DIRECTORY")
+        and hasattr(_CORE.os, "O_NOFOLLOW")
+        and _CORE.os.open in getattr(_CORE.os, "supports_dir_fd", set())
+    ):
+        return False
+    try:
+        signature = inspect.signature(_CORE.os.open)
+    except (TypeError, ValueError):
+        return True
+    return "dir_fd" in signature.parameters or any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
 
 
 def _read_evidence(path: Path) -> object:
     """Retain precise compatibility diagnostics around the hardened reader."""
+    if path.suffix and path.suffix != ".json":
+        raise ValueError("evidence filename must use the lowercase .json suffix")
     try:
         return _ORIGINAL_READ_EVIDENCE(path)
     except ValueError as exc:
