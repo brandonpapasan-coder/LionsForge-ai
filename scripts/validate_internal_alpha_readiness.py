@@ -91,9 +91,7 @@ def validate_record(text: str) -> list[Finding]:
 
     candidate_sha = fields.get("Candidate commit SHA", "")
     if not SHA_RE.fullmatch(candidate_sha):
-        findings.append(
-            Finding("invalid-sha", "GO requires an exact 40-character candidate SHA")
-        )
+        findings.append(Finding("invalid-sha", "GO requires an exact 40-character candidate SHA"))
 
     for component in ("backend", "frontend"):
         digest = fields.get(f"Candidate {component} image digest", "")
@@ -107,17 +105,13 @@ def validate_record(text: str) -> list[Finding]:
 
     for field in ("Review owner role", "Review date"):
         if _record_incomplete(fields.get(field, "")):
-            findings.append(
-                Finding("missing-field", f"GO requires completed field: {field}")
-            )
+            findings.append(Finding("missing-field", f"GO requires completed field: {field}"))
 
     for cells in rows:
         name = cells[0]
         values = cells[1:]
         if any(_record_incomplete(value) for value in values):
-            findings.append(
-                Finding("incomplete-control", f"GO control is incomplete: {name}")
-            )
+            findings.append(Finding("incomplete-control", f"GO control is incomplete: {name}"))
 
     for line in lines:
         stripped = line.strip()
@@ -140,10 +134,7 @@ def validate_record(text: str) -> list[Finding]:
     )
     if required_signoff not in text:
         findings.append(
-            Finding(
-                "missing-signoff",
-                "GO requires the Internal Alpha provenance sign-off statement",
-            )
+            Finding("missing-signoff", "GO requires the Internal Alpha provenance sign-off statement")
         )
 
     return findings
