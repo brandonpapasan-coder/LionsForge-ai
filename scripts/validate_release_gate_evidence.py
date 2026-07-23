@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 
 _CORE_PATH = Path(__file__).with_name("validate_release_gate_evidence_core.py")
 _CORE_SPEC = importlib.util.spec_from_file_location(
@@ -44,6 +45,24 @@ for _name in dir(_CORE):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_CORE, _name)
 globals()["_validate_json_string"] = _validate_json_string
+
+
+class _CoreProxyModule(ModuleType):
+    """Keep public-module monkeypatches synchronized with the loaded core."""
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if name not in {"_CORE", "__class__"} and not name.startswith("__"):
+            setattr(_CORE, name, value)
+        super().__setattr__(name, value)
+
+    def __delattr__(self, name: str) -> None:
+        if name not in {"_CORE", "__class__"} and not name.startswith("__"):
+            if hasattr(_CORE, name):
+                delattr(_CORE, name)
+        super().__delattr__(name)
+
+
+sys.modules[__name__].__class__ = _CoreProxyModule
 
 
 if __name__ == "__main__":
