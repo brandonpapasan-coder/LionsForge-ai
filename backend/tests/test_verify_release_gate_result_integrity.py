@@ -16,9 +16,7 @@ DEFAULT_SHA = "a" * 40
 
 def passing_results():
     runs = []
-    for index, (name, path) in enumerate(
-        MODULE.REQUIRED_WORKFLOW_PATHS.items(), start=1
-    ):
+    for index, (name, path) in enumerate(MODULE.REQUIRED_WORKFLOW_PATHS.items(), start=1):
         runs.append(
             {
                 "id": index,

@@ -86,41 +86,47 @@ jobs:
           tests/test_write_atomic_evidence.py
 
       - name: Ruff format check
-        run: >-
-          ruff format --check
-          app/schemas/system_readiness.py
-          scripts/export_openapi.py
-          ../scripts/validate_production_acceptance.py
-          ../scripts/validate_public_operations_activation.py
-          ../scripts/validate_public_operations_row_evidence.py
-          ../scripts/validate_release_gate_evidence.py
-          ../scripts/verify_release_gates.py
-          ../scripts/write_atomic_evidence.py
-          tests/test_production_acceptance_validator.py
-          tests/test_public_operations_activation_template.py
-          tests/test_public_operations_activation_validator.py
-          tests/test_public_operations_row_evidence_validator.py
-          tests/test_validate_release_gate_evidence.py
-          tests/test_verify_release_gate_response_limits.py
-          tests/test_verify_release_gate_result_integrity.py
-          tests/test_verify_release_gate_run_schema.py
-          tests/test_verify_release_gates.py
-          tests/test_write_atomic_evidence.py
+        shell: bash
+        run: |
+          set -o pipefail
+          ruff format --check --diff \
+            app/schemas/system_readiness.py \
+            scripts/export_openapi.py \
+            ../scripts/validate_production_acceptance.py \
+            ../scripts/validate_public_operations_activation.py \
+            ../scripts/validate_public_operations_row_evidence.py \
+            ../scripts/validate_release_gate_evidence.py \
+            ../scripts/verify_release_gates.py \
+            ../scripts/write_atomic_evidence.py \
+            tests/test_production_acceptance_validator.py \
+            tests/test_public_operations_activation_template.py \
+            tests/test_public_operations_activation_validator.py \
+            tests/test_public_operations_row_evidence_validator.py \
+            tests/test_validate_release_gate_evidence.py \
+            tests/test_verify_release_gate_response_limits.py \
+            tests/test_verify_release_gate_result_integrity.py \
+            tests/test_verify_release_gate_run_schema.py \
+            tests/test_verify_release_gates.py \
+            tests/test_write_atomic_evidence.py \
+            2>&1 | tee ruff-format.log
 
       - name: Type check
-        run: >-
-          mypy
-          --follow-imports=skip
-          app/api/routes/system.py
-          app/schemas/system_readiness.py
-          scripts/export_openapi.py
-          scripts/validate_openapi.py
-          ../scripts/validate_production_acceptance.py
-          ../scripts/validate_public_operations_activation.py
-          ../scripts/validate_public_operations_row_evidence.py
-          ../scripts/validate_release_gate_evidence.py
-          ../scripts/verify_release_gates.py
-          ../scripts/write_atomic_evidence.py
+        shell: bash
+        run: |
+          set -o pipefail
+          mypy \
+            --follow-imports=skip \
+            app/api/routes/system.py \
+            app/schemas/system_readiness.py \
+            scripts/export_openapi.py \
+            scripts/validate_openapi.py \
+            ../scripts/validate_production_acceptance.py \
+            ../scripts/validate_public_operations_activation.py \
+            ../scripts/validate_public_operations_row_evidence.py \
+            ../scripts/validate_release_gate_evidence.py \
+            ../scripts/verify_release_gates.py \
+            ../scripts/write_atomic_evidence.py \
+            2>&1 | tee mypy.log
 
       - name: Validate Alembic migrations on PostgreSQL
         run: |
@@ -177,4 +183,6 @@ jobs:
             backend/openapi.json
             backend/pytest.log
             backend/performance-smoke.log
+            backend/ruff-format.log
+            backend/mypy.log
           if-no-files-found: warn

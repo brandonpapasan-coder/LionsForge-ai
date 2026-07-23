@@ -13,7 +13,6 @@ MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
-
 DEFAULT_SHA = "a" * 40
 
 
@@ -23,6 +22,9 @@ class FakeHeaders:
 
     def get_content_type(self):
         return self.content_type
+
+    def get(self, name, default=None):
+        return default
 
 
 class FakeResponse(io.BytesIO):
@@ -68,8 +70,7 @@ def run(
 
 def test_all_required_main_push_workflows_pass():
     runs = [
-        run(name, run_id=index)
-        for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
+        run(name, run_id=index) for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
     ]
     results = MODULE.evaluate_runs(runs)
     assert MODULE.all_passed(results)
@@ -77,15 +78,12 @@ def test_all_required_main_push_workflows_pass():
 
 def test_all_required_exact_sha_workflows_pass():
     runs = [
-        run(name, run_id=index)
-        for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
+        run(name, run_id=index) for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
     ]
     results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
     assert MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
     assert {result.head_sha for result in results} == {DEFAULT_SHA}
-    assert {result.path for result in results} == set(
-        MODULE.REQUIRED_WORKFLOW_PATHS.values()
-    )
+    assert {result.path for result in results} == set(MODULE.REQUIRED_WORKFLOW_PATHS.values())
 
 
 def test_missing_required_workflow_fails():
@@ -123,11 +121,7 @@ def test_latest_rerun_attempt_wins_for_same_run_number():
             run_id=51,
         ),
     ]
-    backend = next(
-        result
-        for result in MODULE.evaluate_runs(runs)
-        if result.name == "Backend CI"
-    )
+    backend = next(result for result in MODULE.evaluate_runs(runs) if result.name == "Backend CI")
     assert backend.run_id == 51
     assert backend.conclusion == "success"
 
@@ -167,10 +161,8 @@ def test_pull_request_run_does_not_satisfy_gate():
 def test_wrong_head_sha_does_not_satisfy_gate():
     runs = [run(name) for name in MODULE.REQUIRED_WORKFLOWS]
     runs[0] = run("Backend CI", head_sha="b" * 40)
-
     results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
     backend = next(result for result in results if result.name == "Backend CI")
-
     assert backend.status == "missing"
     assert backend.head_sha is None
     assert not MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
@@ -182,10 +174,8 @@ def test_spoofed_workflow_name_with_wrong_path_does_not_satisfy_gate():
         "Backend CI",
         path=".github/workflows/spoofed-backend-ci.yml",
     )
-
     results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
     backend = next(result for result in results if result.name == "Backend CI")
-
     assert backend.status == "missing"
     assert backend.path == MODULE.REQUIRED_WORKFLOW_PATHS["Backend CI"]
     assert not MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
@@ -203,7 +193,6 @@ def test_in_progress_or_failed_gate_fails():
     runs = [run(name) for name in MODULE.REQUIRED_WORKFLOWS]
     runs[0] = run("Backend CI", status="in_progress", conclusion=None)
     assert not MODULE.all_passed(MODULE.evaluate_runs(runs))
-
     runs[0] = run("Backend CI", conclusion="failure")
     assert not MODULE.all_passed(MODULE.evaluate_runs(runs))
 
@@ -211,7 +200,6 @@ def test_in_progress_or_failed_gate_fails():
 def test_input_validation_rejects_malformed_repository_and_sha():
     with pytest.raises(ValueError, match="owner/name"):
         MODULE.validate_inputs("not-a-repository", "a" * 40)
-
     with pytest.raises(ValueError, match="40 lowercase"):
         MODULE.validate_inputs("owner/repository", "ABC123")
 
@@ -219,23 +207,24 @@ def test_input_validation_rejects_malformed_repository_and_sha():
 def test_validate_page_runs_rejects_malformed_entries_and_ids():
     with pytest.raises(RuntimeError, match="non-object run"):
         MODULE._validate_page_runs(["not-an-object"], 1)
-
     with pytest.raises(RuntimeError, match="invalid run id"):
         MODULE._validate_page_runs([{"id": 0}], 1)
-
     with pytest.raises(RuntimeError, match="invalid run id"):
         MODULE._validate_page_runs([{"id": True}], 1)
 
 
 def test_validate_page_runs_rejects_duplicate_ids_within_page():
+    duplicate_runs = [
+        run("Backend CI", run_id=7),
+        run("Frontend CI", run_id=7),
+    ]
     with pytest.raises(RuntimeError, match="duplicate run id 7"):
-        MODULE._validate_page_runs([{"id": 7}, {"id": 7}], 2)
+        MODULE._validate_page_runs(duplicate_runs, 2)
 
 
 def test_response_media_type_requires_readable_json_headers():
     with pytest.raises(RuntimeError, match="did not include headers"):
         MODULE._response_media_type(object())
-
     response = FakeResponse(b"{}", content_type="text/html")
     with pytest.raises(RuntimeError, match="unexpected content type: text/html"):
         MODULE._response_media_type(response)
@@ -243,7 +232,6 @@ def test_response_media_type_requires_readable_json_headers():
 
 def test_fetch_page_rejects_malformed_json(monkeypatch):
     monkeypatch.setattr(MODULE, "urlopen", lambda request, timeout: FakeResponse(b"{"))
-
     with pytest.raises(RuntimeError, match="returned malformed JSON"):
         MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
 
@@ -253,7 +241,6 @@ def test_fetch_page_rejects_timeout(monkeypatch):
         raise TimeoutError("timed out")
 
     monkeypatch.setattr(MODULE, "urlopen", raise_timeout)
-
     with pytest.raises(RuntimeError, match="request failed: timed out"):
         MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
 
@@ -263,16 +250,12 @@ def test_fetch_page_rejects_incomplete_read(monkeypatch):
         raise MODULE.IncompleteRead(b"partial", 100)
 
     monkeypatch.setattr(MODULE, "urlopen", raise_incomplete_read)
-
     with pytest.raises(RuntimeError, match="request failed"):
         MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
 
 
 def test_fetch_runs_paginates_until_partial_page(monkeypatch):
-    first_page = [
-        run("Backend CI", run_id=index)
-        for index in range(1, MODULE.PER_PAGE + 1)
-    ]
+    first_page = [run("Backend CI", run_id=index) for index in range(1, MODULE.PER_PAGE + 1)]
     second_page = [run("Frontend CI", run_id=1000)]
     requested_pages = []
 
@@ -285,7 +268,6 @@ def test_fetch_runs_paginates_until_partial_page(monkeypatch):
 
     monkeypatch.setattr(MODULE, "_fetch_page", fake_fetch_page)
     runs = MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")
-
     assert requested_pages == [1, 2]
     assert runs == first_page + second_page
 
@@ -301,7 +283,6 @@ def test_fetch_runs_rejects_repeated_ids_across_pages(monkeypatch):
         "_fetch_page",
         lambda repository, sha, token, page: pages[page],
     )
-
     with pytest.raises(RuntimeError, match="repeated run id.*2"):
         MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")
 
@@ -312,10 +293,7 @@ def test_fetch_runs_enforces_maximum_page_limit(monkeypatch):
     monkeypatch.setattr(
         MODULE,
         "_fetch_page",
-        lambda repository, sha, token, page: [
-            run("Backend CI", run_id=page)
-        ],
+        lambda repository, sha, token, page: [run("Backend CI", run_id=page)],
     )
-
     with pytest.raises(RuntimeError, match="2-page safety limit"):
         MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")

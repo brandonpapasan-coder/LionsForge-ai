@@ -15,7 +15,10 @@ sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
-@pytest.mark.parametrize("character", ['<', '>', ':', '"', '|', '?', '*', '\\'])
+@pytest.mark.parametrize(
+    "character",
+    ["<", ">", ":", '"', "|", "?", "*", "\\"],
+)
 def test_rejects_portable_forbidden_characters(character):
     component = f"bad{character}name"
     with pytest.raises(ValueError, match="forbidden portable character"):

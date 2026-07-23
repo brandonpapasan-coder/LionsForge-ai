@@ -116,9 +116,13 @@ def test_release_and_rollback_must_be_distinct_valid_shas():
 
 
 def test_invalid_or_unverified_image_digest_fails():
-    text = valid_record().replace("sha256:" + "c" * 64, "latest", 1).replace(
-        "- Running backend digest verified: Yes",
-        "- Running backend digest verified: No",
+    text = (
+        valid_record()
+        .replace("sha256:" + "c" * 64, "latest", 1)
+        .replace(
+            "- Running backend digest verified: Yes",
+            "- Running backend digest verified: No",
+        )
     )
     assert {"invalid-image-digest", "image-provenance-unverified"}.issubset(codes(text))
 
@@ -146,7 +150,9 @@ def test_no_go_allows_documented_blocking_defects():
 
 
 def test_incomplete_rollback_is_rejected():
-    text = valid_record().replace("- Backend rollback executed: Yes", "- Backend rollback executed: No")
+    text = valid_record().replace(
+        "- Backend rollback executed: Yes", "- Backend rollback executed: No"
+    )
     assert "rollback-incomplete" in codes(text)
 
 

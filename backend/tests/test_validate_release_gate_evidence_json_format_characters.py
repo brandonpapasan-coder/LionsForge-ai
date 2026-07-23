@@ -34,7 +34,10 @@ def test_rejects_unicode_format_characters_in_json_values(character):
         MODULE._validate_json_tree({"value": f"release{character}evidence"})
 
 
-@pytest.mark.parametrize("character", ["\u200b", "\u202e", "\u2066", "\ufeff"])
+@pytest.mark.parametrize(
+    "character",
+    ["\u200b", "\u202e", "\u2066", "\ufeff"],
+)
 def test_rejects_unicode_format_characters_in_json_object_keys(character):
     with pytest.raises(ValueError, match="JSON contains a Unicode format character"):
         MODULE._validate_json_tree({f"release{character}evidence": "value"})

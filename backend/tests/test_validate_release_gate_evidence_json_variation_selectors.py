@@ -30,7 +30,10 @@ def test_rejects_unicode_variation_selectors_in_json_values(character):
         MODULE._validate_json_tree({"value": f"release{character}evidence"})
 
 
-@pytest.mark.parametrize("character", ["\ufe00", "\ufe0f", "\U000e0100", "\U000e01ef"])
+@pytest.mark.parametrize(
+    "character",
+    ["\ufe00", "\ufe0f", "\U000e0100", "\U000e01ef"],
+)
 def test_rejects_unicode_variation_selectors_in_json_object_keys(character):
     with pytest.raises(ValueError, match="JSON contains a Unicode variation selector"):
         MODULE._validate_json_tree({f"release{character}evidence": "value"})

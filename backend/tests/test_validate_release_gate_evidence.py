@@ -116,12 +116,18 @@ def test_rejects_malformed_json_and_non_regular_targets(tmp_path):
 
 def test_rejects_duplicate_json_keys_at_every_object_level(tmp_path):
     top_level = tmp_path / "duplicate-top-level.json"
-    top_level.write_text('{"repository":"owner/repository","repository":"other/repo"}', encoding="utf-8")
+    top_level.write_text(
+        '{"repository":"owner/repository","repository":"other/repo"}',
+        encoding="utf-8",
+    )
     with pytest.raises(ValueError, match="duplicate key: repository"):
         MODULE._read_evidence(top_level)
 
     gate_level = tmp_path / "duplicate-gate.json"
-    gate_level.write_text('{"gates":[{"name":"Backend CI","name":"Frontend CI"}]}', encoding="utf-8")
+    gate_level.write_text(
+        '{"gates":[{"name":"Backend CI","name":"Frontend CI"}]}',
+        encoding="utf-8",
+    )
     with pytest.raises(ValueError, match="duplicate key: name"):
         MODULE._read_evidence(gate_level)
 
@@ -259,16 +265,12 @@ def test_rejects_invalid_run_identity_and_url_binding():
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload()
-    evidence["gates"][0]["html_url"] = (
-        "https://github.com/other/repository/actions/runs/1"
-    )
+    evidence["gates"][0]["html_url"] = "https://github.com/other/repository/actions/runs/1"
     with pytest.raises(ValueError, match="html_url is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload()
-    evidence["gates"][0]["html_url"] = (
-        "https://github.com/owner/repository/actions/runs/999"
-    )
+    evidence["gates"][0]["html_url"] = "https://github.com/owner/repository/actions/runs/999"
     with pytest.raises(ValueError, match="html_url is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 

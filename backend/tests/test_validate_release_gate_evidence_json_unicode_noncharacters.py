@@ -68,7 +68,9 @@ def test_read_evidence_rejects_noncharacter_value_after_json_decode(tmp_path):
 
 def test_read_evidence_rejects_noncharacter_key_after_json_decode(tmp_path):
     evidence = tmp_path / "evidence.json"
-    evidence.write_text(json.dumps({"release\U0010ffffevidence": "value"}), encoding="utf-8")
+    evidence.write_text(
+        json.dumps({"release\U0010ffffevidence": "value"}), encoding="utf-8"
+    )
     evidence.chmod(0o600)
 
     with pytest.raises(ValueError, match="JSON contains a Unicode noncharacter"):
