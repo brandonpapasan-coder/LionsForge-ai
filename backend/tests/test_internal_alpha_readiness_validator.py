@@ -3,11 +3,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 
-SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "scripts"
-    / "validate_internal_alpha_readiness.py"
-)
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "validate_internal_alpha_readiness.py"
 SPEC = spec_from_file_location("validate_internal_alpha_readiness", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = module_from_spec(SPEC)
@@ -67,16 +63,12 @@ def test_go_requires_exact_sha_and_digests():
 
 
 def test_go_rejects_pending_fields_and_controls():
-    text = valid_record().replace(
-        "- Review owner role: Release Owner", "- Review owner role: PENDING"
-    )
+    text = valid_record().replace("- Review owner role: Release Owner", "- Review owner role: PENDING")
     text = text.replace(
         "| Dependency audit | report | PASSED |",
         "| Dependency audit | PENDING | NOT VERIFIED |",
     )
-    assert {"missing-field", "incomplete-control", "incomplete-field"}.issubset(
-        codes(text)
-    )
+    assert {"missing-field", "incomplete-control", "incomplete-field"}.issubset(codes(text))
 
 
 def test_go_rejects_open_blockers():
