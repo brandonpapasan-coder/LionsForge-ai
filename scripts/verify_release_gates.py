@@ -64,9 +64,7 @@ def is_eligible_run(
     return expected_path is None or run.get("path") == expected_path
 
 
-def evaluate_runs(
-    runs: list[dict], expected_sha: str | None = None
-) -> list[GateResult]:
+def evaluate_runs(runs: list[dict], expected_sha: str | None = None) -> list[GateResult]:
     results: list[GateResult] = []
     for workflow_name, workflow_path in REQUIRED_WORKFLOW_PATHS.items():
         matches = [
@@ -115,9 +113,7 @@ def evaluate_runs(
     return results
 
 
-def all_passed(
-    results: list[GateResult], expected_sha: str | None = None
-) -> bool:
+def all_passed(results: list[GateResult], expected_sha: str | None = None) -> bool:
     if expected_sha is not None and not SHA_RE.fullmatch(expected_sha):
         return False
     if len(results) != len(REQUIRED_WORKFLOWS):
@@ -166,9 +162,7 @@ def _required_string(value: object, field: str, page: int, index: int) -> str:
     return value
 
 
-def _optional_string(
-    value: object, field: str, page: int, index: int
-) -> str | None:
+def _optional_string(value: object, field: str, page: int, index: int) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
@@ -241,9 +235,7 @@ def _response_media_type(response: object) -> str:
         raise RuntimeError("GitHub Actions API response headers were not readable")
     media_type = str(get_content_type()).lower()
     if media_type not in EXPECTED_MEDIA_TYPES:
-        raise RuntimeError(
-            f"GitHub Actions API returned unexpected content type: {media_type}"
-        )
+        raise RuntimeError(f"GitHub Actions API returned unexpected content type: {media_type}")
     return media_type
 
 
@@ -334,9 +326,7 @@ def fetch_runs(repository: str, sha: str, token: str) -> list[dict]:
         if len(page_runs) < PER_PAGE:
             return runs
 
-    raise RuntimeError(
-        f"GitHub Actions API pagination exceeded the {MAX_PAGES}-page safety limit"
-    )
+    raise RuntimeError(f"GitHub Actions API pagination exceeded the {MAX_PAGES}-page safety limit")
 
 
 def parse_args() -> argparse.Namespace:
