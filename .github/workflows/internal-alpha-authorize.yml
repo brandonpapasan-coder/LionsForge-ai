@@ -40,7 +40,9 @@ jobs:
           ref: refs/heads/main
           fetch-depth: 0
 
-      - name: Verify protected-main checkout
+      - name: Verify protected-main checkout and workflow provenance
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
@@ -48,6 +50,14 @@ jobs:
           protected_main_sha="$(git rev-parse origin/main)"
           [[ "${checked_out_sha}" == "${protected_main_sha}" ]] || {
             echo "Checked-out HEAD does not equal origin/main" >&2
+            exit 1
+          }
+          [[ "${WORKFLOW_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Workflow SHA must be an exact 40-character lowercase commit SHA" >&2
+            exit 1
+          }
+          [[ "${WORKFLOW_SHA}" == "${protected_main_sha}" ]] || {
+            echo "Workflow definition SHA does not equal protected main" >&2
             exit 1
           }
 
