@@ -108,9 +108,7 @@ def test_go_rejects_pending_fields_and_controls():
         "| Dependency audit | report | PASSED |",
         "| Dependency audit | PENDING | NOT VERIFIED |",
     )
-    assert {"missing-field", "incomplete-control", "incomplete-field"}.issubset(
-        codes(text)
-    )
+    assert {"missing-field", "incomplete-control", "incomplete-field"}.issubset(codes(text))
 
 
 def test_go_rejects_open_blockers():
