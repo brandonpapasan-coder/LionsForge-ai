@@ -142,9 +142,7 @@ def test_rejects_duplicate_json_keys_at_every_object_level(tmp_path):
 
 def test_rejects_nonstandard_json_constants(tmp_path):
     for constant in ("NaN", "Infinity", "-Infinity"):
-        evidence_path = (
-            tmp_path / f"constant-{constant.replace('-', 'negative-')}.json"
-        )
+        evidence_path = tmp_path / f"constant-{constant.replace('-', 'negative-')}.json"
         evidence_path.write_text(
             f'{{"passed":{constant}}}',
             encoding="utf-8",
@@ -255,9 +253,7 @@ def test_rejects_incoherent_missing_evidence():
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload(passed=False)
-    evidence["gates"][0]["html_url"] = (
-        "https://github.com/owner/repository/actions/runs/1"
-    )
+    evidence["gates"][0]["html_url"] = "https://github.com/owner/repository/actions/runs/1"
     with pytest.raises(ValueError, match="missing evidence has invalid html_url"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
@@ -269,16 +265,12 @@ def test_rejects_invalid_run_identity_and_url_binding():
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload()
-    evidence["gates"][0]["html_url"] = (
-        "https://github.com/other/repository/actions/runs/1"
-    )
+    evidence["gates"][0]["html_url"] = "https://github.com/other/repository/actions/runs/1"
     with pytest.raises(ValueError, match="html_url is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
     evidence = payload()
-    evidence["gates"][0]["html_url"] = (
-        "https://github.com/owner/repository/actions/runs/999"
-    )
+    evidence["gates"][0]["html_url"] = "https://github.com/owner/repository/actions/runs/999"
     with pytest.raises(ValueError, match="html_url is invalid"):
         MODULE.validate_payload(evidence, REPOSITORY, SHA)
 
