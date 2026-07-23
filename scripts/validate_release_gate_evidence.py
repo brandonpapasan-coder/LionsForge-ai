@@ -38,7 +38,7 @@ def _validate_json_string(value: str) -> None:
         raise ValueError("evidence JSON contains a control character")
 
 
-_CORE._validate_json_string = _validate_json_string
+setattr(_CORE, "_validate_json_string", _validate_json_string)
 
 for _name in dir(_CORE):
     if not _name.startswith("__"):
