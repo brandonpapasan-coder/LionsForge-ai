@@ -68,8 +68,7 @@ def run(
 
 def test_all_required_main_push_workflows_pass():
     runs = [
-        run(name, run_id=index)
-        for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
+        run(name, run_id=index) for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
     ]
     results = MODULE.evaluate_runs(runs)
     assert MODULE.all_passed(results)
@@ -77,15 +76,12 @@ def test_all_required_main_push_workflows_pass():
 
 def test_all_required_exact_sha_workflows_pass():
     runs = [
-        run(name, run_id=index)
-        for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
+        run(name, run_id=index) for index, name in enumerate(MODULE.REQUIRED_WORKFLOWS, start=1)
     ]
     results = MODULE.evaluate_runs(runs, expected_sha=DEFAULT_SHA)
     assert MODULE.all_passed(results, expected_sha=DEFAULT_SHA)
     assert {result.head_sha for result in results} == {DEFAULT_SHA}
-    assert {result.path for result in results} == set(
-        MODULE.REQUIRED_WORKFLOW_PATHS.values()
-    )
+    assert {result.path for result in results} == set(MODULE.REQUIRED_WORKFLOW_PATHS.values())
 
 
 def test_missing_required_workflow_fails():
@@ -123,11 +119,7 @@ def test_latest_rerun_attempt_wins_for_same_run_number():
             run_id=51,
         ),
     ]
-    backend = next(
-        result
-        for result in MODULE.evaluate_runs(runs)
-        if result.name == "Backend CI"
-    )
+    backend = next(result for result in MODULE.evaluate_runs(runs) if result.name == "Backend CI")
     assert backend.run_id == 51
     assert backend.conclusion == "success"
 
@@ -269,10 +261,7 @@ def test_fetch_page_rejects_incomplete_read(monkeypatch):
 
 
 def test_fetch_runs_paginates_until_partial_page(monkeypatch):
-    first_page = [
-        run("Backend CI", run_id=index)
-        for index in range(1, MODULE.PER_PAGE + 1)
-    ]
+    first_page = [run("Backend CI", run_id=index) for index in range(1, MODULE.PER_PAGE + 1)]
     second_page = [run("Frontend CI", run_id=1000)]
     requested_pages = []
 
@@ -312,9 +301,7 @@ def test_fetch_runs_enforces_maximum_page_limit(monkeypatch):
     monkeypatch.setattr(
         MODULE,
         "_fetch_page",
-        lambda repository, sha, token, page: [
-            run("Backend CI", run_id=page)
-        ],
+        lambda repository, sha, token, page: [run("Backend CI", run_id=page)],
     )
 
     with pytest.raises(RuntimeError, match="2-page safety limit"):
