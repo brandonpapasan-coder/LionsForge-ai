@@ -4,9 +4,7 @@ from pathlib import Path
 
 
 SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "scripts"
-    / "validate_public_operations_row_evidence.py"
+    Path(__file__).resolve().parents[2] / "scripts" / "validate_public_operations_row_evidence.py"
 )
 SPEC = spec_from_file_location("validate_public_operations_row_evidence", SCRIPT)
 assert SPEC and SPEC.loader
@@ -88,9 +86,7 @@ def valid_record() -> str:
             "|---|---|---|---|",
         ]
     )
-    lines.extend(
-        f"| {name} | {name} | 2026-07-20 | APPROVED |" for name in approvals
-    )
+    lines.extend(f"| {name} | {name} | 2026-07-20 | APPROVED |" for name in approvals)
     return "\n".join(lines)
 
 
