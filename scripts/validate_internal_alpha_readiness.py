@@ -25,6 +25,28 @@ PLACEHOLDERS = {
     "NOT APPLICABLE OR NOT TESTED",
 }
 FAIL_STATUSES = PLACEHOLDERS | {"FAILED", "BLOCKED", "NO", "INCOMPLETE"}
+REQUIRED_SECTIONS = (
+    "## Current decision",
+    "## 1. Candidate integrity",
+    "## 2. Internal Alpha environment",
+    "## 3. Integrated product journeys",
+    "## 4. Cross-system controls",
+    "## 5. Reliability, security, and operations",
+    "## 6. Recovery and rollback",
+    "## 7. Alpha cohort controls",
+    "## 8. Final authorization",
+    "## GO rule",
+)
+REQUIRED_BASE_FIELDS = (
+    "Protected-main implementation merge",
+    "Staging execution controls merge",
+    "Pre-merge gate-clean candidate",
+    "Backend image digest",
+    "Frontend image digest",
+    "Review owner role",
+    "Review date",
+    "Decision",
+)
 
 
 @dataclass(frozen=True)
@@ -75,11 +97,27 @@ def _record_incomplete(value: str) -> bool:
     return normalized in FAIL_STATUSES or normalized.startswith("PENDING")
 
 
+def _first_field(fields: dict[str, str], *names: str) -> str:
+    for name in names:
+        value = fields.get(name, "")
+        if value:
+            return value
+    return ""
+
+
 def validate_record(text: str) -> list[Finding]:
     lines = text.splitlines()
     fields = _fields(lines)
     rows = _rows(lines)
     findings: list[Finding] = []
+
+    for section in REQUIRED_SECTIONS:
+        if section not in lines:
+            findings.append(Finding("missing-section", f"Required section is missing: {section}"))
+
+    for field in REQUIRED_BASE_FIELDS:
+        if field not in fields:
+            findings.append(Finding("missing-field", f"Required baseline field is missing: {field}"))
 
     decision = fields.get("Decision", "")
     if decision not in {"GO", "NO-GO"}:
@@ -89,12 +127,20 @@ def validate_record(text: str) -> list[Finding]:
     if decision == "NO-GO":
         return findings
 
-    candidate_sha = fields.get("Candidate commit SHA", "")
+    candidate_sha = _first_field(
+        fields,
+        "Candidate commit SHA",
+        "Protected-main implementation merge",
+    )
     if not SHA_RE.fullmatch(candidate_sha):
         findings.append(Finding("invalid-sha", "GO requires an exact 40-character candidate SHA"))
 
     for component in ("backend", "frontend"):
-        digest = fields.get(f"Candidate {component} image digest", "")
+        digest = _first_field(
+            fields,
+            f"Candidate {component} image digest",
+            f"{component.title()} image digest",
+        )
         if not DIGEST_RE.fullmatch(digest):
             findings.append(
                 Finding(
@@ -118,13 +164,10 @@ def validate_record(text: str) -> list[Finding]:
         if not stripped.startswith("-") or ":" not in stripped:
             continue
         key, value = stripped[1:].split(":", 1)
-        key = key.strip()
-        if key in {
-            "Candidate mobile build identifier",
-        }:
-            continue
         if _record_incomplete(value):
-            findings.append(Finding("incomplete-field", f"GO field is incomplete: {key}"))
+            findings.append(
+                Finding("incomplete-field", f"GO field is incomplete: {key.strip()}")
+            )
 
     if "| OPEN |" in text or "| BLOCKING |" in text:
         findings.append(Finding("open-blocker", "GO cannot include open blocking items"))
