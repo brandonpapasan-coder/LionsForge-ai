@@ -86,6 +86,8 @@ jobs:
           tests/test_write_atomic_evidence.py
 
       - name: Ruff format check
+        id: ruff_format
+        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -109,6 +111,49 @@ jobs:
             tests/test_verify_release_gates.py \
             tests/test_write_atomic_evidence.py \
             2>&1 | tee ruff-format.log
+
+      - name: Produce Ruff-formatted remediation bundle
+        if: steps.ruff_format.outcome == 'failure'
+        shell: bash
+        run: |
+          ruff format \
+            app/schemas/system_readiness.py \
+            scripts/export_openapi.py \
+            ../scripts/validate_production_acceptance.py \
+            ../scripts/validate_public_operations_activation.py \
+            ../scripts/validate_public_operations_row_evidence.py \
+            ../scripts/validate_release_gate_evidence.py \
+            ../scripts/verify_release_gates.py \
+            ../scripts/write_atomic_evidence.py \
+            tests/test_production_acceptance_validator.py \
+            tests/test_public_operations_activation_template.py \
+            tests/test_public_operations_activation_validator.py \
+            tests/test_public_operations_row_evidence_validator.py \
+            tests/test_validate_release_gate_evidence.py \
+            tests/test_verify_release_gate_response_limits.py \
+            tests/test_verify_release_gate_result_integrity.py \
+            tests/test_verify_release_gate_run_schema.py \
+            tests/test_verify_release_gates.py \
+            tests/test_write_atomic_evidence.py
+          mkdir -p ruff-formatted/backend/tests ruff-formatted/scripts
+          cp tests/test_production_acceptance_validator.py ruff-formatted/backend/tests/
+          cp tests/test_public_operations_activation_validator.py ruff-formatted/backend/tests/
+          cp tests/test_public_operations_row_evidence_validator.py ruff-formatted/backend/tests/
+          cp tests/test_validate_release_gate_evidence.py ruff-formatted/backend/tests/
+          cp tests/test_verify_release_gate_result_integrity.py ruff-formatted/backend/tests/
+          cp tests/test_verify_release_gates.py ruff-formatted/backend/tests/
+
+      - name: Upload Ruff remediation bundle
+        if: steps.ruff_format.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ruff-formatted-files
+          path: backend/ruff-formatted
+          if-no-files-found: error
+
+      - name: Enforce Ruff format gate
+        if: steps.ruff_format.outcome == 'failure'
+        run: exit 1
 
       - name: Type check
         run: >-
