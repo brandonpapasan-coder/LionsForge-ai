@@ -133,6 +133,11 @@ jobs:
             ../scripts/write_atomic_evidence.py \
             2>&1 | tee mypy.log
 
+      - name: Validate live Internal Alpha readiness record
+        run: >-
+          python ../scripts/validate_internal_alpha_readiness.py
+          ../docs/operations/internal-alpha-readiness-gate.md
+
       - name: Validate Alembic migrations on PostgreSQL
         run: |
           alembic upgrade head
