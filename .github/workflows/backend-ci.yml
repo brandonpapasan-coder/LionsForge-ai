@@ -75,6 +75,7 @@ jobs:
           ../scripts/write_atomic_evidence.py
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
+          tests/test_internal_alpha_authorization_workflow.py
           tests/test_internal_alpha_readiness_validator.py
           tests/test_production_acceptance_validator.py
           tests/test_public_operations_activation_template.py
@@ -101,6 +102,7 @@ jobs:
             ../scripts/validate_release_gate_evidence.py \
             ../scripts/verify_release_gates.py \
             ../scripts/write_atomic_evidence.py \
+            tests/test_internal_alpha_authorization_workflow.py \
             tests/test_internal_alpha_readiness_validator.py \
             tests/test_production_acceptance_validator.py \
             tests/test_public_operations_activation_template.py \

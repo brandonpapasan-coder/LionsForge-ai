@@ -1,0 +1,120 @@
+name: Internal Alpha Authorize
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character lowercase protected-main candidate SHA
+        required: true
+        type: string
+      backend_digest:
+        description: Immutable backend image digest (sha256:...)
+        required: true
+        type: string
+      frontend_digest:
+        description: Immutable frontend image digest (sha256:...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate authorization inputs and record provenance
+        env:
+          RECORD_PATH: docs/operations/internal-alpha-readiness-gate.md
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "candidate_sha must be an exact 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+          for digest_name in BACKEND_DIGEST FRONTEND_DIGEST; do
+            digest="${!digest_name}"
+            if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "${digest_name} must be an immutable lowercase sha256 digest" >&2
+              exit 1
+            fi
+          done
+
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+          test -f "${RECORD_PATH}"
+
+          decision="$(sed -n 's/^- Decision:[[:space:]]*\*\*\([^*]*\)\*\*.*/\1/p' "${RECORD_PATH}" | head -n 1)"
+          recorded_sha="$(sed -n 's/^- Protected-main implementation merge:[[:space:]]*`\([^`]*\)`.*/\1/p' "${RECORD_PATH}" | head -n 1)"
+          recorded_backend="$(sed -n 's/^- Backend image digest:[[:space:]]*`\([^`]*\)`.*/\1/p' "${RECORD_PATH}" | head -n 1)"
+          recorded_frontend="$(sed -n 's/^- Frontend image digest:[[:space:]]*`\([^`]*\)`.*/\1/p' "${RECORD_PATH}" | head -n 1)"
+
+          [[ "${decision}" == "GO" ]] || { echo "Internal Alpha record decision must be GO" >&2; exit 1; }
+          [[ "${recorded_sha}" == "${CANDIDATE_SHA}" ]] || { echo "candidate_sha does not match the readiness record" >&2; exit 1; }
+          [[ "${recorded_backend}" == "${BACKEND_DIGEST}" ]] || { echo "backend_digest does not match the readiness record" >&2; exit 1; }
+          [[ "${recorded_frontend}" == "${FRONTEND_DIGEST}" ]] || { echo "frontend_digest does not match the readiness record" >&2; exit 1; }
+
+      - name: Verify required release gates
+        id: release-gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -o pipefail
+          python scripts/verify_release_gates.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --sha "${RELEASE_SHA}" \
+            --output internal-alpha-release-gate-evidence.json \
+            | tee internal-alpha-release-gate-evidence.txt
+
+      - name: Validate Internal Alpha readiness record
+        id: validate
+        run: |
+          set -o pipefail
+          python scripts/validate_internal_alpha_readiness.py \
+            docs/operations/internal-alpha-readiness-gate.md \
+            | tee internal-alpha-readiness-validation.txt
+
+      - name: Publish authorization summary
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          GATE_OUTCOME: ${{ steps.release-gates.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+        run: |
+          {
+            echo "## Internal Alpha authorization"
+            echo
+            echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
+            echo "- Backend digest: \`${BACKEND_DIGEST}\`"
+            echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
+            echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
+            echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo
+            echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload non-sensitive authorization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internal-alpha-authorization-evidence
+          path: |
+            internal-alpha-release-gate-evidence.json
+            internal-alpha-release-gate-evidence.txt
+            internal-alpha-readiness-validation.txt
+          if-no-files-found: warn
+          retention-days: 90
