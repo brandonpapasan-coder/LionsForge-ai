@@ -86,8 +86,6 @@ jobs:
           tests/test_write_atomic_evidence.py
 
       - name: Ruff format check
-        id: ruff_format
-        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -111,35 +109,6 @@ jobs:
             tests/test_verify_release_gates.py \
             tests/test_write_atomic_evidence.py \
             2>&1 | tee ruff-format.log
-
-      - name: Produce Ruff-formatted source bundle
-        if: steps.ruff_format.outcome == 'failure'
-        shell: bash
-        run: |
-          ruff format \
-            ../scripts/validate_production_acceptance.py \
-            ../scripts/validate_public_operations_activation.py \
-            ../scripts/validate_public_operations_row_evidence.py \
-            ../scripts/validate_release_gate_evidence.py \
-            ../scripts/verify_release_gates.py
-          mkdir -p ruff-formatted/scripts
-          cp ../scripts/validate_production_acceptance.py ruff-formatted/scripts/
-          cp ../scripts/validate_public_operations_activation.py ruff-formatted/scripts/
-          cp ../scripts/validate_public_operations_row_evidence.py ruff-formatted/scripts/
-          cp ../scripts/validate_release_gate_evidence.py ruff-formatted/scripts/
-          cp ../scripts/verify_release_gates.py ruff-formatted/scripts/
-
-      - name: Upload Ruff source remediation bundle
-        if: steps.ruff_format.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-ruff-formatted-source-files
-          path: backend/ruff-formatted
-          if-no-files-found: error
-
-      - name: Enforce Ruff format gate
-        if: steps.ruff_format.outcome == 'failure'
-        run: exit 1
 
       - name: Type check
         shell: bash
