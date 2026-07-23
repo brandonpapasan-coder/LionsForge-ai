@@ -142,7 +142,9 @@ def test_rejects_duplicate_json_keys_at_every_object_level(tmp_path):
 
 def test_rejects_nonstandard_json_constants(tmp_path):
     for constant in ("NaN", "Infinity", "-Infinity"):
-        evidence_path = tmp_path / f"constant-{constant.replace('-', 'negative-')}.json"
+        evidence_path = (
+            tmp_path / f"constant-{constant.replace('-', 'negative-')}.json"
+        )
         evidence_path.write_text(
             f'{{"passed":{constant}}}',
             encoding="utf-8",
