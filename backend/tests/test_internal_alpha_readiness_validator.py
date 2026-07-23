@@ -63,7 +63,9 @@ def test_go_requires_exact_sha_and_digests():
 
 
 def test_go_rejects_pending_fields_and_controls():
-    text = valid_record().replace("- Review owner role: Release Owner", "- Review owner role: PENDING")
+    text = valid_record().replace(
+        "- Review owner role: Release Owner", "- Review owner role: PENDING"
+    )
     text = text.replace(
         "| Dependency audit | report | PASSED |",
         "| Dependency audit | PENDING | NOT VERIFIED |",
