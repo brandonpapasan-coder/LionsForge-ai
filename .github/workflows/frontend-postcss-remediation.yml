@@ -1,0 +1,62 @@
+name: Frontend PostCSS Remediation
+
+on:
+  push:
+    branches:
+      - fix/backend-ruff-format-gate
+    paths:
+      - .github/workflows/frontend-postcss-remediation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  remediate-postcss:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Regenerate patched dependency files
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set overrides.postcss=8.5.12
+          npm install --package-lock-only
+          npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Commit validated dependency files
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package.json frontend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Validated dependency files are already committed."
+            exit 0
+          fi
+          git commit -m "Patch PostCSS security advisory"
+          git push origin HEAD:fix/backend-ruff-format-gate
