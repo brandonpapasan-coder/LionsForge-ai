@@ -239,6 +239,7 @@ def test_fetch_page_rejects_malformed_json(monkeypatch):
 def test_fetch_page_rejects_timeout(monkeypatch):
     def raise_timeout(request, timeout):
         raise TimeoutError("timed out")
+
     monkeypatch.setattr(MODULE, "urlopen", raise_timeout)
     with pytest.raises(RuntimeError, match="request failed: timed out"):
         MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
@@ -247,6 +248,7 @@ def test_fetch_page_rejects_timeout(monkeypatch):
 def test_fetch_page_rejects_incomplete_read(monkeypatch):
     def raise_incomplete_read(request, timeout):
         raise MODULE.IncompleteRead(b"partial", 100)
+
     monkeypatch.setattr(MODULE, "urlopen", raise_incomplete_read)
     with pytest.raises(RuntimeError, match="request failed"):
         MODULE._fetch_page("owner/repository", DEFAULT_SHA, "token", 1)
@@ -256,12 +258,14 @@ def test_fetch_runs_paginates_until_partial_page(monkeypatch):
     first_page = [run("Backend CI", run_id=index) for index in range(1, MODULE.PER_PAGE + 1)]
     second_page = [run("Frontend CI", run_id=1000)]
     requested_pages = []
+
     def fake_fetch_page(repository, sha, token, page):
         assert repository == "owner/repository"
         assert sha == DEFAULT_SHA
         assert token == "token"
         requested_pages.append(page)
         return first_page if page == 1 else second_page
+
     monkeypatch.setattr(MODULE, "_fetch_page", fake_fetch_page)
     runs = MODULE.fetch_runs("owner/repository", DEFAULT_SHA, "token")
     assert requested_pages == [1, 2]
