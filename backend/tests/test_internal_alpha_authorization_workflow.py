@@ -18,6 +18,17 @@ def test_workflow_is_manual_and_read_only():
     assert "id-token: write" not in text
 
 
+def test_workflow_requires_protected_main_dispatch_and_checkout():
+    text = workflow_text()
+    assert "DISPATCH_REF: ${{ github.ref }}" in text
+    assert '[[ "${DISPATCH_REF}" == "refs/heads/main" ]]' in text
+    assert "ref: refs/heads/main" in text
+    assert 'checked_out_sha="$(git rev-parse HEAD)"' in text
+    assert 'protected_main_sha="$(git rev-parse origin/main)"' in text
+    assert '[[ "${checked_out_sha}" == "${protected_main_sha}" ]]' in text
+    assert "WORKFLOW_SHA: ${{ github.workflow_sha }}" in text
+
+
 def test_workflow_requires_exact_sha_and_image_digests():
     text = workflow_text()
     assert "candidate_sha:" in text

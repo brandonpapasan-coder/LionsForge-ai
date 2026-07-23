@@ -24,10 +24,32 @@ jobs:
   authorize:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository history
+      - name: Require protected-main dispatch
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          [[ "${DISPATCH_REF}" == "refs/heads/main" ]] || {
+            echo "Internal Alpha authorization must be dispatched from protected main" >&2
+            exit 1
+          }
+
+      - name: Checkout protected main history
         uses: actions/checkout@v4
         with:
+          ref: refs/heads/main
           fetch-depth: 0
+
+      - name: Verify protected-main checkout
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          checked_out_sha="$(git rev-parse HEAD)"
+          protected_main_sha="$(git rev-parse origin/main)"
+          [[ "${checked_out_sha}" == "${protected_main_sha}" ]] || {
+            echo "Checked-out HEAD does not equal origin/main" >&2
+            exit 1
+          }
 
       - name: Validate authorization inputs and record provenance
         env:
@@ -51,7 +73,6 @@ jobs:
           done
 
           git cat-file -e "${CANDIDATE_SHA}^{commit}"
-          git fetch --no-tags origin main
           git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
           test -f "${RECORD_PATH}"
 
@@ -92,12 +113,16 @@ jobs:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           BACKEND_DIGEST: ${{ inputs.backend_digest }}
           FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          DISPATCH_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
           GATE_OUTCOME: ${{ steps.release-gates.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
         run: |
           {
             echo "## Internal Alpha authorization"
             echo
+            echo "- Dispatch ref: \`${DISPATCH_REF}\`"
+            echo "- Workflow SHA: \`${WORKFLOW_SHA}\`"
             echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
             echo "- Backend digest: \`${BACKEND_DIGEST}\`"
             echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
