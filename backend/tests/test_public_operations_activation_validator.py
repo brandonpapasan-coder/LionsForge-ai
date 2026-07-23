@@ -4,9 +4,7 @@ from pathlib import Path
 
 
 SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "scripts"
-    / "validate_public_operations_activation.py"
+    Path(__file__).resolve().parents[2] / "scripts" / "validate_public_operations_activation.py"
 )
 SPEC = spec_from_file_location("validate_public_operations_activation", SCRIPT)
 assert SPEC and SPEC.loader
@@ -67,8 +65,7 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
         "- Intended effective date: 2026-08-01",
         f"- Decision: **{decision}**",
         "- Public legal entity name: LionsForge AI LLC",
-        "- Public business address or approved registered-agent address: "
-        "controlled-private-record",
+        "- Public business address or approved registered-agent address: controlled-private-record",
         "- Governing-law and venue language approved: Yes",
         "- Supported launch jurisdictions: United States",
         "- Age eligibility and parental-consent position: Adults only",
@@ -85,8 +82,7 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
         "|---|---|---|---|---|---|",
     ]
     lines.extend(
-        f"| {name} | v1 | 2026-08-01 | Business Owner | Legal Reviewer | "
-        "APPROVED |"
+        f"| {name} | v1 | 2026-08-01 | Business Owner | Legal Reviewer | APPROVED |"
         for name in policies
     )
     lines.extend(
@@ -108,8 +104,7 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
         ]
     )
     lines.extend(
-        f"| {name} | 30 days | Delete | Expires with backup | APPROVED |"
-        for name in retention
+        f"| {name} | 30 days | Delete | Expires with backup | APPROVED |" for name in retention
     )
     lines.extend(
         [
@@ -117,10 +112,7 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
             "|---|---|---|---|---|",
         ]
     )
-    lines.extend(
-        f"| {name} | 2026-07-20 | Tester | evidence | PASSED |"
-        for name in workflows
-    )
+    lines.extend(f"| {name} | 2026-07-20 | Tester | evidence | PASSED |" for name in workflows)
     lines.extend(
         [
             "- Log-redaction review completed: YES",
@@ -135,9 +127,7 @@ def valid_record(*, decision: str = "GO", defects: str = "0") -> str:
             "|---|---|---|---|",
         ]
     )
-    lines.extend(
-        f"| {name} | {name} | 2026-07-20 | APPROVED |" for name in approvals
-    )
+    lines.extend(f"| {name} | {name} | 2026-07-20 | APPROVED |" for name in approvals)
     return "\n".join(lines)
 
 
@@ -160,8 +150,7 @@ def test_invalid_release_sha_fails() -> None:
 
 def test_missing_public_address_fails() -> None:
     text = valid_record().replace(
-        "- Public business address or approved registered-agent address: "
-        "controlled-private-record",
+        "- Public business address or approved registered-agent address: controlled-private-record",
         "- Public business address or approved registered-agent address: PENDING",
     )
     assert "missing-field" in codes(text)
@@ -202,14 +191,11 @@ def test_placeholder_controlled_reference_fails() -> None:
 
 def test_unapproved_policy_and_unverified_channel_fail() -> None:
     text = valid_record().replace(
-        "| Privacy Notice | v1 | 2026-08-01 | Business Owner | Legal Reviewer | "
-        "APPROVED |",
-        "| Privacy Notice | PENDING | PENDING | PENDING | PENDING | "
-        "NOT APPROVED |",
+        "| Privacy Notice | v1 | 2026-08-01 | Business Owner | Legal Reviewer | APPROVED |",
+        "| Privacy Notice | PENDING | PENDING | PENDING | PENDING | NOT APPROVED |",
     )
     text = text.replace(
-        "| General support | public@example.test | Operations Owner | VERIFIED | "
-        "evidence |",
+        "| General support | public@example.test | Operations Owner | VERIFIED | evidence |",
         "| General support | PENDING | PENDING | NOT VERIFIED | PENDING |",
     )
     assert {
@@ -222,8 +208,7 @@ def test_unapproved_policy_and_unverified_channel_fail() -> None:
 
 def test_untested_deletion_workflow_fails() -> None:
     text = valid_record().replace(
-        "| Eligible data deletion or de-identification | 2026-07-20 | Tester | "
-        "evidence | PASSED |",
+        "| Eligible data deletion or de-identification | 2026-07-20 | Tester | evidence | PASSED |",
         "| Eligible data deletion or de-identification | PENDING | PENDING | "
         "PENDING | NOT TESTED |",
     )
@@ -248,9 +233,7 @@ def test_required_consent_control_must_be_tested() -> None:
 
 def test_go_rejects_blocking_defects() -> None:
     findings = validate_record(valid_record(defects="1"))
-    assert {"blocking-defect", "invalid-go"}.issubset(
-        {finding.code for finding in findings}
-    )
+    assert {"blocking-defect", "invalid-go"}.issubset({finding.code for finding in findings})
 
 
 def test_missing_final_approval_fails() -> None:
