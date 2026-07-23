@@ -2,10 +2,7 @@ from pathlib import Path
 
 
 WORKFLOW = (
-    Path(__file__).resolve().parents[2]
-    / ".github"
-    / "workflows"
-    / "internal-alpha-authorize.yml"
+    Path(__file__).resolve().parents[2] / ".github" / "workflows" / "internal-alpha-authorize.yml"
 )
 
 
