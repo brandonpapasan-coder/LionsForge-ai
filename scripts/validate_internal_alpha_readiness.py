@@ -52,6 +52,20 @@ UNIQUE_FIELDS = frozenset(REQUIRED_BASE_FIELDS) | {
     "Candidate backend image digest",
     "Candidate frontend image digest",
 }
+PROVENANCE_ALIAS_GROUPS = (
+    (
+        "candidate SHA",
+        ("Candidate commit SHA", "Protected-main implementation merge"),
+    ),
+    (
+        "backend image digest",
+        ("Candidate backend image digest", "Backend image digest"),
+    ),
+    (
+        "frontend image digest",
+        ("Candidate frontend image digest", "Frontend image digest"),
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -129,6 +143,16 @@ def validate_record(text: str) -> list[Finding]:
             )
         )
 
+    for label, names in PROVENANCE_ALIAS_GROUPS:
+        alias_values = {fields[name] for name in names if fields.get(name)}
+        if len(alias_values) > 1:
+            findings.append(
+                Finding(
+                    "conflicting-alias",
+                    f"Provenance aliases must agree on one {label}: {', '.join(names)}",
+                )
+            )
+
     for section in REQUIRED_SECTIONS:
         if section not in lines:
             findings.append(Finding("missing-section", f"Required section is missing: {section}"))
@@ -175,8 +199,8 @@ def validate_record(text: str) -> list[Finding]:
 
     for cells in rows:
         name = cells[0]
-        values = cells[1:]
-        if any(_record_incomplete(value) for value in values):
+        row_values = cells[1:]
+        if any(_record_incomplete(value) for value in row_values):
             findings.append(Finding("incomplete-control", f"GO control is incomplete: {name}"))
 
     for line in lines:

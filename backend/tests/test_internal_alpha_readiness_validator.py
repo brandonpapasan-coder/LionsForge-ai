@@ -108,6 +108,53 @@ def test_record_rejects_duplicate_provenance_values():
     assert "duplicate-field" in codes(text)
 
 
+def test_no_go_rejects_conflicting_candidate_sha_aliases():
+    text = valid_record(decision="NO-GO").replace(
+        "- Protected-main implementation merge: " + "a" * 40,
+        "- Candidate commit SHA: "
+        + "f" * 40
+        + "\n- Protected-main implementation merge: "
+        + "a" * 40,
+    )
+    assert "conflicting-alias" in codes(text)
+
+
+def test_go_rejects_conflicting_image_digest_aliases():
+    text = valid_record().replace(
+        "- Backend image digest: sha256:" + "b" * 64,
+        "- Candidate backend image digest: sha256:"
+        + "f" * 64
+        + "\n- Backend image digest: sha256:"
+        + "b" * 64,
+    )
+    assert "conflicting-alias" in codes(text)
+
+
+def test_record_accepts_matching_provenance_aliases():
+    text = valid_record().replace(
+        "- Protected-main implementation merge: " + "a" * 40,
+        "- Candidate commit SHA: "
+        + "a" * 40
+        + "\n- Protected-main implementation merge: "
+        + "a" * 40,
+    )
+    text = text.replace(
+        "- Backend image digest: sha256:" + "b" * 64,
+        "- Candidate backend image digest: sha256:"
+        + "b" * 64
+        + "\n- Backend image digest: sha256:"
+        + "b" * 64,
+    )
+    text = text.replace(
+        "- Frontend image digest: sha256:" + "c" * 64,
+        "- Candidate frontend image digest: sha256:"
+        + "c" * 64
+        + "\n- Frontend image digest: sha256:"
+        + "c" * 64,
+    )
+    assert validate_record(text) == []
+
+
 def test_invalid_decision_fails():
     text = valid_record().replace("**GO**", "**READY**")
     assert "invalid-decision" in codes(text)
