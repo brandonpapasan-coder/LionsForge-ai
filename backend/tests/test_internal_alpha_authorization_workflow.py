@@ -1,0 +1,55 @@
+from pathlib import Path
+
+
+WORKFLOW = (
+    Path(__file__).resolve().parents[2]
+    / ".github"
+    / "workflows"
+    / "internal-alpha-authorize.yml"
+)
+
+
+def workflow_text() -> str:
+    return WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_workflow_is_manual_and_read_only():
+    text = workflow_text()
+    assert "workflow_dispatch:" in text
+    assert "contents: read" in text
+    assert "actions: read" in text
+    assert "id-token: write" not in text
+
+
+def test_workflow_requires_exact_sha_and_image_digests():
+    text = workflow_text()
+    assert "candidate_sha:" in text
+    assert "backend_digest:" in text
+    assert "frontend_digest:" in text
+    assert "^[0-9a-f]{40}$" in text
+    assert "^sha256:[0-9a-f]{64}$" in text
+
+
+def test_workflow_binds_inputs_to_canonical_go_record():
+    text = workflow_text()
+    assert "docs/operations/internal-alpha-readiness-gate.md" in text
+    assert '[[ "${decision}" == "GO" ]]' in text
+    assert '[[ "${recorded_sha}" == "${CANDIDATE_SHA}" ]]' in text
+    assert '[[ "${recorded_backend}" == "${BACKEND_DIGEST}" ]]' in text
+    assert '[[ "${recorded_frontend}" == "${FRONTEND_DIGEST}" ]]' in text
+
+
+def test_workflow_requires_main_ancestry_and_release_gates():
+    text = workflow_text()
+    assert 'git cat-file -e "${CANDIDATE_SHA}^{commit}"' in text
+    assert 'git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main' in text
+    assert "python scripts/verify_release_gates.py" in text
+    assert '--sha "${RELEASE_SHA}"' in text
+
+
+def test_workflow_runs_validator_and_retains_evidence():
+    text = workflow_text()
+    assert "python scripts/validate_internal_alpha_readiness.py" in text
+    assert "GITHUB_STEP_SUMMARY" in text
+    assert "internal-alpha-authorization-evidence" in text
+    assert "retention-days: 90" in text
