@@ -101,7 +101,9 @@ def _table_rows(lines: list[str]) -> dict[str, list[str]]:
     return rows
 
 
-def _require_passed(rows: dict[str, list[str]], names: set[str], findings: list[Finding], group: str) -> None:
+def _require_passed(
+    rows: dict[str, list[str]], names: set[str], findings: list[Finding], group: str
+) -> None:
     for name in sorted(names):
         cells = rows.get(name)
         if cells is None:
@@ -109,7 +111,12 @@ def _require_passed(rows: dict[str, list[str]], names: set[str], findings: list[
             continue
         result = cells[0] if cells else ""
         if result != "Passed":
-            findings.append(Finding("incomplete-check", f"{group} must be Passed: {name} (found {result or 'blank'})"))
+            findings.append(
+                Finding(
+                    "incomplete-check",
+                    f"{group} must be Passed: {name} (found {result or 'blank'})",
+                )
+            )
 
 
 def validate_record(text: str) -> list[Finding]:
@@ -121,18 +128,36 @@ def validate_record(text: str) -> list[Finding]:
     release_sha = fields.get("Release SHA", "")
     rollback_sha = fields.get("Rollback SHA", "")
     if not SHA_RE.fullmatch(release_sha):
-        findings.append(Finding("invalid-sha", "Release SHA must be exactly 40 lowercase hexadecimal characters"))
+        findings.append(
+            Finding(
+                "invalid-sha", "Release SHA must be exactly 40 lowercase hexadecimal characters"
+            )
+        )
     if not SHA_RE.fullmatch(rollback_sha):
-        findings.append(Finding("invalid-sha", "Rollback SHA must be exactly 40 lowercase hexadecimal characters"))
+        findings.append(
+            Finding(
+                "invalid-sha", "Rollback SHA must be exactly 40 lowercase hexadecimal characters"
+            )
+        )
     if release_sha and rollback_sha and release_sha == rollback_sha:
         findings.append(Finding("invalid-rollback", "Release SHA and rollback SHA must differ"))
 
     for component in ("Backend", "Frontend"):
         digest = fields.get(f"{component} image digest", "")
         if not DIGEST_RE.fullmatch(digest):
-            findings.append(Finding("invalid-image-digest", f"{component} image digest must be sha256 followed by 64 lowercase hexadecimal characters"))
+            findings.append(
+                Finding(
+                    "invalid-image-digest",
+                    f"{component} image digest must be sha256 followed by 64 lowercase hexadecimal characters",
+                )
+            )
         if fields.get(f"Running {component.lower()} digest verified") != "Yes":
-            findings.append(Finding("image-provenance-unverified", f"Running {component.lower()} digest verified must be Yes"))
+            findings.append(
+                Finding(
+                    "image-provenance-unverified",
+                    f"Running {component.lower()} digest verified must be Yes",
+                )
+            )
 
     for field in (
         "Staging GO evidence",
@@ -168,7 +193,9 @@ def validate_record(text: str) -> list[Finding]:
     )
     for field in rollback_fields:
         if fields.get(field) != "Yes":
-            findings.append(Finding("rollback-incomplete", f"Rollback evidence must be Yes: {field}"))
+            findings.append(
+                Finding("rollback-incomplete", f"Rollback evidence must be Yes: {field}")
+            )
 
     decision = fields.get("Decision", "")
     if decision not in {"GO", "NO-GO"}:
@@ -176,24 +203,37 @@ def validate_record(text: str) -> list[Finding]:
     if not fields.get("Decision owner"):
         findings.append(Finding("missing-field", "Required field is blank: Decision owner"))
     if not fields.get("Decision timestamp (UTC)"):
-        findings.append(Finding("missing-field", "Required field is blank: Decision timestamp (UTC)"))
+        findings.append(
+            Finding("missing-field", "Required field is blank: Decision timestamp (UTC)")
+        )
 
     if decision == "GO":
         allowed_zero = {"0", "None", "none"}
         if fields.get("Unresolved critical defects", "") not in allowed_zero:
-            findings.append(Finding("blocking-defect", "GO requires zero unresolved critical defects"))
+            findings.append(
+                Finding("blocking-defect", "GO requires zero unresolved critical defects")
+            )
         if fields.get("Unresolved high-severity defects", "") not in allowed_zero:
-            findings.append(Finding("blocking-defect", "GO requires zero unresolved high-severity defects"))
+            findings.append(
+                Finding("blocking-defect", "GO requires zero unresolved high-severity defects")
+            )
         required_signoff = "exact release and rollback SHAs and backend and frontend image digests"
         if required_signoff not in text:
-            findings.append(Finding("missing-signoff", "GO requires the full production provenance sign-off statement"))
+            findings.append(
+                Finding(
+                    "missing-signoff",
+                    "GO requires the full production provenance sign-off statement",
+                )
+            )
 
     return findings
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("record", type=Path, help="Path to a completed production acceptance Markdown record")
+    parser.add_argument(
+        "record", type=Path, help="Path to a completed production acceptance Markdown record"
+    )
     args = parser.parse_args(argv)
 
     try:
