@@ -47,6 +47,11 @@ REQUIRED_BASE_FIELDS = (
     "Review date",
     "Decision",
 )
+UNIQUE_FIELDS = frozenset(REQUIRED_BASE_FIELDS) | {
+    "Candidate commit SHA",
+    "Candidate backend image digest",
+    "Candidate frontend image digest",
+}
 
 
 @dataclass(frozen=True)
@@ -59,13 +64,18 @@ def _normalize(value: str) -> str:
     return value.strip().strip("`").strip("*").strip()
 
 
-def _fields(lines: list[str]) -> dict[str, str]:
+def _fields(lines: list[str]) -> tuple[dict[str, str], set[str]]:
     fields: dict[str, str] = {}
+    duplicates: set[str] = set()
     for line in lines:
         match = FIELD_RE.match(line.strip())
-        if match:
-            fields[match.group(1).strip()] = _normalize(match.group(2))
-    return fields
+        if not match:
+            continue
+        name = match.group(1).strip()
+        if name in fields:
+            duplicates.add(name)
+        fields[name] = _normalize(match.group(2))
+    return fields, duplicates
 
 
 def _rows(lines: list[str]) -> list[list[str]]:
@@ -107,9 +117,17 @@ def _first_field(fields: dict[str, str], *names: str) -> str:
 
 def validate_record(text: str) -> list[Finding]:
     lines = text.splitlines()
-    fields = _fields(lines)
+    fields, duplicate_fields = _fields(lines)
     rows = _rows(lines)
     findings: list[Finding] = []
+
+    for field in sorted(duplicate_fields & UNIQUE_FIELDS):
+        findings.append(
+            Finding(
+                "duplicate-field",
+                f"Authorization-critical field must appear exactly once: {field}",
+            )
+        )
 
     for section in REQUIRED_SECTIONS:
         if section not in lines:

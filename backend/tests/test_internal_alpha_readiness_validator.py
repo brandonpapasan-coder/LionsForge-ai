@@ -89,6 +89,25 @@ def test_no_go_still_requires_all_sections():
     assert "missing-section" in codes(text)
 
 
+def test_no_go_rejects_conflicting_duplicate_decisions():
+    text = valid_record(decision="NO-GO").replace(
+        "- Decision: **NO-GO**",
+        "- Decision: **GO**\n- Decision: **NO-GO**",
+    )
+    assert "duplicate-field" in codes(text)
+
+
+def test_record_rejects_duplicate_provenance_values():
+    text = valid_record().replace(
+        "- Backend image digest: sha256:" + "b" * 64,
+        "- Backend image digest: sha256:"
+        + "b" * 64
+        + "\n- Backend image digest: sha256:"
+        + "f" * 64,
+    )
+    assert "duplicate-field" in codes(text)
+
+
 def test_invalid_decision_fails():
     text = valid_record().replace("**GO**", "**READY**")
     assert "invalid-decision" in codes(text)
