@@ -182,8 +182,7 @@ def test_workflow_enforces_artifact_contract_before_fail_closed_upload():
     assert "internal-alpha-authorization-artifact-contract-verification.txt" in text
     assert "CONTRACT_OUTCOME: ${{ steps.artifact-contract.outcome }}" in text
     assert (
-        "CONTRACT_VERIFICATION_OUTCOME: "
-        "${{ steps.artifact-contract-verification.outcome }}" in text
+        "CONTRACT_VERIFICATION_OUTCOME: ${{ steps.artifact-contract-verification.outcome }}" in text
     )
     assert "Artifact contract generation outcome" in text
     assert "Artifact contract verification outcome" in text
