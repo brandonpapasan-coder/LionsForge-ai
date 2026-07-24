@@ -1,12 +1,12 @@
-# LionsForge AI
+# Onyxmane Intelligence
 
-LionsForge AI is an AI-assisted research, evidence validation, knowledge management, and education platform. It is designed to help people investigate complex questions, organize supporting material, expose uncertainty, preserve research history, and strengthen research skills while keeping humans responsible for conclusions and approvals.
+Onyxmane Intelligence is an AI-assisted research, evidence validation, knowledge management, and education platform. It is designed to help people investigate complex questions, organize supporting material, expose uncertainty, preserve research history, and strengthen research skills while keeping humans responsible for conclusions and approvals.
 
 ## Current status
 
 The repository is under active MVP development. The current application includes a FastAPI backend, a Next.js frontend, authenticated research workflows, institutional knowledge-quality views, deterministic investigation evidence-packet exports, automated backend and frontend testing, deployment validation, and security checks.
 
-The repository also contains legacy investment-research modules from an earlier product direction. Those modules are not the strategic focus of LionsForge AI and should be treated as compatibility or migration candidates until they are explicitly retained, reframed, or removed.
+The repository also contains legacy investment-research modules from an earlier product direction. Those modules are not the strategic focus of Onyxmane Intelligence and should be treated as compatibility or migration candidates until they are explicitly retained, reframed, or removed.
 
 ## Product principles
 
@@ -47,6 +47,8 @@ python -m app.db.init_db
 python scripts/smoke_backend.py
 ```
 
+The `lionsforge` SQLite filenames are retained as internal compatibility identifiers during the rebrand and are not the active product name.
+
 API documentation is available locally at:
 
 ```text
@@ -63,7 +65,7 @@ For a controlled migration or compatibility environment, copy the dedicated temp
 cat backend/.env.legacy.example
 ```
 
-The compatibility template sets `ENABLE_LEGACY_FINANCE_MODULES=true`. Do not add it to normal LionsForge AI research, validation, knowledge, or education deployments. Enabling compatibility mode does not authorize live trading, brokerage integration, order routing, individualized financial advice, or security-selection recommendations.
+The compatibility template sets `ENABLE_LEGACY_FINANCE_MODULES=true`. Do not add it to normal Onyxmane Intelligence research, validation, knowledge, or education deployments. Enabling compatibility mode does not authorize live trading, brokerage integration, order routing, individualized financial advice, or security-selection recommendations.
 
 ## Frontend quick start
 
@@ -122,7 +124,7 @@ Tests should cover successful, loading, empty, unauthorized, not-found, and fail
 
 ## Legacy financial modules
 
-Legacy financial functionality may include market quotes, company news, watchlists, portfolios, holdings analytics, alerts, and ticker-based research. Its presence in the repository does not indicate that LionsForge AI is an active trading platform. No live trading capability should be introduced without a new, explicit product decision and appropriate security, risk, legal, and regulatory review.
+Legacy financial functionality may include market quotes, company news, watchlists, portfolios, holdings analytics, alerts, and ticker-based research. Its presence in the repository does not indicate that Onyxmane Intelligence is an active trading platform. No live trading capability should be introduced without a new, explicit product decision and appropriate security, risk, legal, and regulatory review.
 
 ## Contribution, security, and licensing
 
