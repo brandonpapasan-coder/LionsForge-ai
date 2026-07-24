@@ -109,7 +109,9 @@ def _validate_inventory(inventory: dict) -> int:
     return len(files)
 
 
-def build_receipt(manifest_path: Path, inventory_path: Path, receipt_path: Path) -> dict[str, object]:
+def build_receipt(
+    manifest_path: Path, inventory_path: Path, receipt_path: Path
+) -> dict[str, object]:
     for path, label in ((manifest_path, "manifest"), (inventory_path, "inventory")):
         _regular_file(path, label)
         if path.resolve(strict=False) == receipt_path.resolve(strict=False):
