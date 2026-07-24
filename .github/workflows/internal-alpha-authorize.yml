@@ -117,6 +117,14 @@ jobs:
             docs/operations/internal-alpha-readiness-gate.md \
             | tee internal-alpha-readiness-validation.txt
 
+      - name: Validate Internal Alpha evidence references
+        id: evidence
+        run: |
+          set -o pipefail
+          python scripts/validate_internal_alpha_evidence.py \
+            docs/operations/internal-alpha-readiness-gate.md \
+            | tee internal-alpha-evidence-validation.txt
+
       - name: Publish authorization summary
         if: always()
         env:
@@ -127,6 +135,7 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
           GATE_OUTCOME: ${{ steps.release-gates.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
         run: |
           {
             echo "## Internal Alpha authorization"
@@ -138,6 +147,7 @@ jobs:
             echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
             echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
             echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
             echo
             echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -151,5 +161,6 @@ jobs:
             internal-alpha-release-gate-evidence.json
             internal-alpha-release-gate-evidence.txt
             internal-alpha-readiness-validation.txt
+            internal-alpha-evidence-validation.txt
           if-no-files-found: warn
           retention-days: 90

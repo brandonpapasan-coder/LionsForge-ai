@@ -62,9 +62,13 @@ def test_workflow_requires_main_ancestry_and_release_gates():
     assert '--sha "${RELEASE_SHA}"' in text
 
 
-def test_workflow_runs_validator_and_retains_evidence():
+def test_workflow_validates_and_retains_traceable_evidence():
     text = workflow_text()
     assert "python scripts/validate_internal_alpha_readiness.py" in text
+    assert "python scripts/validate_internal_alpha_evidence.py" in text
+    assert "internal-alpha-evidence-validation.txt" in text
+    assert "EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}" in text
+    assert "Evidence validator outcome" in text
     assert "GITHUB_STEP_SUMMARY" in text
     assert "internal-alpha-authorization-evidence" in text
     assert "retention-days: 90" in text
