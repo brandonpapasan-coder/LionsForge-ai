@@ -161,6 +161,36 @@ def test_workflow_always_generates_and_verifies_fail_closed_decision_before_uplo
     assert 'authorization="not-authorized"' in text
 
 
+def test_workflow_enforces_artifact_contract_before_fail_closed_upload():
+    text = workflow_text()
+    decision_verifier = text.index("manage_internal_alpha_authorization_decision.py verify")
+    contract_writer = text.index("manage_internal_alpha_artifact_contract.py write")
+    contract_verifier = text.index("manage_internal_alpha_artifact_contract.py verify")
+    summary = text.index("Publish authorization summary")
+    upload = text.index("actions/upload-artifact@v4")
+    assert decision_verifier < contract_writer < contract_verifier < summary < upload
+    assert (
+        "Generate authorization artifact contract\n        id: artifact-contract\n        if: always()"
+        in text
+    )
+    assert (
+        "Verify authorization artifact contract\n        id: artifact-contract-verification\n"
+        "        if: always()" in text
+    )
+    assert "internal-alpha-authorization-artifact-contract.json" in text
+    assert "internal-alpha-authorization-artifact-contract-generation.txt" in text
+    assert "internal-alpha-authorization-artifact-contract-verification.txt" in text
+    assert "CONTRACT_OUTCOME: ${{ steps.artifact-contract.outcome }}" in text
+    assert (
+        "CONTRACT_VERIFICATION_OUTCOME: "
+        "${{ steps.artifact-contract-verification.outcome }}" in text
+    )
+    assert "Artifact contract generation outcome" in text
+    assert "Artifact contract verification outcome" in text
+    assert "if-no-files-found: error" in text
+    assert "if-no-files-found: warn" not in text
+
+
 def test_workflow_validates_and_retains_traceable_evidence():
     text = workflow_text()
     assert "python scripts/validate_internal_alpha_readiness.py" in text
