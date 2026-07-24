@@ -132,6 +132,14 @@ jobs:
             --output internal-alpha-authorization-manifest.json \
             | tee internal-alpha-authorization-manifest.txt
 
+      - name: Validate authorization manifest
+        id: manifest-validation
+        run: |
+          set -o pipefail
+          python scripts/validate_internal_alpha_authorization_manifest.py \
+            internal-alpha-authorization-manifest.json \
+            | tee internal-alpha-authorization-manifest-validation.txt
+
       - name: Validate Internal Alpha readiness record
         id: validate
         run: |
@@ -158,6 +166,7 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
           GATE_OUTCOME: ${{ steps.release-gates.outcome }}
           MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
+          MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
           EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
         run: |
@@ -171,6 +180,7 @@ jobs:
             echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
             echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
             echo "- Authorization manifest outcome: \`${MANIFEST_OUTCOME:-not-run}\`"
+            echo "- Authorization manifest validator outcome: \`${MANIFEST_VALIDATION_OUTCOME:-not-run}\`"
             echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
             echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
             echo
@@ -187,6 +197,7 @@ jobs:
             internal-alpha-release-gate-evidence.txt
             internal-alpha-authorization-manifest.json
             internal-alpha-authorization-manifest.txt
+            internal-alpha-authorization-manifest-validation.txt
             internal-alpha-readiness-validation.txt
             internal-alpha-evidence-validation.txt
           if-no-files-found: warn
