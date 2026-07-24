@@ -42,6 +42,33 @@ class CompetencyTrendRead(BaseModel):
     explanation: str
 
 
+class LearningPlanSignalRead(BaseModel):
+    signal_type: str
+    reference: str
+    measured_value: str
+    explanation: str
+
+
+class LearningPlanItemRead(BaseModel):
+    sequence_position: int = Field(ge=1)
+    lesson_slug: str
+    lesson_title: str
+    target_competency: str
+    recommendation_type: str
+    priority_score: int = Field(ge=0)
+    recommended_difficulty: str
+    mastery_threshold: int = Field(ge=0, le=100)
+    recommendation_reason: str
+    supporting_signals: list[LearningPlanSignalRead]
+
+
+class AdaptiveLearningPlanRead(BaseModel):
+    status: str = Field(pattern="^(active|completed|empty)$")
+    generated_at: datetime
+    advisory_notice: str
+    plan_items: list[LearningPlanItemRead]
+
+
 class EducationHubRead(BaseModel):
     completed_lessons: int
     total_lessons: int

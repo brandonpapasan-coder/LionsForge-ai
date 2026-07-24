@@ -17,6 +17,7 @@ from app.api.routes import (
     knowledge_memory_remediation_escalation,
     knowledge_memory_remediation_verification,
     knowledge_quality,
+    learning_plan,
     mentor,
     missions,
     multi_agent_consensus,
@@ -69,6 +70,7 @@ def build_api_router(
     router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     router.include_router(release_countdown.router, prefix="/release-countdown", tags=["release-countdown"])
     router.include_router(education.router, prefix="/education", tags=["education"])
+    router.include_router(learning_plan.router, prefix="/education/learning-plan", tags=["education"])
     router.include_router(investigations.router, prefix="/investigations", tags=["investigations"])
     router.include_router(knowledge_graph.router, prefix="/knowledge-graph", tags=["knowledge-graph"])
     router.include_router(knowledge_extraction.router, prefix="/knowledge-graph", tags=["knowledge-extraction"])
