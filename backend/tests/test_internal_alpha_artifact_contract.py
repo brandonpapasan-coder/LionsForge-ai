@@ -104,7 +104,9 @@ def test_diagnostic_contract_requires_minimum_decision_evidence(tmp_path: Path):
 
 def test_authorized_contract_rejects_missing_declared_path(tmp_path: Path):
     write_decision(tmp_path, authorized=True)
-    declared = tuple(path for path in AUTHORIZED_REQUIRED if path != "internal-alpha-readiness-validation.txt")
+    declared = tuple(
+        path for path in AUTHORIZED_REQUIRED if path != "internal-alpha-readiness-validation.txt"
+    )
     files = relative_files(tmp_path, declared)
 
     with pytest.raises(ValueError, match="required artifact paths were not declared"):
