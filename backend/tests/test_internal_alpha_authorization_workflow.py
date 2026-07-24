@@ -82,9 +82,7 @@ def test_workflow_validates_manifest_before_retention():
     assert generator < validator < upload
     assert "id: manifest-validation" in text
     assert "internal-alpha-authorization-manifest-validation.txt" in text
-    assert (
-        "MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}" in text
-    )
+    assert "MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}" in text
     assert "Authorization manifest validator outcome" in text
 
 
