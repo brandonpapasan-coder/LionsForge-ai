@@ -86,6 +86,23 @@ def test_workflow_validates_manifest_before_retention():
     assert "Authorization manifest validator outcome" in text
 
 
+def test_workflow_generates_and_verifies_checksum_inventory_before_upload():
+    text = workflow_text()
+    writer = text.index("manage_internal_alpha_evidence_checksums.py write")
+    verifier = text.index("manage_internal_alpha_evidence_checksums.py verify")
+    upload = text.index("actions/upload-artifact@v4")
+    assert writer < verifier < upload
+    assert "id: checksum-inventory" in text
+    assert "id: checksum-verification" in text
+    assert "internal-alpha-authorization-evidence-checksums.json" in text
+    assert "internal-alpha-authorization-evidence-checksum-generation.txt" in text
+    assert "internal-alpha-authorization-evidence-checksum-verification.txt" in text
+    assert "CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}" in text
+    assert "CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}" in text
+    assert "Evidence checksum inventory outcome" in text
+    assert "Evidence checksum verification outcome" in text
+
+
 def test_workflow_validates_and_retains_traceable_evidence():
     text = workflow_text()
     assert "python scripts/validate_internal_alpha_readiness.py" in text
