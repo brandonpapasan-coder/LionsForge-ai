@@ -9,6 +9,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 DECISION_PATH = "internal-alpha-authorization-decision.json"
 DIAGNOSTIC_REQUIRED = (
@@ -172,9 +173,10 @@ def main() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+    files = cast(list[dict[str, object]], payload["files"])
     print(
         f"{args.mode.upper()}: authorized={str(payload['authorized']).lower()} "
-        f"files={len(payload['files'])} {args.contract}"
+        f"files={len(files)} {args.contract}"
     )
     return 0
 
