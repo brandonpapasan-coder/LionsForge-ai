@@ -34,9 +34,7 @@ def test_inventory_is_deterministic_and_sorted(tmp_path: Path):
     assert inventory.read_bytes() == first
     payload = json.loads(first)
     assert payload["schema_version"] == 1
-    assert [item["path"] for item in payload["files"]] == sorted(
-        path.as_posix() for path in files
-    )
+    assert [item["path"] for item in payload["files"]] == sorted(path.as_posix() for path in files)
     verify_inventory(files, inventory)
 
 
