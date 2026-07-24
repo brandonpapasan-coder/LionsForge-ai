@@ -35,6 +35,7 @@ jobs:
           }
 
       - name: Checkout protected main history
+        if: always()
         uses: actions/checkout@v4
         with:
           ref: refs/heads/main
@@ -206,6 +207,88 @@ jobs:
             --receipt internal-alpha-authorization-receipt.json \
             | tee internal-alpha-authorization-receipt-verification.txt
 
+      - name: Generate fail-closed authorization decision
+        id: decision
+        if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          RELEASE_GATES_OUTCOME: ${{ steps.release-gates.outcome }}
+          MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
+          MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}
+          READINESS_OUTCOME: ${{ steps.validate.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}
+          CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_decision.py write \
+            --output internal-alpha-authorization-decision.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${RUN_ID}" \
+            --run-attempt "${RUN_ATTEMPT}" \
+            --workflow-sha "${WORKFLOW_SHA}" \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --backend-digest "${BACKEND_DIGEST}" \
+            --frontend-digest "${FRONTEND_DIGEST}" \
+            --step "release-gates=${RELEASE_GATES_OUTCOME:-not-run}" \
+            --step "manifest=${MANIFEST_OUTCOME:-not-run}" \
+            --step "manifest-validation=${MANIFEST_VALIDATION_OUTCOME:-not-run}" \
+            --step "validate=${READINESS_OUTCOME:-not-run}" \
+            --step "evidence=${EVIDENCE_OUTCOME:-not-run}" \
+            --step "checksum-inventory=${CHECKSUM_INVENTORY_OUTCOME:-not-run}" \
+            --step "checksum-verification=${CHECKSUM_VERIFICATION_OUTCOME:-not-run}" \
+            --step "receipt=${RECEIPT_OUTCOME:-not-run}" \
+            --step "receipt-verification=${RECEIPT_VERIFICATION_OUTCOME:-not-run}" \
+            | tee internal-alpha-authorization-decision-generation.txt
+
+      - name: Verify fail-closed authorization decision
+        id: decision-verification
+        if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          RELEASE_GATES_OUTCOME: ${{ steps.release-gates.outcome }}
+          MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
+          MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}
+          READINESS_OUTCOME: ${{ steps.validate.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}
+          CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_decision.py verify \
+            --output internal-alpha-authorization-decision.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --run-id "${RUN_ID}" \
+            --run-attempt "${RUN_ATTEMPT}" \
+            --workflow-sha "${WORKFLOW_SHA}" \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --backend-digest "${BACKEND_DIGEST}" \
+            --frontend-digest "${FRONTEND_DIGEST}" \
+            --step "release-gates=${RELEASE_GATES_OUTCOME:-not-run}" \
+            --step "manifest=${MANIFEST_OUTCOME:-not-run}" \
+            --step "manifest-validation=${MANIFEST_VALIDATION_OUTCOME:-not-run}" \
+            --step "validate=${READINESS_OUTCOME:-not-run}" \
+            --step "evidence=${EVIDENCE_OUTCOME:-not-run}" \
+            --step "checksum-inventory=${CHECKSUM_INVENTORY_OUTCOME:-not-run}" \
+            --step "checksum-verification=${CHECKSUM_VERIFICATION_OUTCOME:-not-run}" \
+            --step "receipt=${RECEIPT_OUTCOME:-not-run}" \
+            --step "receipt-verification=${RECEIPT_VERIFICATION_OUTCOME:-not-run}" \
+            | tee internal-alpha-authorization-decision-verification.txt
+
       - name: Publish authorization summary
         if: always()
         env:
@@ -223,7 +306,14 @@ jobs:
           CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
           RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
           RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
+          DECISION_OUTCOME: ${{ steps.decision.outcome }}
+          DECISION_VERIFICATION_OUTCOME: ${{ steps.decision-verification.outcome }}
         run: |
+          authorization="not-authorized"
+          if [[ "${DECISION_OUTCOME}" == "success" && "${DECISION_VERIFICATION_OUTCOME}" == "success" ]] \
+            && grep -q '"authorized": true' internal-alpha-authorization-decision.json; then
+            authorization="authorized"
+          fi
           {
             echo "## Internal Alpha authorization"
             echo
@@ -241,6 +331,9 @@ jobs:
             echo "- Evidence checksum verification outcome: \`${CHECKSUM_VERIFICATION_OUTCOME:-not-run}\`"
             echo "- Final authorization receipt outcome: \`${RECEIPT_OUTCOME:-not-run}\`"
             echo "- Final authorization receipt verification outcome: \`${RECEIPT_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Authorization decision generation outcome: \`${DECISION_OUTCOME:-not-run}\`"
+            echo "- Authorization decision verification outcome: \`${DECISION_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Final authorization decision: \`${authorization}\`"
             echo
             echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -264,5 +357,8 @@ jobs:
             internal-alpha-authorization-receipt.json
             internal-alpha-authorization-receipt-generation.txt
             internal-alpha-authorization-receipt-verification.txt
+            internal-alpha-authorization-decision.json
+            internal-alpha-authorization-decision-generation.txt
+            internal-alpha-authorization-decision-verification.txt
           if-no-files-found: warn
           retention-days: 90

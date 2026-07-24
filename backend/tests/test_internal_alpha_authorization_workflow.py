@@ -23,6 +23,7 @@ def test_workflow_requires_protected_main_dispatch_and_checkout():
     assert "DISPATCH_REF: ${{ github.ref }}" in text
     assert '[[ "${DISPATCH_REF}" == "refs/heads/main" ]]' in text
     assert "ref: refs/heads/main" in text
+    assert "Checkout protected main history\n        if: always()" in text
     assert 'checked_out_sha="$(git rev-parse HEAD)"' in text
     assert 'protected_main_sha="$(git rev-parse origin/main)"' in text
     assert '[[ "${checked_out_sha}" == "${protected_main_sha}" ]]' in text
@@ -119,6 +120,45 @@ def test_workflow_generates_and_verifies_final_receipt_before_upload():
     assert "RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}" in text
     assert "Final authorization receipt outcome" in text
     assert "Final authorization receipt verification outcome" in text
+
+
+def test_workflow_always_generates_and_verifies_fail_closed_decision_before_upload():
+    text = workflow_text()
+    receipt_verifier = text.index("manage_internal_alpha_authorization_receipt.py verify")
+    decision_writer = text.index("manage_internal_alpha_authorization_decision.py write")
+    decision_verifier = text.index("manage_internal_alpha_authorization_decision.py verify")
+    summary = text.index("Publish authorization summary")
+    upload = text.index("actions/upload-artifact@v4")
+    assert receipt_verifier < decision_writer < decision_verifier < summary < upload
+    assert (
+        "Generate fail-closed authorization decision\n        id: decision\n        if: always()"
+        in text
+    )
+    assert (
+        "Verify fail-closed authorization decision\n        id: decision-verification\n        if: always()"
+        in text
+    )
+    assert '--run-id "${RUN_ID}"' in text
+    assert '--run-attempt "${RUN_ATTEMPT}"' in text
+    for step in (
+        "release-gates",
+        "manifest",
+        "manifest-validation",
+        "validate",
+        "evidence",
+        "checksum-inventory",
+        "checksum-verification",
+        "receipt",
+        "receipt-verification",
+    ):
+        assert f'--step "{step}=' in text
+    assert "internal-alpha-authorization-decision.json" in text
+    assert "internal-alpha-authorization-decision-generation.txt" in text
+    assert "internal-alpha-authorization-decision-verification.txt" in text
+    assert "DECISION_OUTCOME: ${{ steps.decision.outcome }}" in text
+    assert "DECISION_VERIFICATION_OUTCOME: ${{ steps.decision-verification.outcome }}" in text
+    assert "Final authorization decision" in text
+    assert 'authorization="not-authorized"' in text
 
 
 def test_workflow_validates_and_retains_traceable_evidence():
