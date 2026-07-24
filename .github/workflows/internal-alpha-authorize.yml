@@ -109,6 +109,29 @@ jobs:
             --output internal-alpha-release-gate-evidence.json \
             | tee internal-alpha-release-gate-evidence.txt
 
+      - name: Generate authorization manifest
+        id: manifest
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          PROTECTED_MAIN_SHA: ${{ github.sha }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+        run: |
+          set -o pipefail
+          python scripts/write_internal_alpha_authorization_manifest.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --dispatch-ref "${DISPATCH_REF}" \
+            --workflow-sha "${WORKFLOW_SHA}" \
+            --protected-main-sha "${PROTECTED_MAIN_SHA}" \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --backend-digest "${BACKEND_DIGEST}" \
+            --frontend-digest "${FRONTEND_DIGEST}" \
+            --gate-evidence internal-alpha-release-gate-evidence.json \
+            --output internal-alpha-authorization-manifest.json \
+            | tee internal-alpha-authorization-manifest.txt
+
       - name: Validate Internal Alpha readiness record
         id: validate
         run: |
@@ -134,6 +157,7 @@ jobs:
           DISPATCH_REF: ${{ github.ref }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
           GATE_OUTCOME: ${{ steps.release-gates.outcome }}
+          MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
           EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
         run: |
@@ -146,6 +170,7 @@ jobs:
             echo "- Backend digest: \`${BACKEND_DIGEST}\`"
             echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
             echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
+            echo "- Authorization manifest outcome: \`${MANIFEST_OUTCOME:-not-run}\`"
             echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
             echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
             echo
@@ -160,6 +185,8 @@ jobs:
           path: |
             internal-alpha-release-gate-evidence.json
             internal-alpha-release-gate-evidence.txt
+            internal-alpha-authorization-manifest.json
+            internal-alpha-authorization-manifest.txt
             internal-alpha-readiness-validation.txt
             internal-alpha-evidence-validation.txt
           if-no-files-found: warn
