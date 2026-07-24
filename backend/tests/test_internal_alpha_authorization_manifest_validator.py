@@ -70,9 +70,7 @@ def test_valid_manifest_passes():
     [
         (lambda value: value.update({"unexpected": True}), "manifest keys"),
         (
-            lambda value: value["authorization_scope"].update(
-                {"external_staging_proven": True}
-            ),
+            lambda value: value["authorization_scope"].update({"external_staging_proven": True}),
             "repository-only boundaries",
         ),
         (
