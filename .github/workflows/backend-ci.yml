@@ -66,6 +66,7 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          ../scripts/validate_internal_alpha_authorization_manifest.py
           ../scripts/validate_internal_alpha_evidence.py
           ../scripts/validate_internal_alpha_readiness.py
           ../scripts/validate_production_acceptance.py
@@ -79,6 +80,7 @@ jobs:
           tests/test_autonomous_portfolio_intelligence.py
           tests/test_backend_ci_internal_alpha_evidence.py
           tests/test_internal_alpha_authorization_manifest.py
+          tests/test_internal_alpha_authorization_manifest_validator.py
           tests/test_internal_alpha_authorization_workflow.py
           tests/test_internal_alpha_evidence_validator.py
           tests/test_internal_alpha_readiness_validator.py
@@ -100,6 +102,7 @@ jobs:
           ruff format --check --diff \
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
+            ../scripts/validate_internal_alpha_authorization_manifest.py \
             ../scripts/validate_internal_alpha_evidence.py \
             ../scripts/validate_internal_alpha_readiness.py \
             ../scripts/validate_production_acceptance.py \
@@ -111,6 +114,7 @@ jobs:
             ../scripts/write_internal_alpha_authorization_manifest.py \
             tests/test_backend_ci_internal_alpha_evidence.py \
             tests/test_internal_alpha_authorization_manifest.py \
+            tests/test_internal_alpha_authorization_manifest_validator.py \
             tests/test_internal_alpha_authorization_workflow.py \
             tests/test_internal_alpha_evidence_validator.py \
             tests/test_internal_alpha_readiness_validator.py \
@@ -136,6 +140,7 @@ jobs:
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
             scripts/validate_openapi.py \
+            ../scripts/validate_internal_alpha_authorization_manifest.py \
             ../scripts/validate_internal_alpha_evidence.py \
             ../scripts/validate_internal_alpha_readiness.py \
             ../scripts/validate_production_acceptance.py \

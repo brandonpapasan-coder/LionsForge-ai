@@ -74,6 +74,18 @@ def test_workflow_generates_and_retains_authorization_manifest():
     assert "Authorization manifest outcome" in text
 
 
+def test_workflow_validates_manifest_before_retention():
+    text = workflow_text()
+    generator = text.index("python scripts/write_internal_alpha_authorization_manifest.py")
+    validator = text.index("python scripts/validate_internal_alpha_authorization_manifest.py")
+    upload = text.index("actions/upload-artifact@v4")
+    assert generator < validator < upload
+    assert "id: manifest-validation" in text
+    assert "internal-alpha-authorization-manifest-validation.txt" in text
+    assert "MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}" in text
+    assert "Authorization manifest validator outcome" in text
+
+
 def test_workflow_validates_and_retains_traceable_evidence():
     text = workflow_text()
     assert "python scripts/validate_internal_alpha_readiness.py" in text
