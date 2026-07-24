@@ -14,9 +14,7 @@ SHA_RE = re.compile(r"(?:^|[^0-9a-f])[0-9a-f]{40}(?:$|[^0-9a-f])")
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 NUMBERED_REF_RE = re.compile(r"\b(?:PR|Issue|Run|Artifact)\s+#?\d+\b", re.IGNORECASE)
 URL_RE = re.compile(r"https://[^\s`|]+")
-REPO_PATH_RE = re.compile(
-    r"(?:^|[\s`])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+(?:$|[\s`])"
-)
+REPO_PATH_RE = re.compile(r"(?:^|[\s`])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+(?:$|[\s`])")
 GENERIC_EVIDENCE = {
     "complete",
     "completed",
@@ -71,7 +69,9 @@ def validate_evidence(text: str) -> list[Finding]:
             index += 1
             continue
         if index + 1 >= len(lines) or not _is_separator(_cells(lines[index + 1])):
-            findings.append(Finding("malformed-evidence-table", "Evidence table is missing a separator row"))
+            findings.append(
+                Finding("malformed-evidence-table", "Evidence table is missing a separator row")
+            )
             index += 1
             continue
 
@@ -82,7 +82,10 @@ def validate_evidence(text: str) -> list[Finding]:
                 break
             if len(row) != len(header):
                 findings.append(
-                    Finding("malformed-evidence-row", f"Evidence row has the wrong column count: {row[0] if row else 'unknown'}")
+                    Finding(
+                        "malformed-evidence-row",
+                        f"Evidence row has the wrong column count: {row[0] if row else 'unknown'}",
+                    )
                 )
             else:
                 evidence = row[-1]
