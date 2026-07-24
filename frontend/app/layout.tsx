@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LionsForge AI",
+  title: "Onyxmane Intelligence",
   description: "Evidence-based research, education, and AI mentorship.",
 };
 
