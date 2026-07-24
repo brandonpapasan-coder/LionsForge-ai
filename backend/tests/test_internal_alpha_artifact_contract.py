@@ -1,18 +1,25 @@
 import hashlib
 import json
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
 
-from scripts.manage_internal_alpha_artifact_contract import (
-    AUTHORIZED_REQUIRED,
-    DECISION_PATH,
-    DIAGNOSTIC_REQUIRED,
-    SCOPE,
-    build_contract,
-    verify_contract,
-    write_contract,
-)
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts" / "manage_internal_alpha_artifact_contract.py"
+SPEC = spec_from_file_location("manage_internal_alpha_artifact_contract", SCRIPT)
+assert SPEC and SPEC.loader
+MODULE = module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+AUTHORIZED_REQUIRED = MODULE.AUTHORIZED_REQUIRED
+DECISION_PATH = MODULE.DECISION_PATH
+DIAGNOSTIC_REQUIRED = MODULE.DIAGNOSTIC_REQUIRED
+SCOPE = MODULE.SCOPE
+build_contract = MODULE.build_contract
+verify_contract = MODULE.verify_contract
+write_contract = MODULE.write_contract
 
 
 def decision_payload(*, authorized: bool) -> dict:
