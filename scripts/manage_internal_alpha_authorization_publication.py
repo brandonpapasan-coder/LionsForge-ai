@@ -58,6 +58,17 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_output_path(*, output: Path, decision: Path, contract: Path) -> None:
+    if output.is_symlink():
+        raise ValueError("publication output must not be a symlink")
+    resolved_output = output.resolve(strict=False)
+    if resolved_output in {
+        decision.resolve(strict=False),
+        contract.resolve(strict=False),
+    }:
+        raise ValueError("publication output must be distinct from verified sources")
+
+
 def build_publication(*, decision: Path, contract: Path, artifact_name: str) -> dict[str, object]:
     if decision == contract:
         raise ValueError("decision and artifact contract must be distinct files")
@@ -171,6 +182,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
+        validate_output_path(
+            output=args.output,
+            decision=args.decision,
+            contract=args.contract,
+        )
         payload = build_publication(
             decision=args.decision,
             contract=args.contract,
