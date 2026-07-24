@@ -130,10 +130,16 @@ def test_workflow_always_generates_and_verifies_fail_closed_decision_before_uplo
     summary = text.index("Publish authorization summary")
     upload = text.index("actions/upload-artifact@v4")
     assert receipt_verifier < decision_writer < decision_verifier < summary < upload
-    assert "Generate fail-closed authorization decision\n        id: decision\n        if: always()" in text
-    assert "Verify fail-closed authorization decision\n        id: decision-verification\n        if: always()" in text
-    assert "--run-id \"${RUN_ID}\"" in text
-    assert "--run-attempt \"${RUN_ATTEMPT}\"" in text
+    assert (
+        "Generate fail-closed authorization decision\n        id: decision\n        if: always()"
+        in text
+    )
+    assert (
+        "Verify fail-closed authorization decision\n        id: decision-verification\n        if: always()"
+        in text
+    )
+    assert '--run-id "${RUN_ID}"' in text
+    assert '--run-attempt "${RUN_ATTEMPT}"' in text
     for step in (
         "release-gates",
         "manifest",
