@@ -337,6 +337,30 @@ jobs:
             --file internal-alpha-release-gate-evidence.txt \
             | tee internal-alpha-authorization-artifact-contract-verification.txt
 
+      - name: Generate authorization publication record
+        id: publication
+        if: always()
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_publication.py write \
+            --decision internal-alpha-authorization-decision.json \
+            --contract internal-alpha-authorization-artifact-contract.json \
+            --artifact-name internal-alpha-authorization-evidence \
+            --output internal-alpha-authorization-publication.json \
+            | tee internal-alpha-authorization-publication-generation.txt
+
+      - name: Verify authorization publication record
+        id: publication-verification
+        if: always()
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_publication.py verify \
+            --decision internal-alpha-authorization-decision.json \
+            --contract internal-alpha-authorization-artifact-contract.json \
+            --artifact-name internal-alpha-authorization-evidence \
+            --output internal-alpha-authorization-publication.json \
+            | tee internal-alpha-authorization-publication-verification.txt
+
       - name: Publish authorization summary
         if: always()
         env:
@@ -358,10 +382,14 @@ jobs:
           DECISION_VERIFICATION_OUTCOME: ${{ steps.decision-verification.outcome }}
           CONTRACT_OUTCOME: ${{ steps.artifact-contract.outcome }}
           CONTRACT_VERIFICATION_OUTCOME: ${{ steps.artifact-contract-verification.outcome }}
+          PUBLICATION_OUTCOME: ${{ steps.publication.outcome }}
+          PUBLICATION_VERIFICATION_OUTCOME: ${{ steps.publication-verification.outcome }}
         run: |
           authorization="not-authorized"
           if [[ "${DECISION_OUTCOME}" == "success" && "${DECISION_VERIFICATION_OUTCOME}" == "success" ]] \
-            && grep -q '"authorized": true' internal-alpha-authorization-decision.json; then
+            && [[ "${CONTRACT_OUTCOME}" == "success" && "${CONTRACT_VERIFICATION_OUTCOME}" == "success" ]] \
+            && [[ "${PUBLICATION_OUTCOME}" == "success" && "${PUBLICATION_VERIFICATION_OUTCOME}" == "success" ]] \
+            && grep -q '"authorized": true' internal-alpha-authorization-publication.json; then
             authorization="authorized"
           fi
           {
@@ -385,6 +413,8 @@ jobs:
             echo "- Authorization decision verification outcome: \`${DECISION_VERIFICATION_OUTCOME:-not-run}\`"
             echo "- Artifact contract generation outcome: \`${CONTRACT_OUTCOME:-not-run}\`"
             echo "- Artifact contract verification outcome: \`${CONTRACT_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Publication record generation outcome: \`${PUBLICATION_OUTCOME:-not-run}\`"
+            echo "- Publication record verification outcome: \`${PUBLICATION_VERIFICATION_OUTCOME:-not-run}\`"
             echo "- Final authorization decision: \`${authorization}\`"
             echo
             echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
@@ -415,5 +445,8 @@ jobs:
             internal-alpha-authorization-artifact-contract.json
             internal-alpha-authorization-artifact-contract-generation.txt
             internal-alpha-authorization-artifact-contract-verification.txt
+            internal-alpha-authorization-publication.json
+            internal-alpha-authorization-publication-generation.txt
+            internal-alpha-authorization-publication-verification.txt
           if-no-files-found: error
           retention-days: 90
