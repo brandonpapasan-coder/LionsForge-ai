@@ -72,7 +72,9 @@ def _read_decision(path: Path) -> bool:
     if not isinstance(authorized, bool):
         raise ValueError("decision record authorized must be boolean")
     failed_steps = value["failed_steps"]
-    if not isinstance(failed_steps, list) or not all(isinstance(item, str) for item in failed_steps):
+    if not isinstance(failed_steps, list) or not all(
+        isinstance(item, str) for item in failed_steps
+    ):
         raise ValueError("decision record failed_steps is invalid")
     if authorized == bool(failed_steps):
         raise ValueError("decision record authorization conflicts with failed_steps")
@@ -109,7 +111,9 @@ def build_contract(*, decision: Path, contract: Path, files: list[Path]) -> dict
     required = AUTHORIZED_REQUIRED if authorized else DIAGNOSTIC_REQUIRED
     missing_declared = sorted(set(required) - set(paths))
     if missing_declared:
-        raise ValueError(f"required artifact paths were not declared: {', '.join(missing_declared)}")
+        raise ValueError(
+            f"required artifact paths were not declared: {', '.join(missing_declared)}"
+        )
 
     bindings: list[dict[str, object]] = []
     missing_files: list[str] = []
