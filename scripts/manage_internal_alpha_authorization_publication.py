@@ -88,7 +88,10 @@ def build_publication(
         raise ValueError("artifact contract keys are invalid")
     if decision_value["schema_version"] != 1 or contract_value["schema_version"] != 1:
         raise ValueError("source schema_version must be 1")
-    if decision_value["authorization_scope"] != SCOPE or contract_value["authorization_scope"] != SCOPE:
+    if (
+        decision_value["authorization_scope"] != SCOPE
+        or contract_value["authorization_scope"] != SCOPE
+    ):
         raise ValueError("source records weaken repository-only boundaries")
 
     authorized = decision_value["authorized"]
@@ -147,7 +150,9 @@ def build_publication(
 def write_publication(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     temporary.replace(path)
 
 
