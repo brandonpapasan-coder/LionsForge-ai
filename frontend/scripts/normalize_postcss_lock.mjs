@@ -1,32 +1,36 @@
 #!/usr/bin/env node
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const lockPath = resolve(process.cwd(), "package-lock.json");
 const packagePath = resolve(process.cwd(), "package.json");
-const postcssTarget = {
-  version: "8.5.18",
-  resolved: "https://registry.npmjs.org/postcss/-/postcss-8.5.18.tgz",
-  integrity:
-    "sha512-xdB1oSLHbz1vRWgCDalrCqEFTWzFlhqFC5tIHLMOSUIjhm3XXQ1qrFy8S/ESr1JYRRXqM3c1QFiMZUJdUTqyMQ==",
-};
-const braceExpansionTarget = {
-  version: "5.0.8",
-  resolved: "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.8.tgz",
+const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+
+const exactPins = {
+  postcss: "8.5.18",
+  vitest: "4.1.10",
+  coverage: "4.1.10",
 };
 
-const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
-if (packageJson.overrides?.postcss !== postcssTarget.version) {
+if (packageJson.overrides?.postcss !== exactPins.postcss) {
+  throw new Error(`package.json must pin overrides.postcss to ${exactPins.postcss}`);
+}
+if (packageJson.devDependencies?.vitest !== exactPins.vitest) {
+  throw new Error(`package.json must pin vitest to ${exactPins.vitest}`);
+}
+if (packageJson.devDependencies?.["@vitest/coverage-v8"] !== exactPins.coverage) {
   throw new Error(
-    `package.json must pin overrides.postcss to ${postcssTarget.version}`,
+    `package.json must pin @vitest/coverage-v8 to ${exactPins.coverage}`,
   );
 }
-if (packageJson.overrides?.["brace-expansion"] !== braceExpansionTarget.version) {
-  throw new Error(
-    `package.json must pin overrides.brace-expansion to ${braceExpansionTarget.version}`,
-  );
-}
+
+execFileSync(
+  "npm",
+  ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"],
+  { stdio: "inherit" },
+);
 
 const lock = JSON.parse(readFileSync(lockPath, "utf8"));
 if (lock.lockfileVersion !== 3 || typeof lock.packages !== "object") {
@@ -34,58 +38,36 @@ if (lock.lockfileVersion !== 3 || typeof lock.packages !== "object") {
 }
 
 const postcssEntry = lock.packages["node_modules/postcss"];
-if (!postcssEntry || typeof postcssEntry !== "object") {
-  throw new Error("package-lock.json is missing node_modules/postcss");
+if (!postcssEntry || postcssEntry.version !== exactPins.postcss) {
+  throw new Error(`package-lock.json must resolve PostCSS ${exactPins.postcss}`);
 }
 
-const allowedPostcssVersions = new Set(["8.5.12", postcssTarget.version]);
-if (!allowedPostcssVersions.has(postcssEntry.version)) {
-  throw new Error(`unexpected locked PostCSS version: ${postcssEntry.version}`);
+const vitestEntry = lock.packages["node_modules/vitest"];
+if (!vitestEntry || vitestEntry.version !== exactPins.vitest) {
+  throw new Error(`package-lock.json must resolve Vitest ${exactPins.vitest}`);
 }
 
-postcssEntry.version = postcssTarget.version;
-postcssEntry.resolved = postcssTarget.resolved;
-postcssEntry.integrity = postcssTarget.integrity;
-postcssEntry.dependencies = {
-  nanoid: "^3.3.12",
-  picocolors: "^1.1.1",
-  "source-map-js": "^1.2.1",
-};
-
-const braceExpansionEntries = Object.entries(lock.packages).filter(([path]) =>
-  path.endsWith("node_modules/brace-expansion"),
-);
-if (braceExpansionEntries.length === 0) {
-  throw new Error("package-lock.json is missing brace-expansion entries");
+const coverageEntry = lock.packages["node_modules/@vitest/coverage-v8"];
+if (!coverageEntry || coverageEntry.version !== exactPins.coverage) {
+  throw new Error(
+    `package-lock.json must resolve @vitest/coverage-v8 ${exactPins.coverage}`,
+  );
 }
 
-const allowedBraceExpansionVersions = new Set([
-  "1.1.12",
-  "2.0.2",
-  "5.0.7",
-  braceExpansionTarget.version,
-]);
-for (const [path, entry] of braceExpansionEntries) {
-  if (!entry || typeof entry !== "object") {
-    throw new Error(`invalid brace-expansion lock entry: ${path}`);
+for (const [path, entry] of Object.entries(lock.packages)) {
+  if (!path.endsWith("node_modules/brace-expansion") || !entry?.version) {
+    continue;
   }
-  if (!allowedBraceExpansionVersions.has(entry.version)) {
-    throw new Error(`unexpected locked brace-expansion version at ${path}: ${entry.version}`);
+  const [major = 0, minor = 0, patch = 0] = entry.version
+    .split(".")
+    .map((value) => Number.parseInt(value, 10));
+  const vulnerable =
+    major < 5 || (major === 5 && (minor < 0 || (minor === 0 && patch <= 7)));
+  if (vulnerable) {
+    throw new Error(`vulnerable brace-expansion version remains at ${path}: ${entry.version}`);
   }
-  entry.version = braceExpansionTarget.version;
-  entry.resolved = braceExpansionTarget.resolved;
-  delete entry.integrity;
-  entry.license = "MIT";
-  entry.dependencies = {
-    "balanced-match": "^4.0.0",
-  };
-  entry.engines = {
-    node: "18 || 20 || >=22",
-  };
 }
 
-writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
-console.log(`Normalized PostCSS lock entry to ${postcssTarget.version}`);
-console.log(
-  `Normalized ${braceExpansionEntries.length} brace-expansion lock entries to ${braceExpansionTarget.version}`,
-);
+console.log(`Regenerated lock with PostCSS ${exactPins.postcss}`);
+console.log(`Regenerated lock with Vitest ${exactPins.vitest}`);
+console.log(`Regenerated lock with @vitest/coverage-v8 ${exactPins.coverage}`);
