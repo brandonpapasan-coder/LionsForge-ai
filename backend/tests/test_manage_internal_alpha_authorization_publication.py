@@ -31,7 +31,11 @@ def decision_payload(*, authorized: bool = True) -> dict:
             "repository": "owner/repo",
         },
         "failed_steps": [] if authorized else ["release-gates"],
-        "provenance": {"run_attempt": 1, "run_id": 123, "workflow_sha": "a" * 40},
+        "provenance": {
+            "run_attempt": 1,
+            "run_id": 123,
+            "workflow_sha": "a" * 40,
+        },
         "schema_version": 1,
         "steps": [],
     }
@@ -50,8 +54,12 @@ def contract_payload(*, authorized: bool = True) -> dict:
 def write_sources(root: Path, *, authorized: bool = True) -> tuple[Path, Path]:
     decision = root / "internal-alpha-authorization-decision.json"
     contract = root / "internal-alpha-authorization-artifact-contract.json"
-    decision.write_text(json.dumps(decision_payload(authorized=authorized)), encoding="utf-8")
-    contract.write_text(json.dumps(contract_payload(authorized=authorized)), encoding="utf-8")
+    decision.write_text(
+        json.dumps(decision_payload(authorized=authorized)), encoding="utf-8"
+    )
+    contract.write_text(
+        json.dumps(contract_payload(authorized=authorized)), encoding="utf-8"
+    )
     return decision, contract
 
 
@@ -64,7 +72,9 @@ def test_publication_binds_verified_sources_deterministically(tmp_path: Path):
     )
     assert payload["authorized"] is True
     assert payload["authorization_scope"] == SCOPE
-    assert payload["artifact"]["contract_sha256"] == hashlib.sha256(contract.read_bytes()).hexdigest()
+    assert payload["artifact"]["contract_sha256"] == hashlib.sha256(
+        contract.read_bytes()
+    ).hexdigest()
     output = tmp_path / "publication.json"
     write_publication(output, payload)
     first = output.read_bytes()
@@ -85,12 +95,17 @@ def test_publication_preserves_fail_closed_non_authorized_state(tmp_path: Path):
 
 def test_publication_rejects_inconsistent_or_weakened_sources(tmp_path: Path):
     decision, contract = write_sources(tmp_path)
-    contract.write_text(json.dumps(contract_payload(authorized=False)), encoding="utf-8")
+    contract.write_text(
+        json.dumps(contract_payload(authorized=False)), encoding="utf-8"
+    )
     with pytest.raises(ValueError, match="inconsistent"):
         build_publication(decision=decision, contract=contract, artifact_name="evidence")
 
     contract_value = contract_payload()
-    contract_value["authorization_scope"] = {**SCOPE, "public_access_authorized": True}
+    contract_value["authorization_scope"] = {
+        **SCOPE,
+        "public_access_authorized": True,
+    }
     contract.write_text(json.dumps(contract_value), encoding="utf-8")
     with pytest.raises(ValueError, match="weaken"):
         build_publication(decision=decision, contract=contract, artifact_name="evidence")
@@ -122,11 +137,22 @@ def test_publication_rejects_symlink_and_distinct_source_violation(tmp_path: Pat
 def test_verifier_detects_source_and_record_mutation(tmp_path: Path):
     decision, contract = write_sources(tmp_path)
     output = tmp_path / "publication.json"
-    payload = build_publication(decision=decision, contract=contract, artifact_name="evidence")
+    payload = build_publication(
+        decision=decision,
+        contract=contract,
+        artifact_name="evidence",
+    )
     write_publication(output, payload)
 
-    contract.write_text(json.dumps({**contract_payload(), "files": [{"path": "changed"}]}), encoding="utf-8")
-    changed = build_publication(decision=decision, contract=contract, artifact_name="evidence")
+    contract.write_text(
+        json.dumps({**contract_payload(), "files": [{"path": "changed"}]}),
+        encoding="utf-8",
+    )
+    changed = build_publication(
+        decision=decision,
+        contract=contract,
+        artifact_name="evidence",
+    )
     with pytest.raises(ValueError, match="does not match"):
         verify_publication(output, changed)
 
