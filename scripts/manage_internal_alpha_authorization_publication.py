@@ -58,9 +58,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build_publication(
-    *, decision: Path, contract: Path, artifact_name: str
-) -> dict[str, object]:
+def build_publication(*, decision: Path, contract: Path, artifact_name: str) -> dict[str, object]:
     if decision == contract:
         raise ValueError("decision and artifact contract must be distinct files")
     decision_value = _read_object(decision, "decision record")
@@ -150,9 +148,7 @@ def build_publication(
 def write_publication(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(path)
 
 
