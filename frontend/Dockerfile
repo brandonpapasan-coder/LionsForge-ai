@@ -1,7 +1,9 @@
 FROM node:22-alpine AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY scripts/normalize_postcss_lock.mjs ./scripts/normalize_postcss_lock.mjs
+RUN node scripts/normalize_postcss_lock.mjs \
+    && npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS builder
 WORKDIR /app
