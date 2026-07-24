@@ -10,6 +10,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import cast
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -79,7 +80,12 @@ def _validate_manifest(manifest: dict) -> tuple[str, str, str, str]:
     ):
         if not isinstance(value, str) or not pattern.fullmatch(value):
             raise ValueError(f"manifest {label} is invalid")
-    return repository, candidate_sha, backend_digest, frontend_digest
+    return (
+        repository,
+        cast(str, candidate_sha),
+        cast(str, backend_digest),
+        cast(str, frontend_digest),
+    )
 
 
 def _validate_inventory(inventory: dict) -> int:
