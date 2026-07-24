@@ -186,6 +186,26 @@ jobs:
             internal-alpha-evidence-validation.txt \
             | tee internal-alpha-authorization-evidence-checksum-verification.txt
 
+      - name: Generate final authorization receipt
+        id: receipt
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_receipt.py write \
+            --manifest internal-alpha-authorization-manifest.json \
+            --inventory internal-alpha-authorization-evidence-checksums.json \
+            --receipt internal-alpha-authorization-receipt.json \
+            | tee internal-alpha-authorization-receipt-generation.txt
+
+      - name: Verify final authorization receipt
+        id: receipt-verification
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_receipt.py verify \
+            --manifest internal-alpha-authorization-manifest.json \
+            --inventory internal-alpha-authorization-evidence-checksums.json \
+            --receipt internal-alpha-authorization-receipt.json \
+            | tee internal-alpha-authorization-receipt-verification.txt
+
       - name: Publish authorization summary
         if: always()
         env:
@@ -201,6 +221,8 @@ jobs:
           EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
           CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}
           CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
         run: |
           {
             echo "## Internal Alpha authorization"
@@ -217,6 +239,8 @@ jobs:
             echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
             echo "- Evidence checksum inventory outcome: \`${CHECKSUM_INVENTORY_OUTCOME:-not-run}\`"
             echo "- Evidence checksum verification outcome: \`${CHECKSUM_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Final authorization receipt outcome: \`${RECEIPT_OUTCOME:-not-run}\`"
+            echo "- Final authorization receipt verification outcome: \`${RECEIPT_VERIFICATION_OUTCOME:-not-run}\`"
             echo
             echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -237,5 +261,8 @@ jobs:
             internal-alpha-authorization-evidence-checksums.json
             internal-alpha-authorization-evidence-checksum-generation.txt
             internal-alpha-authorization-evidence-checksum-verification.txt
+            internal-alpha-authorization-receipt.json
+            internal-alpha-authorization-receipt-generation.txt
+            internal-alpha-authorization-receipt-verification.txt
           if-no-files-found: warn
           retention-days: 90
