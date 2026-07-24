@@ -1,9 +1,19 @@
 import json
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
 
-from scripts.write_internal_alpha_authorization_manifest import build_manifest, write_atomic
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts" / "write_internal_alpha_authorization_manifest.py"
+SPEC = spec_from_file_location("write_internal_alpha_authorization_manifest", SCRIPT)
+assert SPEC and SPEC.loader
+MODULE = module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+build_manifest = MODULE.build_manifest
+write_atomic = MODULE.write_atomic
 
 SHA = "a" * 40
 DIGEST_A = "sha256:" + "b" * 64
