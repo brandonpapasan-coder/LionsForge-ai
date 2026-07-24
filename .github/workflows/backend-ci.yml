@@ -66,6 +66,7 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          ../scripts/validate_internal_alpha_evidence.py
           ../scripts/validate_internal_alpha_readiness.py
           ../scripts/validate_production_acceptance.py
           ../scripts/validate_public_operations_activation.py
@@ -75,7 +76,9 @@ jobs:
           ../scripts/write_atomic_evidence.py
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
+          tests/test_backend_ci_internal_alpha_evidence.py
           tests/test_internal_alpha_authorization_workflow.py
+          tests/test_internal_alpha_evidence_validator.py
           tests/test_internal_alpha_readiness_validator.py
           tests/test_production_acceptance_validator.py
           tests/test_public_operations_activation_template.py
@@ -95,6 +98,7 @@ jobs:
           ruff format --check --diff \
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
+            ../scripts/validate_internal_alpha_evidence.py \
             ../scripts/validate_internal_alpha_readiness.py \
             ../scripts/validate_production_acceptance.py \
             ../scripts/validate_public_operations_activation.py \
@@ -102,7 +106,9 @@ jobs:
             ../scripts/validate_release_gate_evidence.py \
             ../scripts/verify_release_gates.py \
             ../scripts/write_atomic_evidence.py \
+            tests/test_backend_ci_internal_alpha_evidence.py \
             tests/test_internal_alpha_authorization_workflow.py \
+            tests/test_internal_alpha_evidence_validator.py \
             tests/test_internal_alpha_readiness_validator.py \
             tests/test_production_acceptance_validator.py \
             tests/test_public_operations_activation_template.py \
@@ -126,6 +132,7 @@ jobs:
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
             scripts/validate_openapi.py \
+            ../scripts/validate_internal_alpha_evidence.py \
             ../scripts/validate_internal_alpha_readiness.py \
             ../scripts/validate_production_acceptance.py \
             ../scripts/validate_public_operations_activation.py \
@@ -139,6 +146,14 @@ jobs:
         run: >-
           python ../scripts/validate_internal_alpha_readiness.py
           ../docs/operations/internal-alpha-readiness-gate.md
+
+      - name: Validate live Internal Alpha evidence references
+        shell: bash
+        run: |
+          set -o pipefail
+          python ../scripts/validate_internal_alpha_evidence.py \
+            ../docs/operations/internal-alpha-readiness-gate.md \
+            2>&1 | tee internal-alpha-evidence-validation.log
 
       - name: Validate Alembic migrations on PostgreSQL
         run: |
@@ -197,4 +212,5 @@ jobs:
             backend/performance-smoke.log
             backend/ruff-format.log
             backend/mypy.log
+            backend/internal-alpha-evidence-validation.log
           if-no-files-found: warn
