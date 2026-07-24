@@ -74,9 +74,11 @@ jobs:
           ../scripts/validate_release_gate_evidence.py
           ../scripts/verify_release_gates.py
           ../scripts/write_atomic_evidence.py
+          ../scripts/write_internal_alpha_authorization_manifest.py
           tests/test_system_readiness.py
           tests/test_autonomous_portfolio_intelligence.py
           tests/test_backend_ci_internal_alpha_evidence.py
+          tests/test_internal_alpha_authorization_manifest.py
           tests/test_internal_alpha_authorization_workflow.py
           tests/test_internal_alpha_evidence_validator.py
           tests/test_internal_alpha_readiness_validator.py
@@ -106,7 +108,9 @@ jobs:
             ../scripts/validate_release_gate_evidence.py \
             ../scripts/verify_release_gates.py \
             ../scripts/write_atomic_evidence.py \
+            ../scripts/write_internal_alpha_authorization_manifest.py \
             tests/test_backend_ci_internal_alpha_evidence.py \
+            tests/test_internal_alpha_authorization_manifest.py \
             tests/test_internal_alpha_authorization_workflow.py \
             tests/test_internal_alpha_evidence_validator.py \
             tests/test_internal_alpha_readiness_validator.py \
@@ -140,6 +144,7 @@ jobs:
             ../scripts/validate_release_gate_evidence.py \
             ../scripts/verify_release_gates.py \
             ../scripts/write_atomic_evidence.py \
+            ../scripts/write_internal_alpha_authorization_manifest.py \
             2>&1 | tee mypy.log
 
       - name: Validate live Internal Alpha readiness record

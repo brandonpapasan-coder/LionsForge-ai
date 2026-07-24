@@ -62,6 +62,18 @@ def test_workflow_requires_main_ancestry_and_release_gates():
     assert '--sha "${RELEASE_SHA}"' in text
 
 
+def test_workflow_generates_and_retains_authorization_manifest():
+    text = workflow_text()
+    assert "python scripts/write_internal_alpha_authorization_manifest.py" in text
+    assert '--dispatch-ref "${DISPATCH_REF}"' in text
+    assert '--workflow-sha "${WORKFLOW_SHA}"' in text
+    assert '--protected-main-sha "${PROTECTED_MAIN_SHA}"' in text
+    assert "internal-alpha-authorization-manifest.json" in text
+    assert "internal-alpha-authorization-manifest.txt" in text
+    assert "MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}" in text
+    assert "Authorization manifest outcome" in text
+
+
 def test_workflow_validates_and_retains_traceable_evidence():
     text = workflow_text()
     assert "python scripts/validate_internal_alpha_readiness.py" in text
