@@ -12,7 +12,9 @@ from pathlib import Path
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
-RUN_URL_RE = re.compile(r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[1-9][0-9]*$")
+RUN_URL_RE = re.compile(
+    r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[1-9][0-9]*$"
+)
 REQUIRED_GATE_PATHS = {
     "Backend CI": ".github/workflows/backend-ci.yml",
     "Frontend CI": ".github/workflows/frontend-ci.yml",
@@ -85,7 +87,17 @@ def validate_manifest(payload: object) -> None:
     for index, raw_gate in enumerate(gates):
         gate = _exact_keys(
             raw_gate,
-            {"conclusion", "event", "head_branch", "head_sha", "html_url", "name", "path", "run_id", "status"},
+            {
+                "conclusion",
+                "event",
+                "head_branch",
+                "head_sha",
+                "html_url",
+                "name",
+                "path",
+                "run_id",
+                "status",
+            },
             f"gates[{index}]",
         )
         name = gate["name"]
