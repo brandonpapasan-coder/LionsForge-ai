@@ -55,6 +55,7 @@ def write_gates(tmp_path: Path, payload: dict | None = None) -> Path:
 
 
 def build(tmp_path: Path, **overrides) -> dict:
+    gate_evidence_path = overrides.pop("gate_evidence_path", None)
     values = {
         "repository": "owner/repo",
         "dispatch_ref": "refs/heads/main",
@@ -63,7 +64,7 @@ def build(tmp_path: Path, **overrides) -> dict:
         "candidate_sha": SHA,
         "backend_digest": DIGEST_A,
         "frontend_digest": DIGEST_B,
-        "gate_evidence_path": write_gates(tmp_path),
+        "gate_evidence_path": gate_evidence_path or write_gates(tmp_path),
     }
     values.update(overrides)
     return build_manifest(**values)
