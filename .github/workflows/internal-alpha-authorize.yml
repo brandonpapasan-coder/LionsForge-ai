@@ -156,6 +156,36 @@ jobs:
             docs/operations/internal-alpha-readiness-gate.md \
             | tee internal-alpha-evidence-validation.txt
 
+      - name: Generate authorization evidence checksum inventory
+        id: checksum-inventory
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_evidence_checksums.py write \
+            --inventory internal-alpha-authorization-evidence-checksums.json \
+            internal-alpha-release-gate-evidence.json \
+            internal-alpha-release-gate-evidence.txt \
+            internal-alpha-authorization-manifest.json \
+            internal-alpha-authorization-manifest.txt \
+            internal-alpha-authorization-manifest-validation.txt \
+            internal-alpha-readiness-validation.txt \
+            internal-alpha-evidence-validation.txt \
+            | tee internal-alpha-authorization-evidence-checksum-generation.txt
+
+      - name: Verify authorization evidence checksum inventory
+        id: checksum-verification
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_evidence_checksums.py verify \
+            --inventory internal-alpha-authorization-evidence-checksums.json \
+            internal-alpha-release-gate-evidence.json \
+            internal-alpha-release-gate-evidence.txt \
+            internal-alpha-authorization-manifest.json \
+            internal-alpha-authorization-manifest.txt \
+            internal-alpha-authorization-manifest-validation.txt \
+            internal-alpha-readiness-validation.txt \
+            internal-alpha-evidence-validation.txt \
+            | tee internal-alpha-authorization-evidence-checksum-verification.txt
+
       - name: Publish authorization summary
         if: always()
         env:
@@ -169,6 +199,8 @@ jobs:
           MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
           EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}
+          CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
         run: |
           {
             echo "## Internal Alpha authorization"
@@ -183,6 +215,8 @@ jobs:
             echo "- Authorization manifest validator outcome: \`${MANIFEST_VALIDATION_OUTCOME:-not-run}\`"
             echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
             echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
+            echo "- Evidence checksum inventory outcome: \`${CHECKSUM_INVENTORY_OUTCOME:-not-run}\`"
+            echo "- Evidence checksum verification outcome: \`${CHECKSUM_VERIFICATION_OUTCOME:-not-run}\`"
             echo
             echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -200,5 +234,8 @@ jobs:
             internal-alpha-authorization-manifest-validation.txt
             internal-alpha-readiness-validation.txt
             internal-alpha-evidence-validation.txt
+            internal-alpha-authorization-evidence-checksums.json
+            internal-alpha-authorization-evidence-checksum-generation.txt
+            internal-alpha-authorization-evidence-checksum-verification.txt
           if-no-files-found: warn
           retention-days: 90
