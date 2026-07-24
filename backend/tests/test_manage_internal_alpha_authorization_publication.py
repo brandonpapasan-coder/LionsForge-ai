@@ -16,6 +16,7 @@ SPEC.loader.exec_module(MODULE)
 
 SCOPE = MODULE.SCOPE
 build_publication = MODULE.build_publication
+validate_output_path = MODULE.validate_output_path
 verify_publication = MODULE.verify_publication
 write_publication = MODULE.write_publication
 
@@ -126,6 +127,19 @@ def test_publication_rejects_symlink_and_distinct_source_violation(tmp_path: Pat
         build_publication(decision=decision, contract=link, artifact_name="evidence")
     with pytest.raises(ValueError, match="distinct"):
         build_publication(decision=decision, contract=decision, artifact_name="evidence")
+
+
+def test_publication_output_cannot_alias_or_symlink_verified_sources(tmp_path: Path):
+    decision, contract = write_sources(tmp_path)
+    with pytest.raises(ValueError, match="distinct"):
+        validate_output_path(output=decision, decision=decision, contract=contract)
+    with pytest.raises(ValueError, match="distinct"):
+        validate_output_path(output=contract, decision=decision, contract=contract)
+
+    output_link = tmp_path / "publication-link.json"
+    output_link.symlink_to(decision)
+    with pytest.raises(ValueError, match="symlink"):
+        validate_output_path(output=output_link, decision=decision, contract=contract)
 
 
 def test_verifier_detects_source_and_record_mutation(tmp_path: Path):
