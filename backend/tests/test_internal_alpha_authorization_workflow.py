@@ -103,6 +103,24 @@ def test_workflow_generates_and_verifies_checksum_inventory_before_upload():
     assert "Evidence checksum verification outcome" in text
 
 
+def test_workflow_generates_and_verifies_final_receipt_before_upload():
+    text = workflow_text()
+    checksum_verifier = text.index("manage_internal_alpha_evidence_checksums.py verify")
+    receipt_writer = text.index("manage_internal_alpha_authorization_receipt.py write")
+    receipt_verifier = text.index("manage_internal_alpha_authorization_receipt.py verify")
+    upload = text.index("actions/upload-artifact@v4")
+    assert checksum_verifier < receipt_writer < receipt_verifier < upload
+    assert "id: receipt" in text
+    assert "id: receipt-verification" in text
+    assert "internal-alpha-authorization-receipt.json" in text
+    assert "internal-alpha-authorization-receipt-generation.txt" in text
+    assert "internal-alpha-authorization-receipt-verification.txt" in text
+    assert "RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}" in text
+    assert "RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}" in text
+    assert "Final authorization receipt outcome" in text
+    assert "Final authorization receipt verification outcome" in text
+
+
 def test_workflow_validates_and_retains_traceable_evidence():
     text = workflow_text()
     assert "python scripts/validate_internal_alpha_readiness.py" in text

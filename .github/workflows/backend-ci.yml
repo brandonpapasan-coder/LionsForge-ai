@@ -66,6 +66,7 @@ jobs:
           app/schemas/system_readiness.py
           scripts/export_openapi.py
           scripts/validate_openapi.py
+          ../scripts/manage_internal_alpha_authorization_receipt.py
           ../scripts/manage_internal_alpha_evidence_checksums.py
           ../scripts/validate_internal_alpha_authorization_manifest.py
           ../scripts/validate_internal_alpha_evidence.py
@@ -82,6 +83,7 @@ jobs:
           tests/test_backend_ci_internal_alpha_evidence.py
           tests/test_internal_alpha_authorization_manifest.py
           tests/test_internal_alpha_authorization_manifest_validator.py
+          tests/test_internal_alpha_authorization_receipt.py
           tests/test_internal_alpha_authorization_workflow.py
           tests/test_internal_alpha_evidence_checksums.py
           tests/test_internal_alpha_evidence_validator.py
@@ -104,6 +106,7 @@ jobs:
           ruff format --check --diff \
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
+            ../scripts/manage_internal_alpha_authorization_receipt.py \
             ../scripts/manage_internal_alpha_evidence_checksums.py \
             ../scripts/validate_internal_alpha_authorization_manifest.py \
             ../scripts/validate_internal_alpha_evidence.py \
@@ -118,6 +121,7 @@ jobs:
             tests/test_backend_ci_internal_alpha_evidence.py \
             tests/test_internal_alpha_authorization_manifest.py \
             tests/test_internal_alpha_authorization_manifest_validator.py \
+            tests/test_internal_alpha_authorization_receipt.py \
             tests/test_internal_alpha_authorization_workflow.py \
             tests/test_internal_alpha_evidence_checksums.py \
             tests/test_internal_alpha_evidence_validator.py \
@@ -144,6 +148,7 @@ jobs:
             app/schemas/system_readiness.py \
             scripts/export_openapi.py \
             scripts/validate_openapi.py \
+            ../scripts/manage_internal_alpha_authorization_receipt.py \
             ../scripts/manage_internal_alpha_evidence_checksums.py \
             ../scripts/validate_internal_alpha_authorization_manifest.py \
             ../scripts/validate_internal_alpha_evidence.py \
