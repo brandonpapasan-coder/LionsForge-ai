@@ -70,7 +70,6 @@ jobs:
           FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
         run: |
           set -euo pipefail
-
           if [[ ! "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
             echo "candidate_sha must be an exact 40-character lowercase commit SHA" >&2
             exit 1
@@ -82,16 +81,13 @@ jobs:
               exit 1
             fi
           done
-
           git cat-file -e "${CANDIDATE_SHA}^{commit}"
           git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
           test -f "${RECORD_PATH}"
-
           decision="$(sed -n 's/^- Decision:[[:space:]]*\*\*\([^*]*\)\*\*.*/\1/p' "${RECORD_PATH}" | head -n 1)"
           recorded_sha="$(sed -n 's/^- Protected-main implementation merge:[[:space:]]*`\([^`]*\)`.*/\1/p' "${RECORD_PATH}" | head -n 1)"
           recorded_backend="$(sed -n 's/^- Backend image digest:[[:space:]]*`\([^`]*\)`.*/\1/p' "${RECORD_PATH}" | head -n 1)"
           recorded_frontend="$(sed -n 's/^- Frontend image digest:[[:space:]]*`\([^`]*\)`.*/\1/p' "${RECORD_PATH}" | head -n 1)"
-
           [[ "${decision}" == "GO" ]] || { echo "Internal Alpha record decision must be GO" >&2; exit 1; }
           [[ "${recorded_sha}" == "${CANDIDATE_SHA}" ]] || { echo "candidate_sha does not match the readiness record" >&2; exit 1; }
           [[ "${recorded_backend}" == "${BACKEND_DIGEST}" ]] || { echo "backend_digest does not match the readiness record" >&2; exit 1; }
@@ -289,6 +285,58 @@ jobs:
             --step "receipt-verification=${RECEIPT_VERIFICATION_OUTCOME:-not-run}" \
             | tee internal-alpha-authorization-decision-verification.txt
 
+      - name: Generate authorization artifact contract
+        id: artifact-contract
+        if: always()
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_artifact_contract.py write \
+            --decision internal-alpha-authorization-decision.json \
+            --contract internal-alpha-authorization-artifact-contract.json \
+            --file internal-alpha-authorization-decision-generation.txt \
+            --file internal-alpha-authorization-decision-verification.txt \
+            --file internal-alpha-authorization-decision.json \
+            --file internal-alpha-authorization-evidence-checksum-generation.txt \
+            --file internal-alpha-authorization-evidence-checksum-verification.txt \
+            --file internal-alpha-authorization-evidence-checksums.json \
+            --file internal-alpha-authorization-manifest-validation.txt \
+            --file internal-alpha-authorization-manifest.json \
+            --file internal-alpha-authorization-manifest.txt \
+            --file internal-alpha-authorization-receipt-generation.txt \
+            --file internal-alpha-authorization-receipt-verification.txt \
+            --file internal-alpha-authorization-receipt.json \
+            --file internal-alpha-evidence-validation.txt \
+            --file internal-alpha-readiness-validation.txt \
+            --file internal-alpha-release-gate-evidence.json \
+            --file internal-alpha-release-gate-evidence.txt \
+            | tee internal-alpha-authorization-artifact-contract-generation.txt
+
+      - name: Verify authorization artifact contract
+        id: artifact-contract-verification
+        if: always()
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_artifact_contract.py verify \
+            --decision internal-alpha-authorization-decision.json \
+            --contract internal-alpha-authorization-artifact-contract.json \
+            --file internal-alpha-authorization-decision-generation.txt \
+            --file internal-alpha-authorization-decision-verification.txt \
+            --file internal-alpha-authorization-decision.json \
+            --file internal-alpha-authorization-evidence-checksum-generation.txt \
+            --file internal-alpha-authorization-evidence-checksum-verification.txt \
+            --file internal-alpha-authorization-evidence-checksums.json \
+            --file internal-alpha-authorization-manifest-validation.txt \
+            --file internal-alpha-authorization-manifest.json \
+            --file internal-alpha-authorization-manifest.txt \
+            --file internal-alpha-authorization-receipt-generation.txt \
+            --file internal-alpha-authorization-receipt-verification.txt \
+            --file internal-alpha-authorization-receipt.json \
+            --file internal-alpha-evidence-validation.txt \
+            --file internal-alpha-readiness-validation.txt \
+            --file internal-alpha-release-gate-evidence.json \
+            --file internal-alpha-release-gate-evidence.txt \
+            | tee internal-alpha-authorization-artifact-contract-verification.txt
+
       - name: Publish authorization summary
         if: always()
         env:
@@ -308,6 +356,8 @@ jobs:
           RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
           DECISION_OUTCOME: ${{ steps.decision.outcome }}
           DECISION_VERIFICATION_OUTCOME: ${{ steps.decision-verification.outcome }}
+          CONTRACT_OUTCOME: ${{ steps.artifact-contract.outcome }}
+          CONTRACT_VERIFICATION_OUTCOME: ${{ steps.artifact-contract-verification.outcome }}
         run: |
           authorization="not-authorized"
           if [[ "${DECISION_OUTCOME}" == "success" && "${DECISION_VERIFICATION_OUTCOME}" == "success" ]] \
@@ -333,6 +383,8 @@ jobs:
             echo "- Final authorization receipt verification outcome: \`${RECEIPT_VERIFICATION_OUTCOME:-not-run}\`"
             echo "- Authorization decision generation outcome: \`${DECISION_OUTCOME:-not-run}\`"
             echo "- Authorization decision verification outcome: \`${DECISION_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Artifact contract generation outcome: \`${CONTRACT_OUTCOME:-not-run}\`"
+            echo "- Artifact contract verification outcome: \`${CONTRACT_VERIFICATION_OUTCOME:-not-run}\`"
             echo "- Final authorization decision: \`${authorization}\`"
             echo
             echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
@@ -360,5 +412,8 @@ jobs:
             internal-alpha-authorization-decision.json
             internal-alpha-authorization-decision-generation.txt
             internal-alpha-authorization-decision-verification.txt
-          if-no-files-found: warn
+            internal-alpha-authorization-artifact-contract.json
+            internal-alpha-authorization-artifact-contract-generation.txt
+            internal-alpha-authorization-artifact-contract-verification.txt
+          if-no-files-found: error
           retention-days: 90
