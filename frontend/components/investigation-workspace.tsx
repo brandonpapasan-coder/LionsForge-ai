@@ -7,6 +7,7 @@ import { ClaimEvidenceValidationMapPanel } from "@/components/claim-evidence-val
 import { EvidenceGapRemediationPanel } from "@/components/evidence-gap-remediation-panel";
 import { InvestigationQualityAssessmentPanel } from "@/components/investigation-quality-assessment-panel";
 import { InvestigationSynthesisPanel } from "@/components/investigation-synthesis-panel";
+import { RemediationProgressLedgerPanel } from "@/components/remediation-progress-ledger";
 import { ResearchLearningRecommendations } from "@/components/research-learning-recommendations";
 import { ValidationLedgerPanel } from "@/components/validation-ledger-panel";
 import type { Investigation, InvestigationStatus } from "@/lib/investigations";
@@ -25,31 +26,22 @@ export function InvestigationWorkspace() {
     const controller = new AbortController();
     async function load() {
       try {
-        const response = await fetch("/api/investigations", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const response = await fetch("/api/investigations", { cache: "no-store", signal: controller.signal });
         if (response.status === 401) { window.location.href = "/login"; return; }
         if (!response.ok) throw new Error();
-        const payload = (await response.json()) as Investigation[];
-        setItems(payload);
+        setItems((await response.json()) as Investigation[]);
       } catch {
-        if (!controller.signal.aborted) {
-          setError("The Research Validation Workspace is temporarily unavailable.");
-        }
+        if (!controller.signal.aborted) setError("The Research Validation Workspace is temporarily unavailable.");
       }
     }
     void load();
-    return () => { controller.abort(); };
+    return () => controller.abort();
   }, []);
 
   async function createInvestigation(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null);
     try {
-      const response = await fetch("/api/investigations", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, research_question: question }),
-      });
+      const response = await fetch("/api/investigations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, research_question: question }) });
       if (!response.ok) throw new Error();
       const created = (await response.json()) as Investigation;
       setItems((current) => [created, ...(current ?? [])]); setTitle(""); setQuestion("");
@@ -60,9 +52,7 @@ export function InvestigationWorkspace() {
   async function updateStatus(item: Investigation, status: InvestigationStatus) {
     setBusy(true); setError(null);
     try {
-      const response = await fetch(`/api/investigations/${item.id}`, {
-        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }),
-      });
+      const response = await fetch(`/api/investigations/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
       if (!response.ok) throw new Error();
       const updated = (await response.json()) as Investigation;
       setItems((current) => [updated, ...(current ?? []).filter((candidate) => candidate.id !== updated.id)]);
@@ -76,15 +66,10 @@ export function InvestigationWorkspace() {
       const response = await fetch(`/api/investigations/${item.id}/evidence-packet`, { cache: "no-store" });
       if (response.status === 401) { window.location.href = "/login"; return; }
       if (!response.ok) throw new Error();
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `lionsforge-investigation-${item.id}-evidence-packet.json`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
+      anchor.href = url; anchor.download = `lionsforge-investigation-${item.id}-evidence-packet.json`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
     } catch { setError("The evidence packet could not be exported. No file was downloaded."); }
     finally { setExportingId(null); }
   }
@@ -109,6 +94,7 @@ export function InvestigationWorkspace() {
         <ClaimEvidencePanel investigationId={item.id} />
         <ClaimEvidenceValidationMapPanel investigationId={item.id} />
         <EvidenceGapRemediationPanel investigationId={item.id} />
+        <RemediationProgressLedgerPanel investigationId={item.id} />
         <ValidationLedgerPanel investigationId={item.id} />
         <InvestigationSynthesisPanel investigationId={item.id} />
         <InvestigationQualityAssessmentPanel investigationId={item.id} />
