@@ -9,7 +9,7 @@ from app.api.deps import get_current_user
 from app.api.routes.evidence_gap_remediation import remediation_plan
 from app.db.session import get_db
 from app.models.investigation_evidence import InvestigationClaim
-from app.models.remediation_progress import RemediationProgress
+from app.models.remediation_progress import RemediationProgress, RemediationProgressHistory
 from app.models.user import User
 from app.schemas.investigation_report import EvidenceGapRemediationAction
 from app.schemas.remediation_progress import (
@@ -17,6 +17,8 @@ from app.schemas.remediation_progress import (
     ProgressStatus,
     RemediationCurrentAction,
     RemediationProgressEntry,
+    RemediationProgressHistory as RemediationProgressHistoryResponse,
+    RemediationProgressHistoryEvent,
     RemediationProgressLedger,
     RemediationProgressUpdate,
 )
@@ -140,6 +142,52 @@ def _ledger(
     )
 
 
+def _history(
+    investigation_id: int,
+    claim_id: int,
+    current_user: User,
+    db: Session,
+) -> RemediationProgressHistoryResponse:
+    remediation_plan(
+        investigation_id=investigation_id,
+        current_user=current_user,
+        db=db,
+    )
+    records = list(
+        db.scalars(
+            select(RemediationProgressHistory)
+            .where(
+                RemediationProgressHistory.investigation_id == investigation_id,
+                RemediationProgressHistory.claim_id == claim_id,
+                RemediationProgressHistory.owner_id == current_user.id,
+            )
+            .order_by(
+                RemediationProgressHistory.recorded_at.desc(),
+                RemediationProgressHistory.id.desc(),
+            )
+        ).all()
+    )
+    events = [
+        RemediationProgressHistoryEvent(
+            event_id=record.id,
+            claim_id=record.claim_id,
+            status=cast(ProgressStatus, record.status),
+            notes=record.notes,
+            action_type_snapshot=cast(ActionType, record.action_type_snapshot),
+            priority_snapshot=record.priority_snapshot,
+            plan_generated_at_snapshot=record.plan_generated_at_snapshot,
+            recorded_at=record.recorded_at,
+        )
+        for record in records
+    ]
+    return RemediationProgressHistoryResponse(
+        investigation_id=investigation_id,
+        claim_id=claim_id,
+        status="active" if events else "empty",
+        events=events,
+    )
+
+
 @router.get(
     "/{investigation_id}/remediation-progress",
     response_model=RemediationProgressLedger,
@@ -150,6 +198,19 @@ def get_remediation_progress(
     db: Session = Depends(get_db),
 ) -> RemediationProgressLedger:
     return _ledger(investigation_id, current_user, db)
+
+
+@router.get(
+    "/{investigation_id}/remediation-progress/{claim_id}/history",
+    response_model=RemediationProgressHistoryResponse,
+)
+def get_remediation_progress_history(
+    investigation_id: int,
+    claim_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RemediationProgressHistoryResponse:
+    return _history(investigation_id, claim_id, current_user, db)
 
 
 @router.put(
@@ -193,11 +254,25 @@ def put_remediation_progress(
             plan_generated_at_snapshot=plan.generated_from_stored_state_at,
         )
         db.add(record)
+        db.flush()
     else:
         record.status = payload.status
         record.notes = payload.notes
         record.action_type_snapshot = action.action_type
         record.priority_snapshot = action.priority
         record.plan_generated_at_snapshot = plan.generated_from_stored_state_at
+    db.add(
+        RemediationProgressHistory(
+            progress_id=record.id,
+            investigation_id=investigation_id,
+            claim_id=claim_id,
+            owner_id=current_user.id,
+            status=payload.status,
+            notes=payload.notes,
+            action_type_snapshot=action.action_type,
+            priority_snapshot=action.priority,
+            plan_generated_at_snapshot=plan.generated_from_stored_state_at,
+        )
+    )
     db.commit()
     return _ledger(investigation_id, current_user, db)
