@@ -48,7 +48,12 @@ def publication() -> dict[str, object]:
     }
 
 
-def run_tool(mode: str, source: Path, output: Path, **overrides: object) -> subprocess.CompletedProcess[str]:
+def run_tool(
+    mode: str,
+    source: Path,
+    output: Path,
+    **overrides: object,
+) -> subprocess.CompletedProcess[str]:
     values = {
         "artifact_id": ARTIFACT_ID,
         "artifact_url": ARTIFACT_URL,
