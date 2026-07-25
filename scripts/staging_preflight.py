@@ -19,6 +19,17 @@ AWS_REGION_RE = re.compile(r"^[a-z]{2}(?:-gov)?-[a-z]+-\d$")
 IAM_ROLE_ARN_RE = re.compile(r"^arn:(aws|aws-us-gov):iam::\d{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$")
 BUCKET_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{1,61}[a-z0-9])?$")
 LOCAL_HOSTS = {"localhost", "localhost.localdomain"}
+NON_PUBLIC_SUFFIXES = (
+    ".internal",
+    ".local",
+    ".localdomain",
+    ".lan",
+    ".home",
+    ".home.arpa",
+    ".invalid",
+    ".test",
+    ".example",
+)
 
 
 def require_environment(names: list[str]) -> dict[str, str]:
@@ -49,6 +60,8 @@ def validate_origin(name: str, value: str) -> urllib.parse.ParseResult:
     hostname = parsed.hostname.rstrip(".").lower()
     if hostname in LOCAL_HOSTS or hostname.endswith(".localhost"):
         raise RuntimeError(f"{name} must not use a local hostname")
+    if any(hostname == suffix[1:] or hostname.endswith(suffix) for suffix in NON_PUBLIC_SUFFIXES):
+        raise RuntimeError(f"{name} must use a publicly routable DNS hostname")
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
