@@ -40,3 +40,26 @@ class CrossInvestigationReviewQueue(BaseModel):
         "This queue uses deterministic workflow rules over stored records. Ranking does not "
         "establish truth, confidence, importance, urgency, risk, or recommended action."
     )
+
+
+class ReviewQueueSnapshotUnsigned(BaseModel):
+    contract_version: str = "1.0"
+    artifact_type: Literal["cross_investigation_review_queue_snapshot"] = (
+        "cross_investigation_review_queue_snapshot"
+    )
+    queue: CrossInvestigationReviewQueue
+    reason_counts: dict[str, int]
+    investigation_count: int
+    generated_from: Literal["canonical_owner_review_queue"] = (
+        "canonical_owner_review_queue"
+    )
+    interpretation_notice: str = (
+        "This snapshot preserves stored workflow conditions. Its digest verifies artifact "
+        "integrity only and does not establish truth, confidence, importance, urgency, risk, "
+        "resolution, or recommended action."
+    )
+
+
+class ReviewQueueSnapshot(ReviewQueueSnapshotUnsigned):
+    generated_at: datetime
+    content_sha256: str
