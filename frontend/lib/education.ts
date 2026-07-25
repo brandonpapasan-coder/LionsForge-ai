@@ -32,6 +32,40 @@ export type CompetencyTrend = {
   explanation: string;
 };
 
+export type LearningPlanSignal = {
+  kind:
+    | "lesson_progress"
+    | "assessment_score"
+    | "failure_streak"
+    | "competency_trend"
+    | "prerequisite_status";
+  reference: string;
+  value: string;
+  explanation: string;
+  measured: boolean;
+};
+
+export type LearningPlanItem = {
+  sequence: number;
+  lesson_slug: string;
+  title: string;
+  target_competency: string;
+  recommended_difficulty: "foundation" | "intermediate" | "advanced";
+  priority: number;
+  state: "remediation" | "recommended" | "available" | "locked";
+  reason: string;
+  mastery_threshold: number;
+  prerequisite_slugs: string[];
+  signals: LearningPlanSignal[];
+};
+
+export type AdaptiveLearningPlan = {
+  status: "active" | "completed";
+  generated_from: "measured_rules";
+  advisory_notice: string;
+  items: LearningPlanItem[];
+};
+
 export type EducationHubData = {
   completed_lessons: number;
   total_lessons: number;
