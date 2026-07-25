@@ -79,6 +79,56 @@ export type InvestigationValidationSummary = {
   claims: ClaimValidationSummary[];
 };
 
+export type ValidationMapEvidenceLink = {
+  evidence_id: number;
+  source_title: string;
+  source_url: string;
+  evidence_type: string;
+  relationship: "supporting" | "contradicting" | "contextual";
+  stored_relationship: EvidenceRelationship;
+  classification_rule: string;
+  credibility_rating: string | null;
+  credibility_rationale: string | null;
+  notes: string | null;
+};
+
+export type ValidationMapHumanReview = {
+  status: "not_reviewed" | "current" | "stale";
+  validation_status: string | null;
+  confidence_level: string | null;
+  rationale: string | null;
+  unresolved_questions: string | null;
+  reviewed_at: string | null;
+  authorship: "user_judgment";
+};
+
+export type ValidationMapClaim = {
+  claim_id: number;
+  sequence: number;
+  statement: string;
+  status: "supported" | "contested" | "insufficient" | "unreviewed";
+  status_rule: string;
+  relationship_counts: Record<string, number>;
+  confidence_inputs: string[];
+  evidence_links: ValidationMapEvidenceLink[];
+  missing_evidence_requirements: string[];
+  unresolved_gaps: string[];
+  human_review: ValidationMapHumanReview;
+};
+
+export type ClaimEvidenceValidationMap = {
+  contract_version: string;
+  investigation_id: number;
+  title: string;
+  status: "active" | "empty";
+  claims: ValidationMapClaim[];
+  summary_counts: Record<string, number>;
+  unresolved_gaps: string[];
+  generated_from: "stored_evidence_rules";
+  generated_from_stored_state_at: string;
+  interpretation_notice: string;
+};
+
 export type ResearchLearningRecommendation = {
   competency: string;
   lesson_slug: string;
