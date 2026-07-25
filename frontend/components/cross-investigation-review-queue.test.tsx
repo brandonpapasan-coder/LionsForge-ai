@@ -15,6 +15,13 @@ function response(body: unknown, status = 200, headers: Record<string, string> =
   });
 }
 
+function jsonFile(body: unknown, name = "prior.json") {
+  const content = typeof body === "string" ? body : JSON.stringify(body);
+  const file = new File([content], name, { type: "application/json" });
+  Object.defineProperty(file, "text", { value: async () => content });
+  return file;
+}
+
 const queue = {
   contract_version: "1.0",
   status: "active",
@@ -81,8 +88,7 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     const fetchMock = vi.fn().mockImplementationOnce(() => response(queue)).mockImplementationOnce(() => response(comparison));
     vi.stubGlobal("fetch", fetchMock);
     render(<CrossInvestigationReviewQueuePanel />);
-    const file = new File([JSON.stringify(snapshot)], "prior.json", { type: "application/json" });
-    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), file);
+    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), jsonFile(snapshot));
     await user.click(screen.getByRole("button", { name: "Compare snapshot" }));
     expect(await screen.findByLabelText("Snapshot comparison results")).toHaveTextContent("Added: 1");
     expect(screen.getByText(/blocked remediation: \+1/)).toBeInTheDocument();
@@ -94,7 +100,7 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     const fetchMock = vi.fn(() => response(queue));
     vi.stubGlobal("fetch", fetchMock);
     render(<CrossInvestigationReviewQueuePanel />);
-    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), new File(["{"], "bad.json", { type: "application/json" }));
+    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), jsonFile("{", "bad.json"));
     await user.click(screen.getByRole("button", { name: "Compare snapshot" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("not valid JSON");
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -104,7 +110,7 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn().mockImplementationOnce(() => response(queue)).mockImplementationOnce(() => response({ detail: "Snapshot digest does not match its canonical payload" }, 400)));
     render(<CrossInvestigationReviewQueuePanel />);
-    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), new File([JSON.stringify(snapshot)], "prior.json", { type: "application/json" }));
+    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), jsonFile(snapshot));
     await user.click(screen.getByRole("button", { name: "Compare snapshot" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("digest does not match");
     expect(screen.queryByLabelText("Snapshot comparison results")).not.toBeInTheDocument();
