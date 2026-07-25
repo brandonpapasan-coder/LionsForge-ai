@@ -71,7 +71,9 @@ describe("EvidenceGapRemediationPanel", () => {
     expect(within(contested).getByText(/Review every currently recorded contradicting evidence item/)).toBeInTheDocument();
 
     const stale = screen.getByLabelText("The supported claim remains current.: priority 4");
-    expect(within(stale).getByText(/Human review refresh:/)).toHaveTextContent("required");
+    expect(within(stale).getByText((_, element) => (
+      element?.tagName === "P" && element.textContent === "Human review refresh: required"
+    ))).toBeInTheDocument();
     expect(within(stale).getByText(/No new source requirement is recorded/)).toBeInTheDocument();
   });
 
