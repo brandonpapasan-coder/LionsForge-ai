@@ -1,3 +1,6 @@
+from datetime import datetime
+from typing import cast
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,7 +11,10 @@ from app.db.session import get_db
 from app.models.investigation_evidence import InvestigationClaim
 from app.models.remediation_progress import RemediationProgress
 from app.models.user import User
+from app.schemas.investigation_report import EvidenceGapRemediationAction
 from app.schemas.remediation_progress import (
+    ActionType,
+    ProgressStatus,
     RemediationCurrentAction,
     RemediationProgressEntry,
     RemediationProgressLedger,
@@ -18,7 +24,10 @@ from app.schemas.remediation_progress import (
 router = APIRouter()
 
 
-def _current_action(action, generated_at):
+def _current_action(
+    action: EvidenceGapRemediationAction,
+    generated_at: datetime,
+) -> RemediationCurrentAction:
     return RemediationCurrentAction(
         action_type=action.action_type,
         priority=action.priority,
@@ -28,21 +37,39 @@ def _current_action(action, generated_at):
     )
 
 
-def _stale_reasons(record: RemediationProgress, current_action: RemediationCurrentAction | None) -> list[str]:
+def _stale_reasons(
+    record: RemediationProgress,
+    current_action: RemediationCurrentAction | None,
+) -> list[str]:
     if current_action is None:
         return ["No current remediation action exists for this claim."]
     reasons: list[str] = []
     if record.action_type_snapshot != current_action.action_type:
-        reasons.append("The deterministic remediation action type changed after this progress record was saved.")
+        reasons.append(
+            "The deterministic remediation action type changed after this progress record was saved."
+        )
     if record.priority_snapshot != current_action.priority:
-        reasons.append("The deterministic remediation priority changed after this progress record was saved.")
+        reasons.append(
+            "The deterministic remediation priority changed after this progress record was saved."
+        )
     if record.plan_generated_at_snapshot != current_action.generated_from_stored_state_at:
-        reasons.append("The underlying claim, evidence, or human-review state changed after this progress record was saved.")
+        reasons.append(
+            "The underlying claim, evidence, or human-review state changed after this progress "
+            "record was saved."
+        )
     return reasons
 
 
-def _ledger(investigation_id: int, current_user: User, db: Session) -> RemediationProgressLedger:
-    plan = remediation_plan(investigation_id=investigation_id, current_user=current_user, db=db)
+def _ledger(
+    investigation_id: int,
+    current_user: User,
+    db: Session,
+) -> RemediationProgressLedger:
+    plan = remediation_plan(
+        investigation_id=investigation_id,
+        current_user=current_user,
+        db=db,
+    )
     claims = list(
         db.scalars(
             select(InvestigationClaim)
@@ -50,12 +77,15 @@ def _ledger(investigation_id: int, current_user: User, db: Session) -> Remediati
             .order_by(InvestigationClaim.id)
         ).all()
     )
-    claim_context = {
+    claim_context: dict[int, tuple[int | None, str]] = {
         claim.id: (sequence, claim.statement)
         for sequence, claim in enumerate(claims, start=1)
     }
     current_actions = {
-        action.claim_id: _current_action(action, plan.generated_from_stored_state_at)
+        action.claim_id: _current_action(
+            action,
+            plan.generated_from_stored_state_at,
+        )
         for action in plan.actions
     }
     records = list(
@@ -81,11 +111,11 @@ def _ledger(investigation_id: int, current_user: User, db: Session) -> Remediati
                 claim_id=record.claim_id,
                 claim_sequence=sequence,
                 statement=statement,
-                status=record.status,
+                status=cast(ProgressStatus, record.status),
                 notes=record.notes,
                 is_stale=bool(stale_reasons),
                 stale_reasons=stale_reasons,
-                action_type_snapshot=record.action_type_snapshot,
+                action_type_snapshot=cast(ActionType, record.action_type_snapshot),
                 priority_snapshot=record.priority_snapshot,
                 plan_generated_at_snapshot=record.plan_generated_at_snapshot,
                 current_action=current_action,
@@ -95,7 +125,9 @@ def _ledger(investigation_id: int, current_user: User, db: Session) -> Remediati
         )
     entries.sort(
         key=lambda entry: (
-            entry.current_action.priority if entry.current_action else entry.priority_snapshot,
+            entry.current_action.priority
+            if entry.current_action is not None
+            else entry.priority_snapshot,
             entry.claim_sequence if entry.claim_sequence is not None else 10**9,
             entry.claim_id,
         )
@@ -131,7 +163,11 @@ def put_remediation_progress(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> RemediationProgressLedger:
-    plan = remediation_plan(investigation_id=investigation_id, current_user=current_user, db=db)
+    plan = remediation_plan(
+        investigation_id=investigation_id,
+        current_user=current_user,
+        db=db,
+    )
     action = next((item for item in plan.actions if item.claim_id == claim_id), None)
     if action is None:
         raise HTTPException(
