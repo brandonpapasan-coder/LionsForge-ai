@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     adaptive_learning_plan,
     auth,
+    claim_evidence_validation,
     dashboard,
     education,
     entity_resolution,
@@ -72,6 +73,7 @@ def build_api_router(
     router.include_router(education.router, prefix="/education", tags=["education"])
     router.include_router(adaptive_learning_plan.router, prefix="/education", tags=["education"])
     router.include_router(investigations.router, prefix="/investigations", tags=["investigations"])
+    router.include_router(claim_evidence_validation.router, prefix="/investigations", tags=["investigations"])
     router.include_router(knowledge_graph.router, prefix="/knowledge-graph", tags=["knowledge-graph"])
     router.include_router(knowledge_extraction.router, prefix="/knowledge-graph", tags=["knowledge-extraction"])
     router.include_router(entity_resolution.router, prefix="/knowledge-graph", tags=["entity-resolution"])

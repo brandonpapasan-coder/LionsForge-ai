@@ -85,6 +85,59 @@ class InvestigationValidationReport(BaseModel):
     )
 
 
+class ValidationMapEvidenceLink(BaseModel):
+    evidence_id: int
+    source_title: str
+    source_url: str
+    evidence_type: str
+    relationship: Literal["supporting", "contradicting", "contextual"]
+    stored_relationship: Literal["supports", "contradicts", "neutral"]
+    classification_rule: str
+    credibility_rating: str | None
+    credibility_rationale: str | None
+    notes: str | None
+
+
+class ValidationMapHumanReview(BaseModel):
+    status: Literal["not_reviewed", "current", "stale"]
+    validation_status: str | None
+    confidence_level: str | None
+    rationale: str | None
+    unresolved_questions: str | None
+    reviewed_at: datetime | None
+    authorship: Literal["user_judgment"] = "user_judgment"
+
+
+class ValidationMapClaim(BaseModel):
+    claim_id: int
+    sequence: int = Field(ge=1)
+    statement: str
+    status: Literal["supported", "contested", "insufficient", "unreviewed"]
+    status_rule: str
+    relationship_counts: dict[str, int]
+    confidence_inputs: list[str]
+    evidence_links: list[ValidationMapEvidenceLink]
+    missing_evidence_requirements: list[str]
+    unresolved_gaps: list[str]
+    human_review: ValidationMapHumanReview
+
+
+class ClaimEvidenceValidationMap(BaseModel):
+    contract_version: str = "1.0"
+    investigation_id: int
+    title: str
+    status: Literal["active", "empty"]
+    claims: list[ValidationMapClaim]
+    summary_counts: dict[str, int]
+    unresolved_gaps: list[str]
+    generated_from: Literal["stored_evidence_rules"] = "stored_evidence_rules"
+    generated_from_stored_state_at: datetime
+    interpretation_notice: str = (
+        "Statuses organize recorded evidence through deterministic rules. "
+        "They do not establish objective truth and must remain subject to human review."
+    )
+
+
 class QualityAssessmentDimension(BaseModel):
     key: str
     label: str
