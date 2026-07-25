@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ClaimEvidencePanel } from "@/components/claim-evidence-panel";
 import { ClaimEvidenceValidationMapPanel } from "@/components/claim-evidence-validation-map";
 import { EvidenceGapRemediationPanel } from "@/components/evidence-gap-remediation-panel";
+import { InvestigationProvenanceTimelinePanel } from "@/components/investigation-provenance-timeline";
 import { InvestigationQualityAssessmentPanel } from "@/components/investigation-quality-assessment-panel";
 import { InvestigationSynthesisPanel } from "@/components/investigation-synthesis-panel";
 import { RemediationProgressLedgerPanel } from "@/components/remediation-progress-ledger";
@@ -95,6 +96,7 @@ export function InvestigationWorkspace() {
         <ClaimEvidenceValidationMapPanel investigationId={item.id} />
         <EvidenceGapRemediationPanel investigationId={item.id} />
         <RemediationProgressLedgerPanel investigationId={item.id} />
+        <InvestigationProvenanceTimelinePanel investigationId={item.id} />
         <ValidationLedgerPanel investigationId={item.id} />
         <InvestigationSynthesisPanel investigationId={item.id} />
         <InvestigationQualityAssessmentPanel investigationId={item.id} />
