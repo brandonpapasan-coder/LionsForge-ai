@@ -86,3 +86,24 @@ class ReviewQueueSnapshotComparison(BaseModel):
         "verify artifact integrity only and do not establish truth, confidence, importance, "
         "urgency, risk, resolution, validation evidence, advice, or recommended action."
     )
+
+
+class ReviewQueueComparisonReportUnsigned(BaseModel):
+    contract_version: Literal["1.0"] = "1.0"
+    artifact_type: Literal["cross_investigation_review_queue_comparison_report"] = (
+        "cross_investigation_review_queue_comparison_report"
+    )
+    comparison: ReviewQueueSnapshotComparison
+    generated_from: Literal["verified_snapshot_comparison"] = (
+        "verified_snapshot_comparison"
+    )
+    interpretation_notice: str = (
+        "This report preserves a deterministic comparison of stored workflow state. Its digest "
+        "verifies report integrity only and does not establish truth, confidence, importance, "
+        "urgency, risk, resolution, validation evidence, advice, or recommended action."
+    )
+
+
+class ReviewQueueComparisonReport(ReviewQueueComparisonReportUnsigned):
+    generated_at: datetime
+    content_sha256: str
