@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CrossInvestigationReviewQueue,
   ReviewQueueReason,
+  ReviewQueueSnapshotComparison,
 } from "@/lib/investigations";
 
 const reasonOptions: Array<{ value: "all" | ReviewQueueReason; label: string }> = [
@@ -26,6 +27,10 @@ export function CrossInvestigationReviewQueuePanel() {
   const [unavailable, setUnavailable] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [comparisonFile, setComparisonFile] = useState<File | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [comparison, setComparison] = useState<ReviewQueueSnapshotComparison | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [reasonFilter, setReasonFilter] = useState<"all" | ReviewQueueReason>("all");
   const [investigationFilter, setInvestigationFilter] = useState("all");
   const [reloadToken, setReloadToken] = useState(0);
@@ -40,10 +45,7 @@ export function CrossInvestigationReviewQueuePanel() {
     const controller = new AbortController();
     async function load() {
       try {
-        const response = await fetch("/api/investigations/review-queue", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const response = await fetch("/api/investigations/review-queue", { cache: "no-store", signal: controller.signal });
         if (response.status === 401) { window.location.href = "/login"; return; }
         if (!response.ok) throw new Error();
         const payload = (await response.json()) as CrossInvestigationReviewQueue;
@@ -78,6 +80,36 @@ export function CrossInvestigationReviewQueuePanel() {
     }
   }
 
+  async function compareSnapshot() {
+    if (!comparisonFile) return;
+    setComparing(true);
+    setComparison(null);
+    setComparisonError(null);
+    try {
+      let parsed: unknown;
+      try { parsed = JSON.parse(await comparisonFile.text()); }
+      catch { setComparisonError("The selected file is not valid JSON."); return; }
+      const response = await fetch("/api/investigations/review-queue/snapshot/compare", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(parsed),
+        cache: "no-store",
+      });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      const payload = await response.json();
+      if (!response.ok) {
+        const detail = typeof payload?.detail === "string" ? payload.detail : "Snapshot comparison failed.";
+        setComparisonError(detail);
+        return;
+      }
+      setComparison(payload as ReviewQueueSnapshotComparison);
+    } catch {
+      setComparisonError("The snapshot comparison is temporarily unavailable.");
+    } finally {
+      setComparing(false);
+    }
+  }
+
   const investigations = useMemo(() => {
     const values = new Map<number, string>();
     queue?.items.forEach((item) => values.set(item.investigation_id, item.investigation_title));
@@ -100,6 +132,20 @@ export function CrossInvestigationReviewQueuePanel() {
       <button type="button" disabled={exporting} onClick={() => void downloadSnapshot()}>{exporting ? "Preparing snapshot…" : "Download queue snapshot"}</button>
       <p>The snapshot digest verifies export integrity only. It is not validation evidence or advice and does not establish truth, confidence, importance, urgency, risk, resolution, or recommended action.</p>
       {exportError ? <p role="alert">{exportError}</p> : null}
+      <div className="lesson-card">
+        <h3>Compare a prior snapshot</h3>
+        <p>The selected JSON remains private to this comparison request and is not stored by this interface.</p>
+        <label>Prior snapshot JSON<input aria-label="Prior snapshot JSON" type="file" accept="application/json,.json" onChange={(event) => { setComparisonFile(event.target.files?.[0] ?? null); setComparison(null); setComparisonError(null); }} /></label>
+        <button type="button" disabled={!comparisonFile || comparing} onClick={() => void compareSnapshot()}>{comparing ? "Comparing…" : "Compare snapshot"}</button>
+        {comparisonError ? <p role="alert">{comparisonError}</p> : null}
+        {comparison ? <div aria-label="Snapshot comparison results">
+          <p><strong>Added:</strong> {comparison.added_items.length} · <strong>Removed:</strong> {comparison.removed_items.length} · <strong>Unchanged:</strong> {comparison.unchanged_items.length}</p>
+          <p><strong>Investigation count delta:</strong> {comparison.investigation_count_delta > 0 ? "+" : ""}{comparison.investigation_count_delta}</p>
+          <h4>Reason-count deltas</h4>
+          {Object.keys(comparison.reason_count_deltas).length === 0 ? <p>No reason-count changes.</p> : <ul>{Object.entries(comparison.reason_count_deltas).map(([reason, delta]) => <li key={reason}>{reason.replaceAll("_", " ")}: {delta > 0 ? "+" : ""}{delta}</li>)}</ul>}
+          <p>{comparison.interpretation_notice}</p>
+        </div> : null}
+      </div>
     </> : null}
     {queue === null && !unavailable ? <p role="status">Loading private review queue…</p> : null}
     {unavailable ? <div role="status"><p>The private review queue is temporarily unavailable.</p><button type="button" onClick={reload}>Retry review queue</button></div> : null}
