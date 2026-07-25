@@ -15,10 +15,20 @@ def test_publication_generation_and_verification_are_always_run_in_order():
     contract_verifier = text.index("manage_internal_alpha_artifact_contract.py verify")
     publication_writer = text.index("manage_internal_alpha_authorization_publication.py write")
     publication_verifier = text.index("manage_internal_alpha_authorization_publication.py verify")
+    upload = text.index("id: evidence-upload")
+    upload_receipt_writer = text.index(
+        "manage_internal_alpha_authorization_upload_receipt.py write"
+    )
     summary = text.index("Publish authorization summary")
-    upload = text.index("actions/upload-artifact@v4")
 
-    assert contract_verifier < publication_writer < publication_verifier < summary < upload
+    assert (
+        contract_verifier
+        < publication_writer
+        < publication_verifier
+        < upload
+        < upload_receipt_writer
+        < summary
+    )
     assert (
         "Generate authorization publication record\n        id: publication\n        if: always()" in text
     )
@@ -46,7 +56,7 @@ def test_publication_outcomes_are_fail_closed_in_summary():
     )
     assert "Publication record generation outcome" in text
     assert "Publication record verification outcome" in text
-    assert 'grep -q \'"authorized": true\' internal-alpha-authorization-publication.json' in text
+    assert 'grep -q \'"authorized": true\' internal-alpha-authorization-upload-receipt.json' in text
     assert 'authorization="not-authorized"' in text
 
 

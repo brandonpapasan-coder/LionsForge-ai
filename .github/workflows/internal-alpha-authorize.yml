@@ -361,66 +361,8 @@ jobs:
             --output internal-alpha-authorization-publication.json \
             | tee internal-alpha-authorization-publication-verification.txt
 
-      - name: Publish authorization summary
-        if: always()
-        env:
-          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-          BACKEND_DIGEST: ${{ inputs.backend_digest }}
-          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
-          DISPATCH_REF: ${{ github.ref }}
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-          GATE_OUTCOME: ${{ steps.release-gates.outcome }}
-          MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
-          MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}
-          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
-          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
-          CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}
-          CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
-          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
-          RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
-          DECISION_OUTCOME: ${{ steps.decision.outcome }}
-          DECISION_VERIFICATION_OUTCOME: ${{ steps.decision-verification.outcome }}
-          CONTRACT_OUTCOME: ${{ steps.artifact-contract.outcome }}
-          CONTRACT_VERIFICATION_OUTCOME: ${{ steps.artifact-contract-verification.outcome }}
-          PUBLICATION_OUTCOME: ${{ steps.publication.outcome }}
-          PUBLICATION_VERIFICATION_OUTCOME: ${{ steps.publication-verification.outcome }}
-        run: |
-          authorization="not-authorized"
-          if [[ "${DECISION_OUTCOME}" == "success" && "${DECISION_VERIFICATION_OUTCOME}" == "success" ]] \
-            && [[ "${CONTRACT_OUTCOME}" == "success" && "${CONTRACT_VERIFICATION_OUTCOME}" == "success" ]] \
-            && [[ "${PUBLICATION_OUTCOME}" == "success" && "${PUBLICATION_VERIFICATION_OUTCOME}" == "success" ]] \
-            && grep -q '"authorized": true' internal-alpha-authorization-publication.json; then
-            authorization="authorized"
-          fi
-          {
-            echo "## Internal Alpha authorization"
-            echo
-            echo "- Dispatch ref: \`${DISPATCH_REF}\`"
-            echo "- Workflow SHA: \`${WORKFLOW_SHA}\`"
-            echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
-            echo "- Backend digest: \`${BACKEND_DIGEST}\`"
-            echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
-            echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
-            echo "- Authorization manifest outcome: \`${MANIFEST_OUTCOME:-not-run}\`"
-            echo "- Authorization manifest validator outcome: \`${MANIFEST_VALIDATION_OUTCOME:-not-run}\`"
-            echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
-            echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
-            echo "- Evidence checksum inventory outcome: \`${CHECKSUM_INVENTORY_OUTCOME:-not-run}\`"
-            echo "- Evidence checksum verification outcome: \`${CHECKSUM_VERIFICATION_OUTCOME:-not-run}\`"
-            echo "- Final authorization receipt outcome: \`${RECEIPT_OUTCOME:-not-run}\`"
-            echo "- Final authorization receipt verification outcome: \`${RECEIPT_VERIFICATION_OUTCOME:-not-run}\`"
-            echo "- Authorization decision generation outcome: \`${DECISION_OUTCOME:-not-run}\`"
-            echo "- Authorization decision verification outcome: \`${DECISION_VERIFICATION_OUTCOME:-not-run}\`"
-            echo "- Artifact contract generation outcome: \`${CONTRACT_OUTCOME:-not-run}\`"
-            echo "- Artifact contract verification outcome: \`${CONTRACT_VERIFICATION_OUTCOME:-not-run}\`"
-            echo "- Publication record generation outcome: \`${PUBLICATION_OUTCOME:-not-run}\`"
-            echo "- Publication record verification outcome: \`${PUBLICATION_VERIFICATION_OUTCOME:-not-run}\`"
-            echo "- Final authorization decision: \`${authorization}\`"
-            echo
-            echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
-          } >> "${GITHUB_STEP_SUMMARY}"
-
       - name: Upload non-sensitive authorization evidence
+        id: evidence-upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -450,3 +392,126 @@ jobs:
             internal-alpha-authorization-publication-verification.txt
           if-no-files-found: error
           retention-days: 90
+
+      - name: Generate authorization upload receipt
+        id: upload-receipt
+        if: always()
+        env:
+          ARTIFACT_ID: ${{ steps.evidence-upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.evidence-upload.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.evidence-upload.outputs.artifact-digest }}
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_upload_receipt.py write \
+            --publication internal-alpha-authorization-publication.json \
+            --artifact-id "${ARTIFACT_ID}" \
+            --artifact-url "${ARTIFACT_URL}" \
+            --artifact-digest "${ARTIFACT_DIGEST}" \
+            --output internal-alpha-authorization-upload-receipt.json \
+            | tee internal-alpha-authorization-upload-receipt-generation.txt
+
+      - name: Verify authorization upload receipt
+        id: upload-receipt-verification
+        if: always()
+        env:
+          ARTIFACT_ID: ${{ steps.evidence-upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.evidence-upload.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.evidence-upload.outputs.artifact-digest }}
+        run: |
+          set -o pipefail
+          python scripts/manage_internal_alpha_authorization_upload_receipt.py verify \
+            --publication internal-alpha-authorization-publication.json \
+            --artifact-id "${ARTIFACT_ID}" \
+            --artifact-url "${ARTIFACT_URL}" \
+            --artifact-digest "${ARTIFACT_DIGEST}" \
+            --output internal-alpha-authorization-upload-receipt.json \
+            | tee internal-alpha-authorization-upload-receipt-verification.txt
+
+      - name: Upload authorization receipt artifact
+        id: upload-receipt-artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internal-alpha-authorization-upload-receipt
+          path: |
+            internal-alpha-authorization-upload-receipt.json
+            internal-alpha-authorization-upload-receipt-generation.txt
+            internal-alpha-authorization-upload-receipt-verification.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish authorization summary
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          BACKEND_DIGEST: ${{ inputs.backend_digest }}
+          FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+          DISPATCH_REF: ${{ github.ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          GATE_OUTCOME: ${{ steps.release-gates.outcome }}
+          MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
+          MANIFEST_VALIDATION_OUTCOME: ${{ steps.manifest-validation.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          CHECKSUM_INVENTORY_OUTCOME: ${{ steps.checksum-inventory.outcome }}
+          CHECKSUM_VERIFICATION_OUTCOME: ${{ steps.checksum-verification.outcome }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          RECEIPT_VERIFICATION_OUTCOME: ${{ steps.receipt-verification.outcome }}
+          DECISION_OUTCOME: ${{ steps.decision.outcome }}
+          DECISION_VERIFICATION_OUTCOME: ${{ steps.decision-verification.outcome }}
+          CONTRACT_OUTCOME: ${{ steps.artifact-contract.outcome }}
+          CONTRACT_VERIFICATION_OUTCOME: ${{ steps.artifact-contract-verification.outcome }}
+          PUBLICATION_OUTCOME: ${{ steps.publication.outcome }}
+          PUBLICATION_VERIFICATION_OUTCOME: ${{ steps.publication-verification.outcome }}
+          EVIDENCE_UPLOAD_OUTCOME: ${{ steps.evidence-upload.outcome }}
+          EVIDENCE_ARTIFACT_ID: ${{ steps.evidence-upload.outputs.artifact-id }}
+          EVIDENCE_ARTIFACT_URL: ${{ steps.evidence-upload.outputs.artifact-url }}
+          EVIDENCE_ARTIFACT_DIGEST: ${{ steps.evidence-upload.outputs.artifact-digest }}
+          UPLOAD_RECEIPT_OUTCOME: ${{ steps.upload-receipt.outcome }}
+          UPLOAD_RECEIPT_VERIFICATION_OUTCOME: ${{ steps.upload-receipt-verification.outcome }}
+          RECEIPT_ARTIFACT_UPLOAD_OUTCOME: ${{ steps.upload-receipt-artifact.outcome }}
+        run: |
+          authorization="not-authorized"
+          if [[ "${DECISION_OUTCOME}" == "success" && "${DECISION_VERIFICATION_OUTCOME}" == "success" ]] \
+            && [[ "${CONTRACT_OUTCOME}" == "success" && "${CONTRACT_VERIFICATION_OUTCOME}" == "success" ]] \
+            && [[ "${PUBLICATION_OUTCOME}" == "success" && "${PUBLICATION_VERIFICATION_OUTCOME}" == "success" ]] \
+            && [[ "${EVIDENCE_UPLOAD_OUTCOME}" == "success" ]] \
+            && [[ "${UPLOAD_RECEIPT_OUTCOME}" == "success" && "${UPLOAD_RECEIPT_VERIFICATION_OUTCOME}" == "success" ]] \
+            && [[ "${RECEIPT_ARTIFACT_UPLOAD_OUTCOME}" == "success" ]] \
+            && grep -q '"authorized": true' internal-alpha-authorization-upload-receipt.json; then
+            authorization="authorized"
+          fi
+          {
+            echo "## Internal Alpha authorization"
+            echo
+            echo "- Dispatch ref: \`${DISPATCH_REF}\`"
+            echo "- Workflow SHA: \`${WORKFLOW_SHA}\`"
+            echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
+            echo "- Backend digest: \`${BACKEND_DIGEST}\`"
+            echo "- Frontend digest: \`${FRONTEND_DIGEST}\`"
+            echo "- Release gate outcome: \`${GATE_OUTCOME:-not-run}\`"
+            echo "- Authorization manifest outcome: \`${MANIFEST_OUTCOME:-not-run}\`"
+            echo "- Authorization manifest validator outcome: \`${MANIFEST_VALIDATION_OUTCOME:-not-run}\`"
+            echo "- Readiness validator outcome: \`${VALIDATION_OUTCOME:-not-run}\`"
+            echo "- Evidence validator outcome: \`${EVIDENCE_OUTCOME:-not-run}\`"
+            echo "- Evidence checksum inventory outcome: \`${CHECKSUM_INVENTORY_OUTCOME:-not-run}\`"
+            echo "- Evidence checksum verification outcome: \`${CHECKSUM_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Final authorization receipt outcome: \`${RECEIPT_OUTCOME:-not-run}\`"
+            echo "- Final authorization receipt verification outcome: \`${RECEIPT_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Authorization decision generation outcome: \`${DECISION_OUTCOME:-not-run}\`"
+            echo "- Authorization decision verification outcome: \`${DECISION_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Artifact contract generation outcome: \`${CONTRACT_OUTCOME:-not-run}\`"
+            echo "- Artifact contract verification outcome: \`${CONTRACT_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Publication record generation outcome: \`${PUBLICATION_OUTCOME:-not-run}\`"
+            echo "- Publication record verification outcome: \`${PUBLICATION_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Evidence upload outcome: \`${EVIDENCE_UPLOAD_OUTCOME:-not-run}\`"
+            echo "- Evidence artifact ID: \`${EVIDENCE_ARTIFACT_ID:-unavailable}\`"
+            echo "- Evidence artifact URL: \`${EVIDENCE_ARTIFACT_URL:-unavailable}\`"
+            echo "- Evidence artifact digest: \`${EVIDENCE_ARTIFACT_DIGEST:-unavailable}\`"
+            echo "- Upload receipt generation outcome: \`${UPLOAD_RECEIPT_OUTCOME:-not-run}\`"
+            echo "- Upload receipt verification outcome: \`${UPLOAD_RECEIPT_VERIFICATION_OUTCOME:-not-run}\`"
+            echo "- Separate 90-day receipt artifact upload outcome: \`${RECEIPT_ARTIFACT_UPLOAD_OUTCOME:-not-run}\`"
+            echo "- Final authorization decision: \`${authorization}\`"
+            echo
+            echo "This workflow validates repository provenance only. It does not independently prove external staging behavior or authorize public access."
+          } >> "${GITHUB_STEP_SUMMARY}"
