@@ -5,8 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CrossInvestigationReviewQueuePanel } from "@/components/cross-investigation-review-queue";
 
-function response(body: unknown, status = 200) {
-  return Promise.resolve({ ok: status >= 200 && status < 300, status, json: async () => body });
+function response(body: unknown, status = 200, headers: Record<string, string> = {}) {
+  return Promise.resolve({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+    blob: async () => new Blob([JSON.stringify(body)], { type: "application/json" }),
+    headers: new Headers(headers),
+  });
 }
 
 const queue = {
@@ -22,6 +28,12 @@ const queue = {
   ],
 };
 
+const snapshot = {
+  artifact_type: "cross_investigation_review_queue_snapshot",
+  queue,
+  content_sha256: "abc123",
+};
+
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("CrossInvestigationReviewQueuePanel", () => {
@@ -31,8 +43,9 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     render(<CrossInvestigationReviewQueuePanel />);
 
     expect(await screen.findByText("Stored remediation progress is blocked.")).toBeInTheDocument();
-    expect(screen.getByText(/not validation evidence or advice/)).toBeInTheDocument();
+    expect(screen.getAllByText(/not validation evidence or advice/)).toHaveLength(2);
     expect(screen.getByText(/remediation_progress record 4/)).toBeInTheDocument();
+    expect(screen.getByText(/digest verifies export integrity only/)).toBeInTheDocument();
     const navigationLinks = screen.getAllByRole("link", { name: "Open investigation context" });
     expect(navigationLinks).toHaveLength(3);
     expect(navigationLinks[0]).toHaveAttribute("href", "#investigation-7");
@@ -47,10 +60,54 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     expect(screen.queryByText("Alpha claim")).not.toBeInTheDocument();
   });
 
+  it("downloads a successful snapshot with the backend filename", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => response(queue))
+      .mockImplementationOnce(() => response(snapshot, 200, {
+        "content-disposition": "attachment; filename=\"verified-review-queue.json\"",
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.fn(() => "blob:snapshot");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    let downloadedFilename = "";
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloadedFilename = this.download;
+    });
+
+    render(<CrossInvestigationReviewQueuePanel />);
+    await user.click(await screen.findByRole("button", { name: "Download queue snapshot" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/investigations/review-queue/snapshot", { cache: "no-store" });
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(downloadedFilename).toBe("verified-review-queue.json");
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:snapshot");
+  });
+
+  it("does not create a download when snapshot export fails", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => response(queue))
+      .mockImplementationOnce(() => response({}, 503));
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+
+    render(<CrossInvestigationReviewQueuePanel />);
+    await user.click(await screen.findByRole("button", { name: "Download queue snapshot" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No file was downloaded");
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+  });
+
   it("renders explicit empty state", async () => {
     vi.stubGlobal("fetch", vi.fn(() => response({ ...queue, status: "empty", item_count: 0, items: [] })));
     render(<CrossInvestigationReviewQueuePanel />);
     expect(await screen.findByText(/No stored investigation items currently require human review/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download queue snapshot" })).toBeEnabled();
   });
 
   it("renders failure and retry states", async () => {

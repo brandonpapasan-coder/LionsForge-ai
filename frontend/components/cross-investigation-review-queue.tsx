@@ -16,9 +16,16 @@ const reasonOptions: Array<{ value: "all" | ReviewQueueReason; label: string }> 
   { value: "remediation_ready_for_review", label: "Ready for review" },
 ];
 
+function snapshotFilename(contentDisposition: string | null) {
+  const match = contentDisposition?.match(/filename="?([^";]+)"?/i);
+  return match?.[1] ?? "lionsforge-review-queue-snapshot.json";
+}
+
 export function CrossInvestigationReviewQueuePanel() {
   const [queue, setQueue] = useState<CrossInvestigationReviewQueue | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [reasonFilter, setReasonFilter] = useState<"all" | ReviewQueueReason>("all");
   const [investigationFilter, setInvestigationFilter] = useState("all");
   const [reloadToken, setReloadToken] = useState(0);
@@ -49,6 +56,28 @@ export function CrossInvestigationReviewQueuePanel() {
     return () => controller.abort();
   }, [reloadToken]);
 
+  async function downloadSnapshot() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const response = await fetch("/api/investigations/review-queue/snapshot", { cache: "no-store" });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      if (!response.ok) throw new Error();
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = snapshotFilename(response.headers.get("content-disposition"));
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError("The review queue snapshot could not be exported. No file was downloaded.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const investigations = useMemo(() => {
     const values = new Map<number, string>();
     queue?.items.forEach((item) => values.set(item.investigation_id, item.investigation_title));
@@ -67,6 +96,11 @@ export function CrossInvestigationReviewQueuePanel() {
     <div className="lesson-meta"><span>private workflow queue</span><span>{queue?.item_count ?? 0} items</span></div>
     <h2>Human review queue</h2>
     <p>This ranking organizes stored workflow conditions only. It is not validation evidence or advice and does not establish truth, confidence, importance, urgency, risk, or resolution.</p>
+    {queue !== null ? <>
+      <button type="button" disabled={exporting} onClick={() => void downloadSnapshot()}>{exporting ? "Preparing snapshot…" : "Download queue snapshot"}</button>
+      <p>The snapshot digest verifies export integrity only. It is not validation evidence or advice and does not establish truth, confidence, importance, urgency, risk, resolution, or recommended action.</p>
+      {exportError ? <p role="alert">{exportError}</p> : null}
+    </> : null}
     {queue === null && !unavailable ? <p role="status">Loading private review queue…</p> : null}
     {unavailable ? <div role="status"><p>The private review queue is temporarily unavailable.</p><button type="button" onClick={reload}>Retry review queue</button></div> : null}
     {queue?.status === "empty" ? <p>No stored investigation items currently require human review.</p> : null}
