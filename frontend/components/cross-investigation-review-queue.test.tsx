@@ -33,7 +33,9 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     expect(await screen.findByText("Stored remediation progress is blocked.")).toBeInTheDocument();
     expect(screen.getByText(/not validation evidence or advice/)).toBeInTheDocument();
     expect(screen.getByText(/remediation_progress record 4/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open investigation context" })).toHaveAttribute("href", "#investigation-7");
+    const navigationLinks = screen.getAllByRole("link", { name: "Open investigation context" });
+    expect(navigationLinks).toHaveLength(3);
+    expect(navigationLinks[0]).toHaveAttribute("href", "#investigation-7");
 
     await user.selectOptions(screen.getByLabelText("Review reason"), "unresolved_contradiction");
     expect(screen.getByText("One or more stored evidence records contradict this claim.")).toBeInTheDocument();
