@@ -43,7 +43,7 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     render(<CrossInvestigationReviewQueuePanel />);
 
     expect(await screen.findByText("Stored remediation progress is blocked.")).toBeInTheDocument();
-    expect(screen.getByText(/not validation evidence or advice/)).toBeInTheDocument();
+    expect(screen.getAllByText(/not validation evidence or advice/)).toHaveLength(2);
     expect(screen.getByText(/remediation_progress record 4/)).toBeInTheDocument();
     expect(screen.getByText(/digest verifies export integrity only/)).toBeInTheDocument();
     const navigationLinks = screen.getAllByRole("link", { name: "Open investigation context" });
