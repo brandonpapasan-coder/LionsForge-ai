@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { ClaimEvidencePanel } from "@/components/claim-evidence-panel";
 import { ClaimEvidenceValidationMapPanel } from "@/components/claim-evidence-validation-map";
+import { CrossInvestigationReviewQueuePanel } from "@/components/cross-investigation-review-queue";
 import { EvidenceGapRemediationPanel } from "@/components/evidence-gap-remediation-panel";
 import { InvestigationProvenanceTimelinePanel } from "@/components/investigation-provenance-timeline";
 import { InvestigationQualityAssessmentPanel } from "@/components/investigation-quality-assessment-panel";
@@ -82,11 +83,12 @@ export function InvestigationWorkspace() {
       <label>Research question<textarea value={question} minLength={5} maxLength={4000} required onChange={(event) => setQuestion(event.target.value)} /></label>
       <button type="submit" disabled={busy}>{busy ? "Saving…" : "Create investigation"}</button>
     </form></section>
+    <CrossInvestigationReviewQueuePanel />
     <section className="lesson-card" aria-label="Private investigations">
       <div className="lesson-meta"><span>private workspace</span><span>{items?.length ?? 0} investigations</span></div><h2>Your investigations</h2>
       {items === null && !error ? <p>Loading your private investigations…</p> : null}
       {items?.length === 0 ? <p>No investigations yet. Start with a research question above.</p> : null}
-      {items && items.length > 0 ? <div className="lesson-grid">{items.map((item) => <article className="lesson-card" key={item.id} data-investigation-status={item.status}>
+      {items && items.length > 0 ? <div className="lesson-grid">{items.map((item) => <article className="lesson-card" id={`investigation-${item.id}`} key={item.id} data-investigation-status={item.status}>
         <div className="lesson-meta"><span>{item.status.replaceAll("_", " ")}</span><time dateTime={item.updated_at}>{new Date(item.updated_at).toLocaleString()}</time></div>
         <h3>{item.title}</h3><p>{item.research_question}</p>
         <label>Validation status<select value={item.status} disabled={busy} onChange={(event) => void updateStatus(item, event.target.value as InvestigationStatus)}>{statuses.map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></label>
