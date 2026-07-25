@@ -84,6 +84,9 @@ def update_investigation(
     return investigation
 
 
+from app.api.routes.investigation_provenance import router as provenance_router
+
 router.include_router(evidence_router)
 router.include_router(reports_router)
 router.include_router(exports_router)
+router.include_router(provenance_router)
