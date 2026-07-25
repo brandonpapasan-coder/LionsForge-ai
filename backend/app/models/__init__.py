@@ -13,6 +13,7 @@ from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
 from app.models.mentor import MentorConversation, MentorMessage
 from app.models.mission import Mission, MissionStep
+from app.models.remediation_progress import RemediationProgress
 from app.models.research_conclusion import ResearchConclusion, ResearchConclusionRevision
 from app.models.research_conclusion_defense import ResearchConclusionDefense, ResearchConclusionDefenseRevision
 from app.models.research_evidence import ResearchEvidence
@@ -72,6 +73,7 @@ __all__ = [
     "MissionStep",
     "Portfolio",
     "PortfolioHolding",
+    "RemediationProgress",
     "ResearchConclusion",
     "ResearchConclusionDefense",
     "ResearchConclusionDefenseRevision",
