@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -14,18 +16,39 @@ from app.schemas.investigation_report import (
 
 router = APIRouter()
 
-_PRIORITY = {
+ActionKey = Literal["contested", "insufficient", "unreviewed", "supported_stale"]
+ActionType = Literal[
+    "resolve_contradiction",
+    "collect_direct_evidence",
+    "attach_initial_evidence",
+    "refresh_human_review",
+]
+PlanStatus = Literal["action_required", "complete", "empty"]
+
+_PRIORITY: dict[ActionKey, int] = {
     "contested": 1,
     "insufficient": 2,
     "unreviewed": 3,
     "supported_stale": 4,
 }
 
-_PRIORITY_RULES = {
-    "contested": "Contested claims are first because recorded contradiction must be resolved before the claim can be treated as settled.",
-    "insufficient": "Insufficient claims follow contested claims because contextual evidence does not directly test the claim.",
-    "unreviewed": "Unreviewed claims follow insufficient claims because no recorded evidence currently tests the claim.",
-    "supported_stale": "Supported claims are included only when their human review is stale and therefore requires refresh against current evidence.",
+_PRIORITY_RULES: dict[ActionKey, str] = {
+    "contested": (
+        "Contested claims are first because recorded contradiction must be resolved "
+        "before the claim can be treated as settled."
+    ),
+    "insufficient": (
+        "Insufficient claims follow contested claims because contextual evidence does not "
+        "directly test the claim."
+    ),
+    "unreviewed": (
+        "Unreviewed claims follow insufficient claims because no recorded evidence currently "
+        "tests the claim."
+    ),
+    "supported_stale": (
+        "Supported claims are included only when their human review is stale and therefore "
+        "requires refresh against current evidence."
+    ),
 }
 
 _SOURCE_CONSTRAINTS = [
@@ -35,33 +58,52 @@ _SOURCE_CONSTRAINTS = [
 ]
 
 
-def _action_key(claim: ValidationMapClaim) -> str | None:
-    if claim.status in {"contested", "insufficient", "unreviewed"}:
-        return claim.status
+def _action_key(claim: ValidationMapClaim) -> ActionKey | None:
+    if claim.status == "contested":
+        return "contested"
+    if claim.status == "insufficient":
+        return "insufficient"
+    if claim.status == "unreviewed":
+        return "unreviewed"
     if claim.status == "supported" and claim.human_review.status == "stale":
         return "supported_stale"
     return None
 
 
-def _action_type(key: str) -> str:
-    return {
+def _action_type(key: ActionKey) -> ActionType:
+    values: dict[ActionKey, ActionType] = {
         "contested": "resolve_contradiction",
         "insufficient": "collect_direct_evidence",
         "unreviewed": "attach_initial_evidence",
         "supported_stale": "refresh_human_review",
-    }[key]
+    }
+    return values[key]
 
 
-def _rationale(claim: ValidationMapClaim, key: str) -> str:
+def _rationale(key: ActionKey) -> str:
     return {
-        "contested": "The claim has recorded contradicting evidence, so the conflicting record must be reviewed and explicitly resolved or documented.",
-        "insufficient": "The claim has only contextual evidence and needs evidence that directly supports or contradicts it.",
-        "unreviewed": "The claim has no attached evidence and cannot yet be tested from recorded sources.",
-        "supported_stale": "The evidence currently supports the claim, but the latest human judgment predates a claim or evidence change.",
+        "contested": (
+            "The claim has recorded contradicting evidence, so the conflicting record must "
+            "be reviewed and explicitly resolved or documented."
+        ),
+        "insufficient": (
+            "The claim has only contextual evidence and needs evidence that directly supports "
+            "or contradicts it."
+        ),
+        "unreviewed": (
+            "The claim has no attached evidence and cannot yet be tested from recorded sources."
+        ),
+        "supported_stale": (
+            "The evidence currently supports the claim, but the latest human judgment predates "
+            "a claim or evidence change."
+        ),
     }[key]
 
 
-def _source_requirements(claim: ValidationMapClaim, key: str) -> list[EvidenceGapSourceRequirement]:
+def _source_requirements(
+    claim: ValidationMapClaim,
+    key: ActionKey,
+) -> list[EvidenceGapSourceRequirement]:
     if key == "supported_stale":
         return []
     recorded = claim.missing_evidence_requirements or claim.unresolved_gaps
@@ -75,7 +117,7 @@ def _source_requirements(claim: ValidationMapClaim, key: str) -> list[EvidenceGa
     ]
 
 
-def _completion_criteria(claim: ValidationMapClaim, key: str) -> list[str]:
+def _completion_criteria(claim: ValidationMapClaim, key: ActionKey) -> list[str]:
     criteria = {
         "contested": [
             "Review every currently recorded contradicting evidence item.",
@@ -96,7 +138,9 @@ def _completion_criteria(claim: ValidationMapClaim, key: str) -> list[str]:
         ],
     }[key]
     if claim.human_review.unresolved_questions:
-        criteria.append("Address or explicitly preserve the recorded unresolved question in the next human judgment.")
+        criteria.append(
+            "Address or explicitly preserve the recorded unresolved question in the next human judgment."
+        )
     return criteria
 
 
@@ -121,7 +165,11 @@ def remediation_plan(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> EvidenceGapRemediationPlan:
-    mapped = validation_map(investigation_id=investigation_id, current_user=current_user, db=db)
+    mapped = validation_map(
+        investigation_id=investigation_id,
+        current_user=current_user,
+        db=db,
+    )
     actions: list[EvidenceGapRemediationAction] = []
 
     for claim in mapped.claims:
@@ -137,7 +185,7 @@ def remediation_plan(
                 priority=_PRIORITY[key],
                 priority_rule=_PRIORITY_RULES[key],
                 action_type=_action_type(key),
-                rationale=_rationale(claim, key),
+                rationale=_rationale(key),
                 source_requirements=_source_requirements(claim, key),
                 review_refresh_required=claim.human_review.status == "stale",
                 completion_criteria=_completion_criteria(claim, key),
@@ -146,7 +194,7 @@ def remediation_plan(
         )
 
     actions.sort(key=lambda item: (item.priority, item.claim_sequence, item.claim_id))
-    counts = {
+    counts: dict[ActionType, int] = {
         "resolve_contradiction": 0,
         "collect_direct_evidence": 0,
         "attach_initial_evidence": 0,
@@ -155,7 +203,14 @@ def remediation_plan(
     for action in actions:
         counts[action.action_type] += 1
 
-    status = "empty" if mapped.status == "empty" else "action_required" if actions else "complete"
+    status: PlanStatus
+    if mapped.status == "empty":
+        status = "empty"
+    elif actions:
+        status = "action_required"
+    else:
+        status = "complete"
+
     return EvidenceGapRemediationPlan(
         investigation_id=mapped.investigation_id,
         title=mapped.title,
