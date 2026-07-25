@@ -43,7 +43,7 @@ class CrossInvestigationReviewQueue(BaseModel):
 
 
 class ReviewQueueSnapshotUnsigned(BaseModel):
-    contract_version: str = "1.0"
+    contract_version: Literal["1.0"] = "1.0"
     artifact_type: Literal["cross_investigation_review_queue_snapshot"] = (
         "cross_investigation_review_queue_snapshot"
     )
@@ -63,3 +63,26 @@ class ReviewQueueSnapshotUnsigned(BaseModel):
 class ReviewQueueSnapshot(ReviewQueueSnapshotUnsigned):
     generated_at: datetime
     content_sha256: str
+
+
+class ReviewQueueSnapshotComparison(BaseModel):
+    contract_version: Literal["1.0"] = "1.0"
+    artifact_type: Literal["cross_investigation_review_queue_snapshot_comparison"] = (
+        "cross_investigation_review_queue_snapshot_comparison"
+    )
+    prior_content_sha256: str
+    current_content_sha256: str
+    added_items: list[ReviewQueueItem]
+    removed_items: list[ReviewQueueItem]
+    unchanged_items: list[ReviewQueueItem]
+    prior_reason_counts: dict[str, int]
+    current_reason_counts: dict[str, int]
+    reason_count_deltas: dict[str, int]
+    prior_investigation_count: int
+    current_investigation_count: int
+    investigation_count_delta: int
+    interpretation_notice: str = (
+        "This comparison describes changes in stored workflow state only. Snapshot digests "
+        "verify artifact integrity only and do not establish truth, confidence, importance, "
+        "urgency, risk, resolution, validation evidence, advice, or recommended action."
+    )
