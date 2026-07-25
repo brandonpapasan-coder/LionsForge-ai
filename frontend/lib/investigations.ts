@@ -129,6 +129,39 @@ export type ClaimEvidenceValidationMap = {
   interpretation_notice: string;
 };
 
+export type EvidenceGapSourceRequirement = {
+  requirement: string;
+  source_constraints: string[];
+  derived_from: "recorded_gap";
+};
+
+export type EvidenceGapRemediationAction = {
+  claim_id: number;
+  claim_sequence: number;
+  statement: string;
+  claim_status: "supported" | "contested" | "insufficient" | "unreviewed";
+  priority: number;
+  priority_rule: string;
+  action_type: "resolve_contradiction" | "collect_direct_evidence" | "attach_initial_evidence" | "refresh_human_review";
+  rationale: string;
+  source_requirements: EvidenceGapSourceRequirement[];
+  review_refresh_required: boolean;
+  completion_criteria: string[];
+  stored_inputs: string[];
+};
+
+export type EvidenceGapRemediationPlan = {
+  contract_version: string;
+  investigation_id: number;
+  title: string;
+  status: "action_required" | "complete" | "empty";
+  actions: EvidenceGapRemediationAction[];
+  action_counts: Record<string, number>;
+  generated_from: "validation_map_stored_inputs";
+  generated_from_stored_state_at: string;
+  interpretation_notice: string;
+};
+
 export type ResearchLearningRecommendation = {
   competency: string;
   lesson_slug: string;
