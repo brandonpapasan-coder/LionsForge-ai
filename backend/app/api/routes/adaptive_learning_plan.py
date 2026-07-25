@@ -1,3 +1,5 @@
+from typing import Literal, cast
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -24,18 +26,20 @@ ADVISORY_NOTICE = (
     "This plan is advisory and generated from measured education records and deterministic rules. "
     "Learners and instructors remain responsible for reviewing and adjusting the sequence."
 )
+PlanState = Literal["remediation", "recommended", "available", "locked"]
+Difficulty = Literal["foundation", "intermediate", "advanced"]
 
 
-def _difficulty_for_item(level: str, mastery_percent: int, remediation: bool) -> str:
+def _difficulty_for_item(level: str, mastery_percent: int, remediation: bool) -> Difficulty:
     if remediation:
         return "foundation"
     measured_difficulty, _ = _assessment_difficulty(mastery_percent)
     if level == "foundation":
         return "foundation" if measured_difficulty == "foundation" else "intermediate"
-    return measured_difficulty
+    return cast(Difficulty, measured_difficulty)
 
 
-def _priority_for_state(state: str, failure_streak: int, trend_direction: str) -> int:
+def _priority_for_state(state: PlanState, failure_streak: int, trend_direction: str) -> int:
     if state == "remediation":
         base = 0 if failure_streak >= REPEATED_FAILURE_THRESHOLD else 10
     elif state == "recommended":
@@ -74,7 +78,7 @@ def _build_learning_plan(db: Session, user_id: int) -> AdaptiveLearningPlanRead:
         missing_prerequisites = [
             slug for slug in lesson.prerequisites if lessons_by_slug[slug].path_state != "completed"
         ]
-        state = lesson.path_state
+        state = cast(PlanState, lesson.path_state)
         priority = _priority_for_state(state, failure_streak, trend.direction)
         remediation = state == "remediation"
         difficulty = _difficulty_for_item(lesson.level, competency.mastery_percent, remediation)
