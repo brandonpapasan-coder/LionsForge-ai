@@ -141,12 +141,47 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Write and verify preflight upload receipt
+        env:
+          ARTIFACT_NAME: staging-preflight-${{ inputs.candidate_sha }}
+          ARTIFACT_ID: ${{ steps.upload_evidence.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_evidence.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_evidence.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          python scripts/manage_staging_preflight_upload_receipt.py write \
+            --report staging-preflight-report.json \
+            --artifact-name "${ARTIFACT_NAME}" \
+            --artifact-id "${ARTIFACT_ID}" \
+            --artifact-url "${ARTIFACT_URL}" \
+            --artifact-digest "${ARTIFACT_DIGEST}" \
+            --output staging-preflight-upload-receipt.json
+          python scripts/manage_staging_preflight_upload_receipt.py verify \
+            --report staging-preflight-report.json \
+            --artifact-name "${ARTIFACT_NAME}" \
+            --artifact-id "${ARTIFACT_ID}" \
+            --artifact-url "${ARTIFACT_URL}" \
+            --artifact-digest "${ARTIFACT_DIGEST}" \
+            --output staging-preflight-upload-receipt.json
+
+      - name: Upload staging preflight receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-preflight-receipt-${{ inputs.candidate_sha }}
+          path: staging-preflight-upload-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Publish preflight summary
         if: always()
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           ARTIFACT_ID: ${{ steps.upload_evidence.outputs.artifact-id }}
           ARTIFACT_URL: ${{ steps.upload_evidence.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_evidence.outputs.artifact-digest }}
+          RECEIPT_ARTIFACT_ID: ${{ steps.upload_receipt.outputs.artifact-id }}
+          RECEIPT_ARTIFACT_URL: ${{ steps.upload_receipt.outputs.artifact-url }}
         run: |
           {
             echo "## Staging Preflight"
@@ -155,5 +190,9 @@ jobs:
             echo "- Endpoint checks skipped: \`${{ inputs.skip_endpoints }}\`"
             echo "- Evidence upload: \`${{ steps.upload_evidence.outcome }}\`"
             echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
+            echo "- Artifact digest: \`${ARTIFACT_DIGEST:-unavailable}\`"
             echo "- Artifact URL: ${ARTIFACT_URL:-unavailable}"
+            echo "- Receipt upload: \`${{ steps.upload_receipt.outcome }}\`"
+            echo "- Receipt artifact ID: \`${RECEIPT_ARTIFACT_ID:-unavailable}\`"
+            echo "- Receipt artifact URL: ${RECEIPT_ARTIFACT_URL:-unavailable}"
           } >> "${GITHUB_STEP_SUMMARY}"
