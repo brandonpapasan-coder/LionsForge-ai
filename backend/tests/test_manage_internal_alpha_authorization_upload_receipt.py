@@ -17,9 +17,7 @@ SCOPE = {
 REPOSITORY = "brandonpapasan-coder/LionsForge-ai"
 RUN_ID = 123456789
 ARTIFACT_ID = 987654321
-ARTIFACT_URL = (
-    f"https://github.com/{REPOSITORY}/actions/runs/{RUN_ID}/artifacts/{ARTIFACT_ID}"
-)
+ARTIFACT_URL = f"https://github.com/{REPOSITORY}/actions/runs/{RUN_ID}/artifacts/{ARTIFACT_ID}"
 ARTIFACT_DIGEST = "sha256:" + "a" * 64
 
 
