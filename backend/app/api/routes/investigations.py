@@ -85,8 +85,10 @@ def update_investigation(
 
 
 from app.api.routes.investigation_provenance import router as provenance_router
+from app.api.routes.review_queue import router as review_queue_router
 
 router.include_router(evidence_router)
 router.include_router(reports_router)
 router.include_router(exports_router)
 router.include_router(provenance_router)
+router.include_router(review_queue_router)
