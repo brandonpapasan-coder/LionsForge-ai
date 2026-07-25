@@ -23,6 +23,16 @@ const ledger = {
   }],
 };
 
+const history = {
+  contract_version: "1.0", investigation_id: 7, claim_id: 1, status: "active",
+  generated_from: "append_only_user_progress_history",
+  interpretation_notice: "Append-only user-authored workflow history.",
+  events: [
+    { event_id: 2, claim_id: 1, status: "blocked", notes: "Need source", authorship: "user_authored", action_type_snapshot: "resolve_contradiction", priority_snapshot: 1, plan_generated_at_snapshot: "2026-07-25T17:00:00Z", recorded_at: "2026-07-25T17:30:00Z" },
+    { event_id: 1, claim_id: 1, status: "in_progress", notes: null, authorship: "user_authored", action_type_snapshot: "attach_initial_evidence", priority_snapshot: 2, plan_generated_at_snapshot: "2026-07-25T16:00:00Z", recorded_at: "2026-07-25T16:30:00Z" },
+  ],
+};
+
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("RemediationProgressLedgerPanel", () => {
@@ -38,6 +48,38 @@ describe("RemediationProgressLedgerPanel", () => {
     await user.selectOptions(screen.getByLabelText("Workflow status"), "ready_for_review");
     await user.click(screen.getByRole("button", { name: "Save progress" }));
     expect(fetchMock).toHaveBeenLastCalledWith("/api/investigations/7/remediation-progress/1", expect.objectContaining({ method: "PUT" }));
+  });
+
+  it("lazy loads and renders append-only progress history", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => response(ledger))
+      .mockImplementationOnce(() => response(history));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RemediationProgressLedgerPanel investigationId={7} />);
+    await screen.findByText("Progress record needs review");
+    await user.click(screen.getByText("Progress history"));
+    expect(await screen.findByText("Need source")).toBeInTheDocument();
+    expect(screen.getByText("No researcher note recorded.")).toBeInTheDocument();
+    expect(screen.getByText(/not validation evidence/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/investigations/7/remediation-progress/1/history", { cache: "no-store" });
+  });
+
+  it("renders history failure and retry states", async () => {
+    const user = userEvent.setup();
+    let historyCalls = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.endsWith("/history")) {
+        historyCalls += 1;
+        return historyCalls === 1 ? response({}, 503) : response({ ...history, status: "empty", events: [] });
+      }
+      return response(ledger);
+    }));
+    render(<RemediationProgressLedgerPanel investigationId={7} />);
+    await screen.findByText("Progress record needs review");
+    await user.click(screen.getByText("Progress history"));
+    await user.click(await screen.findByRole("button", { name: "Retry progress history" }));
+    expect(await screen.findByText(/No history events have been recorded/)).toBeInTheDocument();
   });
 
   it("renders empty and retry states", async () => {
