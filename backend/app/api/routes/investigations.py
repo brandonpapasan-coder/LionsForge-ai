@@ -6,12 +6,14 @@ from app.api.deps import get_current_user
 from app.api.routes.investigation_evidence import router as evidence_router
 from app.api.routes.investigation_exports import router as exports_router
 from app.api.routes.investigation_reports import router as reports_router
+from app.api.routes.review_queue import router as review_queue_router
 from app.db.session import get_db
 from app.models.investigation import Investigation
 from app.models.user import User
 from app.schemas.investigation import InvestigationCreate, InvestigationRead, InvestigationUpdate
 
 router = APIRouter()
+router.include_router(review_queue_router)
 
 
 def _owned_investigation(db: Session, user_id: int, investigation_id: int) -> Investigation:
@@ -85,10 +87,8 @@ def update_investigation(
 
 
 from app.api.routes.investigation_provenance import router as provenance_router
-from app.api.routes.review_queue import router as review_queue_router
 
 router.include_router(evidence_router)
 router.include_router(reports_router)
 router.include_router(exports_router)
 router.include_router(provenance_router)
-router.include_router(review_queue_router)
