@@ -138,6 +138,42 @@ class ClaimEvidenceValidationMap(BaseModel):
     )
 
 
+class EvidenceGapSourceRequirement(BaseModel):
+    requirement: str
+    source_constraints: list[str]
+    derived_from: Literal["recorded_gap"] = "recorded_gap"
+
+
+class EvidenceGapRemediationAction(BaseModel):
+    claim_id: int
+    claim_sequence: int = Field(ge=1)
+    statement: str
+    claim_status: Literal["supported", "contested", "insufficient", "unreviewed"]
+    priority: int = Field(ge=1)
+    priority_rule: str
+    action_type: Literal["resolve_contradiction", "collect_direct_evidence", "attach_initial_evidence", "refresh_human_review"]
+    rationale: str
+    source_requirements: list[EvidenceGapSourceRequirement]
+    review_refresh_required: bool
+    completion_criteria: list[str]
+    stored_inputs: list[str]
+
+
+class EvidenceGapRemediationPlan(BaseModel):
+    contract_version: str = "1.0"
+    investigation_id: int
+    title: str
+    status: Literal["action_required", "complete", "empty"]
+    actions: list[EvidenceGapRemediationAction]
+    action_counts: dict[str, int]
+    generated_from: Literal["validation_map_stored_inputs"] = "validation_map_stored_inputs"
+    generated_from_stored_state_at: datetime
+    interpretation_notice: str = (
+        "Actions are deterministic research prompts derived only from recorded gaps and review state. "
+        "They do not invent sources, deadlines, confidence, conclusions, or research completion."
+    )
+
+
 class QualityAssessmentDimension(BaseModel):
     key: str
     label: str
