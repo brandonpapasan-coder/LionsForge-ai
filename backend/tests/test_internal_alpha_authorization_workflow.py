@@ -198,7 +198,14 @@ def test_workflow_generates_verifies_and_separately_retains_upload_receipt():
     receipt_verifier = text.index("manage_internal_alpha_authorization_upload_receipt.py verify")
     receipt_upload = text.index("id: upload-receipt-artifact")
     summary = text.index("Publish authorization summary")
-    assert publication_verifier < evidence_upload < receipt_writer < receipt_verifier < receipt_upload < summary
+    assert (
+        publication_verifier
+        < evidence_upload
+        < receipt_writer
+        < receipt_verifier
+        < receipt_upload
+        < summary
+    )
     assert "id: upload-receipt" in text
     assert "id: upload-receipt-verification" in text
     assert "ARTIFACT_ID: ${{ steps.evidence-upload.outputs.artifact-id }}" in text
@@ -219,14 +226,12 @@ def test_workflow_generates_verifies_and_separately_retains_upload_receipt():
         "UPLOAD_RECEIPT_VERIFICATION_OUTCOME: "
         "${{ steps.upload-receipt-verification.outcome }}" in text
     )
-    assert (
-        "RECEIPT_ARTIFACT_UPLOAD_OUTCOME: ${{ steps.upload-receipt-artifact.outcome }}"
-        in text
-    )
+    assert "RECEIPT_ARTIFACT_UPLOAD_OUTCOME: ${{ steps.upload-receipt-artifact.outcome }}" in text
     assert "Separate 90-day receipt artifact upload outcome" in text
-    assert "internal-alpha-authorization-upload-receipt.json" not in text[
-        text.index("name: internal-alpha-authorization-evidence") : receipt_writer
-    ]
+    assert (
+        "internal-alpha-authorization-upload-receipt.json"
+        not in text[text.index("name: internal-alpha-authorization-evidence") : receipt_writer]
+    )
 
 
 def test_workflow_validates_and_retains_traceable_evidence():
