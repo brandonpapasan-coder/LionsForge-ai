@@ -3,6 +3,10 @@ name: Staging Preflight
 on:
   workflow_dispatch:
     inputs:
+      candidate_sha:
+        description: Exact 40-character commit SHA from main to validate
+        required: true
+        type: string
       skip_endpoints:
         description: Validate configuration only and skip public endpoint checks
         required: false
@@ -19,8 +23,34 @@ jobs:
     environment:
       name: staging
     steps:
-      - name: Checkout repository
+      - name: Validate candidate input
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "candidate_sha must be exactly 40 lowercase hexadecimal characters" >&2
+            exit 1
+          }
+
+      - name: Checkout exact candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main || {
+            echo "candidate_sha is not contained in origin/main" >&2
+            exit 1
+          }
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -35,6 +65,7 @@ jobs:
         env:
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
         run: |
+          set -euo pipefail
           test -n "${TF_STATE_BUCKET}"
           aws s3api head-bucket --bucket "${TF_STATE_BUCKET}"
           aws s3api get-bucket-versioning --bucket "${TF_STATE_BUCKET}"
@@ -50,8 +81,79 @@ jobs:
           STAGING_API_URL: ${{ vars.STAGING_API_URL }}
           STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
         run: |
+          set -euo pipefail
           if [[ "${{ inputs.skip_endpoints }}" == "true" ]]; then
-            python scripts/staging_preflight.py --skip-endpoints
+            python scripts/staging_preflight.py --skip-endpoints > staging-preflight-report.json
           else
-            python scripts/staging_preflight.py
+            python scripts/staging_preflight.py > staging-preflight-report.json
           fi
+          python -m json.tool staging-preflight-report.json >/dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("staging-preflight-report.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          if payload.get("status") != "passed":
+              raise SystemExit("staging preflight report did not record passed status")
+          PY
+
+      - name: Stamp preflight provenance
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SERVER_URL: ${{ github.server_url }}
+          SKIP_ENDPOINTS: ${{ inputs.skip_endpoints }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path("staging-preflight-report.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          payload["schema_version"] = 1
+          payload["provenance"] = {
+              "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "repository": os.environ["REPOSITORY"],
+              "workflow_run_id": int(os.environ["RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["RUN_ATTEMPT"]),
+              "workflow_run_url": (
+                  f"{os.environ['SERVER_URL']}/{os.environ['REPOSITORY']}"
+                  f"/actions/runs/{os.environ['RUN_ID']}"
+              ),
+              "skip_endpoints": os.environ["SKIP_ENDPOINTS"].lower() == "true",
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+          path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload staging preflight evidence
+        id: upload_evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-preflight-${{ inputs.candidate_sha }}
+          path: staging-preflight-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish preflight summary
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          ARTIFACT_ID: ${{ steps.upload_evidence.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_evidence.outputs.artifact-url }}
+        run: |
+          {
+            echo "## Staging Preflight"
+            echo
+            echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
+            echo "- Endpoint checks skipped: \`${{ inputs.skip_endpoints }}\`"
+            echo "- Evidence upload: \`${{ steps.upload_evidence.outcome }}\`"
+            echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
+            echo "- Artifact URL: ${ARTIFACT_URL:-unavailable}"
+          } >> "${GITHUB_STEP_SUMMARY}"
