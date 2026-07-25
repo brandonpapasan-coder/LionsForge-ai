@@ -33,6 +33,10 @@ export type InvestigationProvenanceCategory = "claim" | "evidence" | "validation
 export type InvestigationProvenanceEvent = { event_key: string; category: InvestigationProvenanceCategory; action: "created" | "updated" | "reviewed" | "recorded"; entity_type: string; entity_id: number; claim_id: number | null; claim_statement: string | null; authorship: "user_authored" | "human_judgment"; summary: string; occurred_at: string; source_table: string; source_record_id: number };
 export type InvestigationProvenanceTimeline = { contract_version: string; investigation_id: number; title: string; status: "empty" | "active"; events: InvestigationProvenanceEvent[]; generated_from: "stored_investigation_records"; interpretation_notice: string };
 
+export type ReviewQueueReason = "stale_validation" | "missing_validation" | "unresolved_contradiction" | "blocked_remediation" | "remediation_ready_for_review";
+export type ReviewQueueItem = { item_key: string; investigation_id: number; investigation_title: string; investigation_status: InvestigationStatus; claim_id: number; claim_statement: string; reason_type: ReviewQueueReason; workflow_priority: number; reason: string; stored_inputs: string[]; latest_relevant_at: string; source_tables: string[]; source_record_ids: number[] };
+export type CrossInvestigationReviewQueue = { contract_version: string; status: "empty" | "active"; item_count: number; items: ReviewQueueItem[]; generated_from: "stored_owner_investigation_records"; interpretation_notice: string };
+
 export type ResearchLearningRecommendation = { competency: string; lesson_slug: string; lesson_title: string; gap_type: string; priority: number; reason: string };
 export type InvestigationEducationRecommendations = { investigation_id: number; recommendation_count: number; completion_authority: "adaptive_assessment_only"; recommendations: ResearchLearningRecommendation[] };
 export type QualityAssessmentDimension = { key: string; label: string; status: QualityAssessmentStatus; counts: Record<string, number>; explanation: string };
