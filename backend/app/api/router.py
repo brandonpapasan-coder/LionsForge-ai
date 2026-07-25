@@ -26,6 +26,7 @@ from app.api.routes import (
     news,
     personal_intelligence,
     release_countdown,
+    remediation_progress,
     research,
     research_agent,
     research_conclusion_defense_export_packet,
@@ -76,6 +77,7 @@ def build_api_router(
     router.include_router(investigations.router, prefix="/investigations", tags=["investigations"])
     router.include_router(claim_evidence_validation.router, prefix="/investigations", tags=["investigations"])
     router.include_router(evidence_gap_remediation.router, prefix="/investigations", tags=["investigations"])
+    router.include_router(remediation_progress.router, prefix="/investigations", tags=["investigations"])
     router.include_router(knowledge_graph.router, prefix="/knowledge-graph", tags=["knowledge-graph"])
     router.include_router(knowledge_extraction.router, prefix="/knowledge-graph", tags=["knowledge-extraction"])
     router.include_router(entity_resolution.router, prefix="/knowledge-graph", tags=["entity-resolution"])
