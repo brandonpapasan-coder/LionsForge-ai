@@ -1,0 +1,57 @@
+name: Internal Alpha Upload Receipt CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev/**
+      - hardening/**
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  upload-receipt-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --quiet --upgrade pip
+          pip install --quiet -r requirements.txt
+
+      - name: Ruff lint
+        run: >-
+          ruff check
+          --select E9,F63,F7,F82
+          ../scripts/manage_internal_alpha_authorization_upload_receipt.py
+          tests/test_manage_internal_alpha_authorization_upload_receipt.py
+
+      - name: Ruff format check
+        run: >-
+          ruff format --check --diff
+          ../scripts/manage_internal_alpha_authorization_upload_receipt.py
+          tests/test_manage_internal_alpha_authorization_upload_receipt.py
+
+      - name: Type check
+        run: >-
+          mypy --follow-imports=skip
+          ../scripts/manage_internal_alpha_authorization_upload_receipt.py
+
+      - name: Run upload receipt tests
+        run: >-
+          pytest -q --tb=short
+          tests/test_manage_internal_alpha_authorization_upload_receipt.py
