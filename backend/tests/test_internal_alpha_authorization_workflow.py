@@ -79,7 +79,7 @@ def test_workflow_validates_manifest_before_retention():
     text = workflow_text()
     generator = text.index("python scripts/write_internal_alpha_authorization_manifest.py")
     validator = text.index("python scripts/validate_internal_alpha_authorization_manifest.py")
-    upload = text.index("actions/upload-artifact@v4")
+    upload = text.index("id: evidence-upload")
     assert generator < validator < upload
     assert "id: manifest-validation" in text
     assert "internal-alpha-authorization-manifest-validation.txt" in text
@@ -91,7 +91,7 @@ def test_workflow_generates_and_verifies_checksum_inventory_before_upload():
     text = workflow_text()
     writer = text.index("manage_internal_alpha_evidence_checksums.py write")
     verifier = text.index("manage_internal_alpha_evidence_checksums.py verify")
-    upload = text.index("actions/upload-artifact@v4")
+    upload = text.index("id: evidence-upload")
     assert writer < verifier < upload
     assert "id: checksum-inventory" in text
     assert "id: checksum-verification" in text
@@ -109,7 +109,7 @@ def test_workflow_generates_and_verifies_final_receipt_before_upload():
     checksum_verifier = text.index("manage_internal_alpha_evidence_checksums.py verify")
     receipt_writer = text.index("manage_internal_alpha_authorization_receipt.py write")
     receipt_verifier = text.index("manage_internal_alpha_authorization_receipt.py verify")
-    upload = text.index("actions/upload-artifact@v4")
+    upload = text.index("id: evidence-upload")
     assert checksum_verifier < receipt_writer < receipt_verifier < upload
     assert "id: receipt" in text
     assert "id: receipt-verification" in text
@@ -127,9 +127,9 @@ def test_workflow_always_generates_and_verifies_fail_closed_decision_before_uplo
     receipt_verifier = text.index("manage_internal_alpha_authorization_receipt.py verify")
     decision_writer = text.index("manage_internal_alpha_authorization_decision.py write")
     decision_verifier = text.index("manage_internal_alpha_authorization_decision.py verify")
+    upload = text.index("id: evidence-upload")
     summary = text.index("Publish authorization summary")
-    upload = text.index("actions/upload-artifact@v4")
-    assert receipt_verifier < decision_writer < decision_verifier < summary < upload
+    assert receipt_verifier < decision_writer < decision_verifier < upload < summary
     assert (
         "Generate fail-closed authorization decision\n        id: decision\n        if: always()"
         in text
@@ -166,9 +166,9 @@ def test_workflow_enforces_artifact_contract_before_fail_closed_upload():
     decision_verifier = text.index("manage_internal_alpha_authorization_decision.py verify")
     contract_writer = text.index("manage_internal_alpha_artifact_contract.py write")
     contract_verifier = text.index("manage_internal_alpha_artifact_contract.py verify")
+    upload = text.index("id: evidence-upload")
     summary = text.index("Publish authorization summary")
-    upload = text.index("actions/upload-artifact@v4")
-    assert decision_verifier < contract_writer < contract_verifier < summary < upload
+    assert decision_verifier < contract_writer < contract_verifier < upload < summary
     assert (
         "Generate authorization artifact contract\n        id: artifact-contract\n        if: always()"
         in text
@@ -188,6 +188,45 @@ def test_workflow_enforces_artifact_contract_before_fail_closed_upload():
     assert "Artifact contract verification outcome" in text
     assert "if-no-files-found: error" in text
     assert "if-no-files-found: warn" not in text
+
+
+def test_workflow_generates_verifies_and_separately_retains_upload_receipt():
+    text = workflow_text()
+    publication_verifier = text.index("manage_internal_alpha_authorization_publication.py verify")
+    evidence_upload = text.index("id: evidence-upload")
+    receipt_writer = text.index("manage_internal_alpha_authorization_upload_receipt.py write")
+    receipt_verifier = text.index("manage_internal_alpha_authorization_upload_receipt.py verify")
+    receipt_upload = text.index("id: upload-receipt-artifact")
+    summary = text.index("Publish authorization summary")
+    assert publication_verifier < evidence_upload < receipt_writer < receipt_verifier < receipt_upload < summary
+    assert "id: upload-receipt" in text
+    assert "id: upload-receipt-verification" in text
+    assert "ARTIFACT_ID: ${{ steps.evidence-upload.outputs.artifact-id }}" in text
+    assert "ARTIFACT_URL: ${{ steps.evidence-upload.outputs.artifact-url }}" in text
+    assert "ARTIFACT_DIGEST: ${{ steps.evidence-upload.outputs.artifact-digest }}" in text
+    assert "--publication internal-alpha-authorization-publication.json" in text
+    assert '--artifact-id "${ARTIFACT_ID}"' in text
+    assert '--artifact-url "${ARTIFACT_URL}"' in text
+    assert '--artifact-digest "${ARTIFACT_DIGEST}"' in text
+    assert "internal-alpha-authorization-upload-receipt.json" in text
+    assert "internal-alpha-authorization-upload-receipt-generation.txt" in text
+    assert "internal-alpha-authorization-upload-receipt-verification.txt" in text
+    assert "name: internal-alpha-authorization-upload-receipt" in text
+    assert text.count("retention-days: 90") == 2
+    assert "EVIDENCE_UPLOAD_OUTCOME: ${{ steps.evidence-upload.outcome }}" in text
+    assert "UPLOAD_RECEIPT_OUTCOME: ${{ steps.upload-receipt.outcome }}" in text
+    assert (
+        "UPLOAD_RECEIPT_VERIFICATION_OUTCOME: "
+        "${{ steps.upload-receipt-verification.outcome }}" in text
+    )
+    assert (
+        "RECEIPT_ARTIFACT_UPLOAD_OUTCOME: ${{ steps.upload-receipt-artifact.outcome }}"
+        in text
+    )
+    assert "Separate 90-day receipt artifact upload outcome" in text
+    assert "internal-alpha-authorization-upload-receipt.json" not in text[
+        text.index("name: internal-alpha-authorization-evidence") : receipt_writer
+    ]
 
 
 def test_workflow_validates_and_retains_traceable_evidence():
