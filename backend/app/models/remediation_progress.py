@@ -45,3 +45,35 @@ class RemediationProgress(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+class RemediationProgressHistory(Base):
+    __tablename__ = "remediation_progress_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    progress_id: Mapped[int] = mapped_column(
+        ForeignKey("remediation_progress.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    investigation_id: Mapped[int] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    claim_id: Mapped[int] = mapped_column(
+        ForeignKey("investigation_claims.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    action_type_snapshot: Mapped[str] = mapped_column(String(48), nullable=False)
+    priority_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
+    plan_generated_at_snapshot: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True, nullable=False)
