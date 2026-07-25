@@ -29,6 +29,10 @@ export type RemediationProgressLedger = { contract_version: string; investigatio
 export type RemediationProgressHistoryEvent = { event_id: number; claim_id: number; status: RemediationProgressStatus; notes: string | null; authorship: "user_authored"; action_type_snapshot: EvidenceGapRemediationAction["action_type"]; priority_snapshot: number; plan_generated_at_snapshot: string; recorded_at: string };
 export type RemediationProgressHistory = { contract_version: string; investigation_id: number; claim_id: number; status: "empty" | "active"; events: RemediationProgressHistoryEvent[]; generated_from: "append_only_user_progress_history"; interpretation_notice: string };
 
+export type InvestigationProvenanceCategory = "claim" | "evidence" | "validation" | "remediation_progress" | "remediation_history";
+export type InvestigationProvenanceEvent = { event_key: string; category: InvestigationProvenanceCategory; action: "created" | "updated" | "reviewed" | "recorded"; entity_type: string; entity_id: number; claim_id: number | null; claim_statement: string | null; authorship: "user_authored" | "human_judgment"; summary: string; occurred_at: string; source_table: string; source_record_id: number };
+export type InvestigationProvenanceTimeline = { contract_version: string; investigation_id: number; title: string; status: "empty" | "active"; events: InvestigationProvenanceEvent[]; generated_from: "stored_investigation_records"; interpretation_notice: string };
+
 export type ResearchLearningRecommendation = { competency: string; lesson_slug: string; lesson_title: string; gap_type: string; priority: number; reason: string };
 export type InvestigationEducationRecommendations = { investigation_id: number; recommendation_count: number; completion_authority: "adaptive_assessment_only"; recommendations: ResearchLearningRecommendation[] };
 export type QualityAssessmentDimension = { key: string; label: string; status: QualityAssessmentStatus; counts: Record<string, number>; explanation: string };
