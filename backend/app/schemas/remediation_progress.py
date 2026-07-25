@@ -70,3 +70,31 @@ class RemediationProgressLedger(BaseModel):
         "deterministic validation or remediation state and do not establish truth, completion, "
         "or resolution."
     )
+
+
+class RemediationProgressHistoryEvent(BaseModel):
+    event_id: int
+    claim_id: int
+    status: ProgressStatus
+    notes: str | None
+    authorship: Literal["user_authored"] = "user_authored"
+    action_type_snapshot: ActionType
+    priority_snapshot: int = Field(ge=1)
+    plan_generated_at_snapshot: datetime
+    recorded_at: datetime
+
+
+class RemediationProgressHistory(BaseModel):
+    contract_version: str = "1.0"
+    investigation_id: int
+    claim_id: int
+    status: Literal["empty", "active"]
+    events: list[RemediationProgressHistoryEvent]
+    generated_from: Literal["append_only_user_progress_history"] = (
+        "append_only_user_progress_history"
+    )
+    interpretation_notice: str = (
+        "History events are append-only snapshots of user-authored workflow state. They do not "
+        "change deterministic validation or remediation state and do not establish truth, "
+        "completion, or resolution."
+    )
