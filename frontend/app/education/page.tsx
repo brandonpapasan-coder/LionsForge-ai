@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { AdaptiveLearningPlan } from "@/components/adaptive-learning-plan";
 import { CompetencyTrends } from "@/components/competency-trends";
 import { EducationHub } from "@/components/education-hub";
 import "./education.css";
@@ -11,6 +12,7 @@ export default async function EducationPage() {
   return (
     <>
       <EducationHub />
+      <AdaptiveLearningPlan />
       <CompetencyTrends />
     </>
   );
