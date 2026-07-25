@@ -90,7 +90,5 @@ console.log(`Regenerated lock with PostCSS ${exactPins.postcss}`);
 console.log(`Regenerated lock with Vitest ${exactPins.vitest}`);
 console.log(`Regenerated lock with @vitest/coverage-v8 ${exactPins.coverage}`);
 console.log(
-  `Verified ${testExcludeEntries.length} test-exclude lock entr${
-    testExcludeEntries.length === 1 ? "y" : "ies"
-  } at ${exactPins.testExclude}`,
+  `Verified ${testExcludeEntries.length} test-exclude lock record(s) at ${exactPins.testExclude}`,
 );
