@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { ClaimEvidencePanel } from "@/components/claim-evidence-panel";
 import { ClaimEvidenceValidationMapPanel } from "@/components/claim-evidence-validation-map";
+import { EvidenceGapRemediationPanel } from "@/components/evidence-gap-remediation-panel";
 import { InvestigationQualityAssessmentPanel } from "@/components/investigation-quality-assessment-panel";
 import { InvestigationSynthesisPanel } from "@/components/investigation-synthesis-panel";
 import { ResearchLearningRecommendations } from "@/components/research-learning-recommendations";
@@ -107,6 +108,7 @@ export function InvestigationWorkspace() {
         <p>This JSON export preserves stored claims, evidence, human judgments, synthesis, limitations, and validation state without automated truth scoring.</p>
         <ClaimEvidencePanel investigationId={item.id} />
         <ClaimEvidenceValidationMapPanel investigationId={item.id} />
+        <EvidenceGapRemediationPanel investigationId={item.id} />
         <ValidationLedgerPanel investigationId={item.id} />
         <InvestigationSynthesisPanel investigationId={item.id} />
         <InvestigationQualityAssessmentPanel investigationId={item.id} />
