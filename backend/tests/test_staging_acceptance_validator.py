@@ -50,8 +50,8 @@ def valid_record(*, decision="GO", critical="0", high="0"):
     lines = [
         "# Acceptance",
         "- Release candidate SHA: " + "a" * 40,
-        "- Staging deploy workflow run: 12345",
-        "- Staging frontend deploy workflow run: 12346",
+        "- Staging deploy workflow run: https://github.com/example/project/actions/runs/12345",
+        "- Staging frontend deploy workflow run: https://github.com/example/project/actions/runs/12346",
         "- Staging URL: https://staging.example.test",
         "- Acceptance date/time (UTC): 2026-07-18T18:00:00Z",
         "- Acceptance owner: Release Owner",
@@ -65,11 +65,20 @@ def valid_record(*, decision="GO", critical="0", high="0"):
         "| Gate | Result | Evidence | Notes |",
         "|---|---|---|---|",
     ]
-    lines.extend(f"| {name} | Passed | ref | |" for name in automated)
+    lines.extend(
+        f"| {name} | Passed | https://github.com/example/project/actions/runs/{20000 + index} | |"
+        for index, name in enumerate(automated)
+    )
     lines.extend(["| Check | Result | Owner | Notes |", "|---|---|---|---|"])
-    lines.extend(f"| {name} | Passed | owner | |" for name in infrastructure)
+    lines.extend(
+        f"| {name} | Passed | Release Owner {index + 1} | |"
+        for index, name in enumerate(infrastructure)
+    )
     lines.extend(["| Step | Result | Evidence | Notes |", "|---|---|---|---|"])
-    lines.extend(f"| {name} | Passed | ref | |" for name in manual)
+    lines.extend(
+        f"| {name} | Passed | evidence-{index + 1}.txt | |"
+        for index, name in enumerate(manual)
+    )
     lines.extend(
         [
             "- Previous image successfully identified: Yes",
@@ -139,3 +148,68 @@ def test_obsolete_market_learning_step_does_not_satisfy_active_scope_requirement
         "| Verify market-learning panels and disclaimers | Passed |",
     )
     assert "missing-row" in codes(text)
+
+
+def test_numeric_or_mutable_workflow_references_are_rejected():
+    text = valid_record().replace(
+        "https://github.com/example/project/actions/runs/12345",
+        "12345",
+        1,
+    ).replace(
+        "https://github.com/example/project/actions/runs/12346",
+        "https://github.com/example/project/actions/workflows/staging.yml",
+        1,
+    )
+    assert "invalid-workflow-run-url" in codes(text)
+
+
+def test_staging_url_must_be_https_origin_and_not_local():
+    for invalid_url in (
+        "http://staging.example.test",
+        "https://localhost",
+        "https://staging.example.test/path?token=secret",
+        "https://user:password@staging.example.test",
+    ):
+        text = valid_record().replace("https://staging.example.test", invalid_url, 1)
+        assert "invalid-staging-url" in codes(text)
+
+
+def test_timestamps_are_strict_utc_and_ordered():
+    malformed = valid_record().replace(
+        "2026-07-18T18:00:00Z",
+        "2026-07-18 18:00:00+00:00",
+        1,
+    )
+    assert "invalid-timestamp" in codes(malformed)
+
+    reversed_order = valid_record().replace(
+        "2026-07-18T18:30:00Z",
+        "2026-07-18T17:59:59Z",
+        1,
+    )
+    assert "invalid-timestamp-order" in codes(reversed_order)
+
+
+def test_placeholder_evidence_is_rejected_even_when_result_is_passed():
+    text = valid_record().replace(
+        "| Backend CI | Passed | https://github.com/example/project/actions/runs/20000 |",
+        "| Backend CI | Passed | ref |",
+        1,
+    ).replace(
+        "| Kubernetes cluster and namespace | Passed | Release Owner 1 |",
+        "| Kubernetes cluster and namespace | Passed | owner |",
+        1,
+    ).replace(
+        "| Sign in and load Executive Dashboard | Passed | evidence-1.txt |",
+        "| Sign in and load Executive Dashboard | Passed | pending |",
+        1,
+    )
+    assert "placeholder-evidence" in codes(text)
+
+
+def test_previous_deployable_sha_must_be_valid_and_different():
+    invalid = valid_record().replace("b" * 40, "previous", 1)
+    assert "invalid-previous-sha" in codes(invalid)
+
+    identical = valid_record().replace("b" * 40, "a" * 40, 1)
+    assert "invalid-rollback-target" in codes(identical)
