@@ -59,7 +59,7 @@ describe("RemediationProgressLedgerPanel", () => {
     render(<RemediationProgressLedgerPanel investigationId={7} />);
     await screen.findByText("Progress record needs review");
     await user.click(screen.getByText("Progress history"));
-    expect(await screen.findByText("Need source")).toBeInTheDocument();
+    expect(await screen.findByRole("article", { name: "History event 2" })).toHaveTextContent("Need source");
     expect(screen.getByText("No researcher note recorded.")).toBeInTheDocument();
     expect(screen.getByText(/not validation evidence/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith("/api/investigations/7/remediation-progress/1/history", { cache: "no-store" });
