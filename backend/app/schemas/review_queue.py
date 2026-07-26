@@ -131,3 +131,39 @@ class ReviewQueueComparisonReportVerification(BaseModel):
         "evidence, advice, recommended action, or that the preserved comparison matches current "
         "queue state."
     )
+
+
+class ReviewQueueComparisonVerificationReceiptUnsigned(BaseModel):
+    contract_version: Literal["1.0"] = "1.0"
+    artifact_type: Literal[
+        "cross_investigation_review_queue_comparison_verification_receipt"
+    ] = "cross_investigation_review_queue_comparison_verification_receipt"
+    verified_report_content_sha256: str
+    prior_content_sha256: str
+    current_content_sha256: str
+    added_item_count: int
+    removed_item_count: int
+    unchanged_item_count: int
+    reason_count_deltas: dict[str, int]
+    investigation_count_delta: int
+    verification_contract_version: Literal["1.0"] = "1.0"
+    verification_artifact_type: Literal[
+        "cross_investigation_review_queue_comparison_report_verification"
+    ] = "cross_investigation_review_queue_comparison_report_verification"
+    current_state_checked: Literal[False] = False
+    generated_from: Literal["successful_report_contract_and_digest_verification"] = (
+        "successful_report_contract_and_digest_verification"
+    )
+    interpretation_notice: str = (
+        "This receipt records successful contract and digest verification for the uploaded "
+        "comparison report. It establishes artifact integrity only and does not establish truth, "
+        "confidence, importance, urgency, risk, resolution, validation evidence, advice, "
+        "recommended action, or agreement with current queue state."
+    )
+
+
+class ReviewQueueComparisonVerificationReceipt(
+    ReviewQueueComparisonVerificationReceiptUnsigned
+):
+    generated_at: datetime
+    content_sha256: str
