@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   PracticumReviewerDetail,
@@ -50,8 +50,7 @@ export function PracticumReviewerWorkspace() {
     }
   }
 
-  async function submitDecision(event: FormEvent, decision: "approved" | "revision_required") {
-    event.preventDefault();
+  async function submitDecision(decision: "approved" | "revision_required") {
     if (!detail) return;
     setSaving(true);
     setError(null);
@@ -205,14 +204,14 @@ export function PracticumReviewerWorkspace() {
               </div>
 
               {detail.enrollment.status === "review_ready" && (
-                <form className="reviewer-decision-form">
+                <form className="reviewer-decision-form" onSubmit={(event) => event.preventDefault()}>
                   <label>
                     Reviewer notes
                     <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={5} maxLength={12000} />
                   </label>
                   <div>
-                    <button type="button" disabled={saving} onClick={(event) => void submitDecision(event, "approved")}>Approve</button>
-                    <button type="button" disabled={saving || !notes.trim()} onClick={(event) => void submitDecision(event, "revision_required")}>Request revision</button>
+                    <button type="button" disabled={saving} onClick={() => void submitDecision("approved")}>Approve</button>
+                    <button type="button" disabled={saving || !notes.trim()} onClick={() => void submitDecision("revision_required")}>Request revision</button>
                   </div>
                   <p>Revision requests require reviewer notes. Decisions are recorded as append-only human review history.</p>
                 </form>
