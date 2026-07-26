@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.review_queue import (
     ReviewQueueComparisonReport,
     ReviewQueueComparisonReportUnsigned,
+    ReviewQueueComparisonReportVerification,
     ReviewQueueSnapshot,
     ReviewQueueSnapshotComparison,
     ReviewQueueSnapshotUnsigned,
@@ -160,4 +161,39 @@ def export_review_queue_comparison_report(
             ),
             "X-Content-SHA256": digest,
         },
+    )
+
+
+@router.post(
+    "/review-queue/snapshot/compare/report/verify",
+    response_model=ReviewQueueComparisonReportVerification,
+)
+def verify_review_queue_comparison_report(
+    report: ReviewQueueComparisonReport,
+    _current_user: User = Depends(get_current_user),
+) -> ReviewQueueComparisonReportVerification:
+    unsigned = ReviewQueueComparisonReportUnsigned(
+        **report.model_dump(exclude={"generated_at", "content_sha256"})
+    )
+    recomputed_digest = _digest(unsigned)
+    if recomputed_digest != report.content_sha256:
+        raise HTTPException(
+            status_code=400,
+            detail="Comparison report digest does not match its canonical payload",
+        )
+
+    comparison = report.comparison
+    return ReviewQueueComparisonReportVerification(
+        supplied_content_sha256=report.content_sha256,
+        recomputed_content_sha256=recomputed_digest,
+        prior_content_sha256=comparison.prior_content_sha256,
+        current_content_sha256=comparison.current_content_sha256,
+        added_item_count=len(comparison.added_items),
+        removed_item_count=len(comparison.removed_items),
+        unchanged_item_count=len(comparison.unchanged_items),
+        reason_count_deltas={
+            key: comparison.reason_count_deltas[key]
+            for key in sorted(comparison.reason_count_deltas)
+        },
+        investigation_count_delta=comparison.investigation_count_delta,
     )
