@@ -195,3 +195,23 @@ class ReviewQueueComparisonVerificationReceiptValidation(BaseModel):
         "not establish truth, confidence, importance, urgency, risk, resolution, validation "
         "evidence, advice, recommended action, or agreement with current queue state."
     )
+
+
+class ReviewQueueArtifactIntegrityResult(BaseModel):
+    contract_version: Literal["1.0"] = "1.0"
+    artifact_type: Literal["cross_investigation_review_queue_artifact_integrity_result"] = (
+        "cross_investigation_review_queue_artifact_integrity_result"
+    )
+    detected_artifact_type: Literal[
+        "cross_investigation_review_queue_comparison_report",
+        "cross_investigation_review_queue_comparison_verification_receipt",
+    ]
+    valid: Literal[True] = True
+    validation: ReviewQueueComparisonReportVerification | ReviewQueueComparisonVerificationReceiptValidation
+    current_state_checked: Literal[False] = False
+    interpretation_notice: str = (
+        "This workspace identifies a supported artifact and confirms its contract and canonical "
+        "digest only. It does not establish truth, confidence, importance, urgency, risk, "
+        "resolution, validation evidence, advice, recommended action, or agreement with current "
+        "queue state."
+    )
