@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AdaptiveLearningPlan } from "@/components/adaptive-learning-plan";
 import { CompetencyTrends } from "@/components/competency-trends";
 import { EducationHub } from "@/components/education-hub";
+import { ResearchPracticumWorkspace } from "@/components/research-practicum-workspace";
 import "./education.css";
 
 export default async function EducationPage() {
@@ -13,6 +14,7 @@ export default async function EducationPage() {
     <>
       <EducationHub />
       <AdaptiveLearningPlan />
+      <ResearchPracticumWorkspace />
       <CompetencyTrends />
     </>
   );
