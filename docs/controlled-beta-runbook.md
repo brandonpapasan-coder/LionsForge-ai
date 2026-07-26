@@ -152,3 +152,19 @@ python scripts/validate_general_availability_decision.py path/to/completed-ga-de
 The command exits `0` only when the record binds one exact release and rollback SHA to immutable image digests, upstream acceptance evidence, checked exit gates, passed operational controls, valid launch measurements, complete approvals, and exactly one internally consistent `GO` or `NO-GO` decision.
 
 A `VALID` GA record confirms Markdown completeness and internal consistency only. It does not independently verify live infrastructure, evidence freshness, ownership, production state, or authorization. It does not enable public registration, payment collection, production changes, or general availability. The external gate issues remain authoritative and fail closed.
+
+## Validate the complete launch evidence chain
+
+After each standalone record validates, cross-check the four non-secret working copies together:
+
+```bash
+python scripts/validate_launch_evidence_chain.py \
+  path/to/completed-production-record.md \
+  path/to/completed-public-operations-record.md \
+  path/to/completed-controlled-beta-record.md \
+  path/to/completed-ga-decision-record.md
+```
+
+The chain validator invokes every standalone validator and then checks release and rollback identity, immutable image digests, public-operations candidate binding, documented candidate ancestry, distinct upstream evidence identifiers, and decision ordering. A differing beta predecessor is accepted only when the GA record contains an explicit candidate-ancestry evidence identifier; a matching release SHA with different digests or rollback identity is rejected as ambiguous.
+
+A `VALID` chain means only that the supplied Markdown records are individually valid and mutually consistent. It does not establish evidence truth or freshness, confirm live infrastructure, authorize deployment or payment collection, enable registration, or declare controlled beta or general availability. The external gate issues remain authoritative and fail closed.
