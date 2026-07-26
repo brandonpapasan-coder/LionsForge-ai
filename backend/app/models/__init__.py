@@ -18,6 +18,14 @@ from app.models.research_conclusion import ResearchConclusion, ResearchConclusio
 from app.models.research_conclusion_defense import ResearchConclusionDefense, ResearchConclusionDefenseRevision
 from app.models.research_evidence import ResearchEvidence
 from app.models.research_planning import ResearchPlanRecommendation, ResearchPlanRevision
+from app.models.research_practicum import (
+    PracticumEnrollment,
+    PracticumEvidenceReference,
+    PracticumObjective,
+    PracticumObjectiveProgress,
+    PracticumReviewDecision,
+    PracticumTemplate,
+)
 from app.models.research_project import ResearchProject
 from app.models.research_session import ResearchSession
 from app.models.user import User
@@ -73,6 +81,12 @@ __all__ = [
     "MissionStep",
     "Portfolio",
     "PortfolioHolding",
+    "PracticumEnrollment",
+    "PracticumEvidenceReference",
+    "PracticumObjective",
+    "PracticumObjectiveProgress",
+    "PracticumReviewDecision",
+    "PracticumTemplate",
     "RemediationProgress",
     "RemediationProgressHistory",
     "ResearchConclusion",

@@ -91,11 +91,89 @@
 .lesson-card {
   display: grid;
   gap: .8rem;
+  min-width: 0;
 }
 
 .lesson-card h2 {
   margin: 0;
   letter-spacing: -.035em;
+}
+
+.lesson-card article,
+.lesson-card section,
+.lesson-card aside {
+  min-width: 0;
+}
+
+.lesson-card section[aria-labelledby] {
+  display: grid;
+  gap: .65rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+  background: rgba(255,255,255,.025);
+}
+
+.lesson-card form {
+  display: grid;
+  gap: .65rem;
+}
+
+.lesson-card label {
+  display: grid;
+  gap: .4rem;
+  color: var(--muted);
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.lesson-card input,
+.lesson-card select,
+.lesson-card textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  padding: .75rem .8rem;
+  background: rgba(4,17,31,.72);
+  color: inherit;
+  font: inherit;
+}
+
+.lesson-card textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.lesson-card button {
+  min-height: 44px;
+  border: 0;
+  border-radius: .8rem;
+  padding: .75rem .9rem;
+  background: var(--accent);
+  color: #04111f;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lesson-card button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.lesson-card input:focus-visible,
+.lesson-card select:focus-visible,
+.lesson-card textarea:focus-visible,
+.lesson-card button:focus-visible,
+.lesson-footer button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 75%, white);
+  outline-offset: 2px;
+}
+
+.lesson-card [role="alert"] {
+  padding: .8rem;
+  border: 1px solid currentColor;
+  border-radius: .75rem;
 }
 
 .lesson-meta,
@@ -149,4 +227,20 @@
   .education-shell { width: min(100% - 1rem, 1400px); }
   .competency-grid { grid-template-columns: 1fr; }
   .education-progress-ring { min-width: 140px; }
+  .lesson-card { padding: .9rem; }
+  .lesson-card section[aria-labelledby] { padding: .8rem; }
+  .lesson-meta,
+  .lesson-footer { align-items: flex-start; flex-direction: column; }
+  .lesson-card button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .education-shell *,
+  .education-shell *::before,
+  .education-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
