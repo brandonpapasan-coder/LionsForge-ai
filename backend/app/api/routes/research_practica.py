@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.education import LessonProgress
+from app.models.research_evidence import ResearchEvidence
 from app.models.research_practicum import (
     PracticumEnrollment,
+    PracticumEvidenceReference,
     PracticumObjective,
     PracticumObjectiveProgress,
     PracticumReviewDecision,
@@ -20,8 +22,14 @@ from app.models.user import User
 from app.schemas.research_practicum import (
     PracticumEnrollmentCreate,
     PracticumEnrollmentRead,
+    PracticumEvidenceReferenceCreate,
+    PracticumEvidenceReferenceRead,
     PracticumObjectiveProgressRead,
     PracticumObjectiveProgressUpdate,
+    PracticumObjectiveReadinessRead,
+    PracticumReadinessRead,
+    PracticumReviewDecisionCreate,
+    PracticumReviewDecisionRead,
     PracticumTemplateRead,
 )
 from app.services.research_practicum_templates import (
@@ -30,6 +38,10 @@ from app.services.research_practicum_templates import (
 )
 
 router = APIRouter()
+ADVISORY_NOTICE = (
+    "This readiness result is a deterministic workflow evaluation based on linked records. "
+    "It is not accreditation, licensing, professional certification, or autonomous competency approval."
+)
 
 
 def _sync_templates(db: Session) -> None:
@@ -116,15 +128,59 @@ def _owned_enrollment(db: Session, user_id: int, enrollment_id: int) -> Practicu
     return enrollment
 
 
-def _enrollment_read(db: Session, enrollment: PracticumEnrollment) -> PracticumEnrollmentRead:
-    template = db.get(PracticumTemplate, enrollment.template_id)
-    progress_rows = list(
+def _reviewable_enrollment(db: Session, reviewer: User, enrollment_id: int) -> PracticumEnrollment:
+    if not reviewer.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Practicum reviewer authorization required")
+    enrollment = db.get(PracticumEnrollment, enrollment_id)
+    if enrollment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practicum enrollment not found")
+    return enrollment
+
+
+def _progress_rows(db: Session, enrollment_id: int) -> list[PracticumObjectiveProgress]:
+    return list(
         db.scalars(
             select(PracticumObjectiveProgress)
-            .where(PracticumObjectiveProgress.enrollment_id == enrollment.id)
+            .where(PracticumObjectiveProgress.enrollment_id == enrollment_id)
             .order_by(PracticumObjectiveProgress.objective_key)
         ).all()
     )
+
+
+def _review_read(row: PracticumReviewDecision) -> PracticumReviewDecisionRead:
+    return PracticumReviewDecisionRead(
+        id=row.id,
+        reviewer_user_id=row.reviewer_user_id,
+        decision=row.decision,
+        notes=row.notes,
+        created_at=row.created_at,
+    )
+
+
+def _enrollment_read(db: Session, enrollment: PracticumEnrollment) -> PracticumEnrollmentRead:
+    template = db.get(PracticumTemplate, enrollment.template_id)
+    progress_rows = _progress_rows(db, enrollment.id)
+    progress_ids = [row.id for row in progress_rows]
+    references = (
+        list(
+            db.scalars(
+                select(PracticumEvidenceReference)
+                .where(PracticumEvidenceReference.objective_progress_id.in_(progress_ids))
+                .order_by(PracticumEvidenceReference.created_at, PracticumEvidenceReference.id)
+            ).all()
+        )
+        if progress_ids
+        else []
+    )
+    references_by_progress: dict[int, list[PracticumEvidenceReferenceRead]] = {}
+    for reference in references:
+        references_by_progress.setdefault(reference.objective_progress_id, []).append(
+            PracticumEvidenceReferenceRead(
+                id=reference.id,
+                research_evidence_id=reference.research_evidence_id,
+                created_at=reference.created_at,
+            )
+        )
     reviews = list(
         db.scalars(
             select(PracticumReviewDecision)
@@ -148,13 +204,89 @@ def _enrollment_read(db: Session, enrollment: PracticumEnrollment) -> PracticumE
             PracticumObjectiveProgressRead(
                 objective_key=row.objective_key,
                 reflection=row.reflection,
-                evidence_references=[],
+                evidence_references=references_by_progress.get(row.id, []),
                 created_at=row.created_at,
                 updated_at=row.updated_at,
             )
             for row in progress_rows
         ],
-        review_history=reviews,
+        review_history=[_review_read(row) for row in reviews],
+    )
+
+
+def _readiness(db: Session, enrollment: PracticumEnrollment) -> PracticumReadinessRead:
+    objectives = list(
+        db.scalars(
+            select(PracticumObjective)
+            .where(PracticumObjective.template_id == enrollment.template_id)
+            .order_by(PracticumObjective.sequence, PracticumObjective.objective_key)
+        ).all()
+    )
+    progress_by_key = {row.objective_key: row for row in _progress_rows(db, enrollment.id)}
+    latest_review = db.scalar(
+        select(PracticumReviewDecision)
+        .where(PracticumReviewDecision.enrollment_id == enrollment.id)
+        .order_by(PracticumReviewDecision.created_at.desc(), PracticumReviewDecision.id.desc())
+    )
+    objective_results: list[PracticumObjectiveReadinessRead] = []
+    overall_missing: list[str] = []
+    approved = latest_review is not None and latest_review.decision == "approved"
+
+    for objective in objectives:
+        progress = progress_by_key[objective.objective_key]
+        references = list(
+            db.scalars(
+                select(PracticumEvidenceReference)
+                .where(PracticumEvidenceReference.objective_progress_id == progress.id)
+                .order_by(PracticumEvidenceReference.research_evidence_id)
+            ).all()
+        )
+        evidence_ids = [reference.research_evidence_id for reference in references]
+        evidence_rows = (
+            list(db.scalars(select(ResearchEvidence).where(ResearchEvidence.id.in_(evidence_ids))).all())
+            if evidence_ids
+            else []
+        )
+        categories = sorted({evidence.source_type for evidence in evidence_rows})
+        missing: list[str] = []
+        if len(evidence_ids) < objective.minimum_evidence_count:
+            missing.append(f"At least {objective.minimum_evidence_count} evidence reference(s) are required.")
+        for category in objective.required_evidence_categories:
+            if category not in categories:
+                missing.append(f"Evidence category '{category}' is required.")
+        reflection_present = bool(progress.reflection and progress.reflection.strip())
+        if objective.reflection_required and not reflection_present:
+            missing.append("A learner-authored reflection is required.")
+        if missing:
+            objective_status = "missing_requirements"
+            overall_missing.extend(f"{objective.objective_key}: {item}" for item in missing)
+        elif approved:
+            objective_status = "approved"
+        else:
+            objective_status = "ready_for_review"
+        objective_results.append(
+            PracticumObjectiveReadinessRead(
+                objective_key=objective.objective_key,
+                sequence=objective.sequence,
+                competency=objective.competency,
+                status=objective_status,
+                referenced_evidence_ids=evidence_ids,
+                covered_evidence_categories=categories,
+                reflection_present=reflection_present,
+                human_review_required=objective.human_review_required,
+                missing_requirements=missing,
+            )
+        )
+
+    ready = not overall_missing
+    return PracticumReadinessRead(
+        enrollment_id=enrollment.id,
+        enrollment_status=enrollment.status,
+        advisory_notice=ADVISORY_NOTICE,
+        objectives=objective_results,
+        missing_requirements=overall_missing,
+        ready_for_human_review=ready,
+        latest_review_decision=_review_read(latest_review) if latest_review else None,
     )
 
 
@@ -217,7 +349,6 @@ def create_practicum_enrollment(
     )
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research project not found")
-
     completed_slugs = set(
         db.scalars(
             select(LessonProgress.lesson_slug).where(
@@ -232,15 +363,13 @@ def create_practicum_enrollment(
             status_code=status.HTTP_409_CONFLICT,
             detail={"message": "Practicum prerequisites are incomplete", "missing_lesson_slugs": missing},
         )
-
-    now = datetime.utcnow()
     enrollment = PracticumEnrollment(
         user_id=current_user.id,
         template_id=template.id,
         template_version=template.version,
         research_project_id=project.id,
         status="in_progress",
-        started_at=now,
+        started_at=datetime.utcnow(),
     )
     db.add(enrollment)
     try:
@@ -253,12 +382,7 @@ def create_practicum_enrollment(
             ).all()
         )
         for objective in objectives:
-            db.add(
-                PracticumObjectiveProgress(
-                    enrollment_id=enrollment.id,
-                    objective_key=objective.objective_key,
-                )
-            )
+            db.add(PracticumObjectiveProgress(enrollment_id=enrollment.id, objective_key=objective.objective_key))
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -291,10 +415,7 @@ def get_practicum_enrollment(
     return _enrollment_read(db, _owned_enrollment(db, current_user.id, enrollment_id))
 
 
-@router.patch(
-    "/enrollments/{enrollment_id}/objectives/{objective_key}",
-    response_model=PracticumEnrollmentRead,
-)
+@router.patch("/enrollments/{enrollment_id}/objectives/{objective_key}", response_model=PracticumEnrollmentRead)
 def update_practicum_objective(
     enrollment_id: int,
     objective_key: str,
@@ -318,3 +439,145 @@ def update_practicum_objective(
     db.commit()
     db.refresh(enrollment)
     return _enrollment_read(db, enrollment)
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/objectives/{objective_key}/evidence",
+    response_model=PracticumEnrollmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def attach_practicum_evidence(
+    enrollment_id: int,
+    objective_key: str,
+    payload: PracticumEvidenceReferenceCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticumEnrollmentRead:
+    enrollment = _owned_enrollment(db, current_user.id, enrollment_id)
+    if enrollment.status in {"review_ready", "completed"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Submitted practica cannot be edited")
+    progress = db.scalar(
+        select(PracticumObjectiveProgress).where(
+            PracticumObjectiveProgress.enrollment_id == enrollment.id,
+            PracticumObjectiveProgress.objective_key == objective_key,
+        )
+    )
+    evidence = db.scalar(
+        select(ResearchEvidence)
+        .join(ResearchProject, ResearchProject.id == ResearchEvidence.project_id)
+        .where(
+            ResearchEvidence.id == payload.research_evidence_id,
+            ResearchEvidence.project_id == enrollment.research_project_id,
+            ResearchProject.owner_id == current_user.id,
+        )
+    )
+    if progress is None or evidence is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practicum objective or evidence not found")
+    db.add(
+        PracticumEvidenceReference(
+            objective_progress_id=progress.id,
+            research_evidence_id=evidence.id,
+        )
+    )
+    try:
+        enrollment.status = "in_progress"
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Evidence is already attached") from exc
+    db.refresh(enrollment)
+    return _enrollment_read(db, enrollment)
+
+
+@router.delete(
+    "/enrollments/{enrollment_id}/objectives/{objective_key}/evidence/{reference_id}",
+    response_model=PracticumEnrollmentRead,
+)
+def remove_practicum_evidence(
+    enrollment_id: int,
+    objective_key: str,
+    reference_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticumEnrollmentRead:
+    enrollment = _owned_enrollment(db, current_user.id, enrollment_id)
+    if enrollment.status in {"review_ready", "completed"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Submitted practica cannot be edited")
+    reference = db.scalar(
+        select(PracticumEvidenceReference)
+        .join(PracticumObjectiveProgress, PracticumObjectiveProgress.id == PracticumEvidenceReference.objective_progress_id)
+        .where(
+            PracticumEvidenceReference.id == reference_id,
+            PracticumObjectiveProgress.enrollment_id == enrollment.id,
+            PracticumObjectiveProgress.objective_key == objective_key,
+        )
+    )
+    if reference is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence reference not found")
+    db.delete(reference)
+    enrollment.status = "in_progress"
+    db.commit()
+    db.refresh(enrollment)
+    return _enrollment_read(db, enrollment)
+
+
+@router.get("/enrollments/{enrollment_id}/readiness", response_model=PracticumReadinessRead)
+def get_practicum_readiness(
+    enrollment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticumReadinessRead:
+    return _readiness(db, _owned_enrollment(db, current_user.id, enrollment_id))
+
+
+@router.post("/enrollments/{enrollment_id}/submit", response_model=PracticumReadinessRead)
+def submit_practicum_for_review(
+    enrollment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticumReadinessRead:
+    enrollment = _owned_enrollment(db, current_user.id, enrollment_id)
+    if enrollment.status == "completed":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Completed practica cannot be resubmitted")
+    readiness = _readiness(db, enrollment)
+    if not readiness.ready_for_human_review:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": "Practicum is not ready for review", "missing_requirements": readiness.missing_requirements},
+        )
+    enrollment.status = "review_ready"
+    enrollment.submitted_for_review_at = datetime.utcnow()
+    db.commit()
+    db.refresh(enrollment)
+    return _readiness(db, enrollment)
+
+
+@router.post("/enrollments/{enrollment_id}/reviews", response_model=PracticumReadinessRead)
+def review_practicum(
+    enrollment_id: int,
+    payload: PracticumReviewDecisionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticumReadinessRead:
+    enrollment = _reviewable_enrollment(db, current_user, enrollment_id)
+    if enrollment.status != "review_ready":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Practicum is not awaiting review")
+    readiness = _readiness(db, enrollment)
+    if not readiness.ready_for_human_review:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Practicum requirements are incomplete")
+    decision = PracticumReviewDecision(
+        enrollment_id=enrollment.id,
+        reviewer_user_id=current_user.id,
+        decision=payload.decision,
+        notes=payload.notes.strip() if payload.notes else None,
+    )
+    db.add(decision)
+    if payload.decision == "approved":
+        enrollment.status = "completed"
+        enrollment.completed_at = datetime.utcnow()
+    else:
+        enrollment.status = "revision_required"
+        enrollment.completed_at = None
+    db.commit()
+    db.refresh(enrollment)
+    return _readiness(db, enrollment)
