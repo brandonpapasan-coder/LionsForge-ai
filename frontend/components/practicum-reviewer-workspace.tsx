@@ -11,6 +11,12 @@ import {
 
 const initialFilters: PracticumReviewerQueueFilters = { page: 1, page_size: 20 };
 
+type ReviewQueueStatus = NonNullable<PracticumReviewerQueueFilters["status"]>;
+
+function parseQueueStatus(value: string): ReviewQueueStatus | undefined {
+  return value === "review_ready" || value === "revision_required" ? value : undefined;
+}
+
 export function PracticumReviewerWorkspace() {
   const [filters, setFilters] = useState(initialFilters);
   const [queue, setQueue] = useState<PracticumReviewerQueue | null>(null);
@@ -86,7 +92,7 @@ export function PracticumReviewerWorkspace() {
           Status
           <select
             value={filters.status ?? ""}
-            onChange={(event) => setFilters({ ...filters, status: event.target.value || undefined, page: 1 })}
+            onChange={(event) => setFilters({ ...filters, status: parseQueueStatus(event.target.value), page: 1 })}
           >
             <option value="">All active reviews</option>
             <option value="review_ready">Ready for review</option>
