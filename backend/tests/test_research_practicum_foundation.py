@@ -24,7 +24,10 @@ def test_practicum_template_definitions_are_versioned_and_deterministic():
     for template in active:
         assert template["version"] >= 1
         objectives = template["objectives"]
-        assert objectives == sorted(objectives, key=lambda objective: (objective["sequence"], objective["objective_key"]))
+        assert objectives == sorted(
+            objectives,
+            key=lambda objective: (objective["sequence"], objective["objective_key"]),
+        )
         assert len({objective["objective_key"] for objective in objectives}) == len(objectives)
         assert all(objective["human_review_required"] for objective in objectives)
 
