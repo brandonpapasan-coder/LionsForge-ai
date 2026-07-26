@@ -74,3 +74,30 @@ def test_practicum_migration_is_chained_and_reversible():
     assert 'op.create_table(\n        "practicum_templates"' in content
     assert 'op.create_table(\n        "practicum_review_decisions"' in content
     assert 'op.drop_table("practicum_templates")' in content
+
+
+def test_practicum_workflow_contract_preserves_ownership_and_human_review():
+    route = Path(__file__).parents[1] / "app" / "api" / "routes" / "research_practica.py"
+    content = route.read_text(encoding="utf-8")
+
+    assert "ResearchEvidence.project_id == enrollment.research_project_id" in content
+    assert "ResearchProject.owner_id == current_user.id" in content
+    assert "db.delete(reference)" in content
+    assert "db.delete(evidence)" not in content
+    assert "if not reviewer.is_superuser" in content
+    assert "Practicum reviewer authorization required" in content
+    assert "db.add(decision)" in content
+    assert "db.delete(decision)" not in content
+
+
+def test_practicum_readiness_and_submission_contract_is_deterministic():
+    route = Path(__file__).parents[1] / "app" / "api" / "routes" / "research_practica.py"
+    content = route.read_text(encoding="utf-8")
+
+    assert "order_by(PracticumObjective.sequence, PracticumObjective.objective_key)" in content
+    assert "ready_for_human_review=ready" in content
+    assert "if not readiness.ready_for_human_review" in content
+    assert 'enrollment.status = "review_ready"' in content
+    assert 'enrollment.status = "completed"' in content
+    assert 'enrollment.status = "revision_required"' in content
+    assert "not accreditation, licensing, professional certification" in content
