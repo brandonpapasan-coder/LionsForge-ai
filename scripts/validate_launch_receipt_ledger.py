@@ -35,7 +35,9 @@ ENTRY_FIELDS = {
     "owner",
 }
 SENSITIVE_PATTERNS = (
-    re.compile(r"(?i)\b(?:api[_-]?key|access[_-]?token|secret|password)\b\s*[:=]\s*\S+"),
+    re.compile(
+        r"(?i)[\"']?\b(?:api[_-]?key|access[_-]?token|secret|password)\b[\"']?\s*[:=]\s*\S+"
+    ),
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
 )
