@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 PracticumTemplateStatus = Literal["active", "retired"]
 PracticumEnrollmentStatus = Literal[
@@ -70,6 +70,13 @@ class PracticumObjectiveProgressRead(BaseModel):
 class PracticumReviewDecisionCreate(BaseModel):
     decision: PracticumReviewDecisionValue
     notes: str | None = Field(default=None, max_length=12000)
+    expected_enrollment_updated_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def require_revision_notes(self) -> "PracticumReviewDecisionCreate":
+        if self.decision == "revision_required" and not (self.notes and self.notes.strip()):
+            raise ValueError("Reviewer notes are required when revision is requested")
+        return self
 
 
 class PracticumReviewDecisionRead(BaseModel):
@@ -118,3 +125,59 @@ class PracticumEnrollmentRead(BaseModel):
     updated_at: datetime
     objectives: list[PracticumObjectiveProgressRead]
     review_history: list[PracticumReviewDecisionRead]
+
+
+class PracticumReviewerEvidenceRead(BaseModel):
+    id: int
+    title: str
+    summary: str | None
+    source_type: str
+    status: str
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime
+    record_source: Literal["measured_research_record"] = "measured_research_record"
+
+
+class PracticumReviewerObjectiveRead(BaseModel):
+    objective_key: str
+    sequence: int
+    title: str
+    description: str
+    competency: str
+    reflection: str | None
+    reflection_source: Literal["learner_authored"] = "learner_authored"
+    evidence: list[PracticumReviewerEvidenceRead]
+    readiness: PracticumObjectiveReadinessRead
+
+
+class PracticumReviewerQueueItemRead(BaseModel):
+    enrollment_id: int
+    learner_user_id: int
+    learner_display_name: str
+    template_slug: str
+    template_title: str
+    template_version: int
+    research_project_id: int
+    research_project_title: str
+    status: PracticumEnrollmentStatus
+    submitted_for_review_at: datetime | None
+    updated_at: datetime
+    latest_review_decision: PracticumReviewDecisionRead | None
+
+
+class PracticumReviewerQueueRead(BaseModel):
+    items: list[PracticumReviewerQueueItemRead]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+    total_items: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+
+
+class PracticumReviewerDetailRead(BaseModel):
+    enrollment: PracticumReviewerQueueItemRead
+    objectives: list[PracticumReviewerObjectiveRead]
+    readiness: PracticumReadinessRead
+    review_history: list[PracticumReviewDecisionRead]
+    human_review_required: Literal[True] = True
+    advisory_notice: str
