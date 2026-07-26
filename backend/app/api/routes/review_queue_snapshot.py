@@ -17,6 +17,7 @@ from app.schemas.review_queue import (
     ReviewQueueComparisonReportVerification,
     ReviewQueueComparisonVerificationReceipt,
     ReviewQueueComparisonVerificationReceiptUnsigned,
+    ReviewQueueComparisonVerificationReceiptValidation,
     ReviewQueueSnapshot,
     ReviewQueueSnapshotComparison,
     ReviewQueueSnapshotUnsigned,
@@ -126,6 +127,38 @@ def _verified_report(
             for key in sorted(comparison.reason_count_deltas)
         },
         investigation_count_delta=comparison.investigation_count_delta,
+    )
+
+
+def _validated_receipt(
+    receipt: ReviewQueueComparisonVerificationReceipt,
+) -> ReviewQueueComparisonVerificationReceiptValidation:
+    unsigned = ReviewQueueComparisonVerificationReceiptUnsigned(
+        **receipt.model_dump(exclude={"generated_at", "content_sha256"})
+    )
+    recomputed_digest = _digest(unsigned)
+    if recomputed_digest != receipt.content_sha256:
+        raise HTTPException(
+            status_code=400,
+            detail="Verification receipt digest does not match its canonical payload",
+        )
+
+    return ReviewQueueComparisonVerificationReceiptValidation(
+        supplied_content_sha256=receipt.content_sha256,
+        recomputed_content_sha256=recomputed_digest,
+        verified_report_content_sha256=receipt.verified_report_content_sha256,
+        prior_content_sha256=receipt.prior_content_sha256,
+        current_content_sha256=receipt.current_content_sha256,
+        added_item_count=receipt.added_item_count,
+        removed_item_count=receipt.removed_item_count,
+        unchanged_item_count=receipt.unchanged_item_count,
+        reason_count_deltas={
+            key: receipt.reason_count_deltas[key]
+            for key in sorted(receipt.reason_count_deltas)
+        },
+        investigation_count_delta=receipt.investigation_count_delta,
+        verification_contract_version=receipt.verification_contract_version,
+        verification_artifact_type=receipt.verification_artifact_type,
     )
 
 
@@ -239,3 +272,14 @@ def export_review_queue_comparison_verification_receipt(
             "X-Content-SHA256": digest,
         },
     )
+
+
+@router.post(
+    "/review-queue/snapshot/compare/report/verify/receipt/validate",
+    response_model=ReviewQueueComparisonVerificationReceiptValidation,
+)
+def validate_review_queue_comparison_verification_receipt(
+    receipt: ReviewQueueComparisonVerificationReceipt,
+    _current_user: User = Depends(get_current_user),
+) -> ReviewQueueComparisonVerificationReceiptValidation:
+    return _validated_receipt(receipt)
