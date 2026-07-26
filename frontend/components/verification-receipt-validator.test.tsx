@@ -126,15 +126,17 @@ describe("verification receipt validator", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("unsupported");
   });
 
-  it("redirects unauthorized users to login", async () => {
+  it("handles unauthorized validation without showing protected metadata", async () => {
     const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.stubGlobal("fetch", vi.fn(() => response({ detail: "Not authenticated" }, 401)));
     render(<VerificationReceiptValidator />);
 
     await user.upload(screen.getByLabelText("Verification receipt JSON"), jsonFile(receipt));
     await user.click(screen.getByRole("button", { name: "Validate verification receipt" }));
 
-    expect(window.location.href).toContain("/login");
+    expect(screen.queryByLabelText("Verification receipt validation results")).not.toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalled();
   });
 
   it("shows retry guidance on transport failure", async () => {
