@@ -140,3 +140,15 @@ python scripts/validate_controlled_beta_acceptance.py path/to/completed-controll
 The command exits `0` only when the Markdown is internally complete and consistent. It fails closed on malformed release identity, blank owners or measurements, unchecked entry gates, missing journey or resilience evidence, unsupported result values, invalid counts, contradictory decisions, multiple selected decisions, and apparent credentials or prohibited private content.
 
 A `VALID` result confirms record structure and internal consistency only. It does not prove that linked evidence is true, current, sufficient, independently verified, or tied to the live environment. It does not authorize controlled beta, public registration, payment collection, or general availability. Issues #29, #400, #401, #402, #403, and #461 remain governed by their live external evidence requirements.
+
+## Validate the separate GA decision record
+
+After controlled beta, complete a private working copy of `docs/general-availability-decision-record.md` using non-secret evidence identifiers only, then run:
+
+```bash
+python scripts/validate_general_availability_decision.py path/to/completed-ga-decision-record.md
+```
+
+The command exits `0` only when the record binds one exact release and rollback SHA to immutable image digests, upstream acceptance evidence, checked exit gates, passed operational controls, valid launch measurements, complete approvals, and exactly one internally consistent `GO` or `NO-GO` decision.
+
+A `VALID` GA record confirms Markdown completeness and internal consistency only. It does not independently verify live infrastructure, evidence freshness, ownership, production state, or authorization. It does not enable public registration, payment collection, production changes, or general availability. The external gate issues remain authoritative and fail closed.
