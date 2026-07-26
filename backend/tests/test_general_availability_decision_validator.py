@@ -47,7 +47,7 @@ def complete_record(decision: str = "GO") -> str:
 - Registration mode: controlled-public
 - Maximum registered users: 1000
 - Per-user daily AI request limit: 50
-- Aggregate daily AI budget (USD): $1,500.00
+- Aggregate daily AI budget (USD): $1500.00
 - Abuse threshold: 20 rejected requests per hour
 - Support owner: support-owner
 - Incident owner: incident-owner
