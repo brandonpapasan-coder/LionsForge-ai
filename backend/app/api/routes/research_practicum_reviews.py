@@ -30,6 +30,7 @@ from app.schemas.research_practicum import (
 
 router = APIRouter()
 REVIEWABLE_STATUSES = {"review_ready", "revision_required"}
+REVIEW_DETAIL_STATUSES = REVIEWABLE_STATUSES | {"completed"}
 
 
 def _require_reviewer(user: User) -> None:
@@ -40,21 +41,17 @@ def _require_reviewer(user: User) -> None:
         )
 
 
-def _queue_item(
-    db: Session,
-    enrollment: PracticumEnrollment,
-) -> PracticumReviewerQueueItemRead:
+def _queue_item(db: Session, enrollment: PracticumEnrollment) -> PracticumReviewerQueueItemRead:
     learner = db.get(User, enrollment.user_id)
     template = db.get(PracticumTemplate, enrollment.template_id)
     project = db.get(ResearchProject, enrollment.research_project_id)
     latest_review = db.scalar(
         select(PracticumReviewDecision)
         .where(PracticumReviewDecision.enrollment_id == enrollment.id)
-        .order_by(
-            PracticumReviewDecision.created_at.desc(),
-            PracticumReviewDecision.id.desc(),
-        )
+        .order_by(PracticumReviewDecision.created_at.desc(), PracticumReviewDecision.id.desc())
     )
+    if template is None or project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practicum context not found")
     return PracticumReviewerQueueItemRead(
         enrollment_id=enrollment.id,
         learner_user_id=enrollment.user_id,
@@ -71,13 +68,10 @@ def _queue_item(
     )
 
 
-def _reviewable_enrollment(db: Session, enrollment_id: int) -> PracticumEnrollment:
+def _detail_enrollment(db: Session, enrollment_id: int) -> PracticumEnrollment:
     enrollment = db.get(PracticumEnrollment, enrollment_id)
-    if enrollment is None or enrollment.status not in REVIEWABLE_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Reviewable practicum not found",
-        )
+    if enrollment is None or enrollment.status not in REVIEW_DETAIL_STATUSES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewable practicum not found")
     return enrollment
 
 
@@ -96,6 +90,8 @@ def list_reviewer_queue(
     _require_reviewer(current_user)
     if queue_status is not None and queue_status not in REVIEWABLE_STATUSES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported queue status")
+    if submitted_from and submitted_to and submitted_from > submitted_to:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid submission date range")
 
     filters = [PracticumEnrollment.status.in_(REVIEWABLE_STATUSES)]
     if queue_status:
@@ -114,9 +110,7 @@ def list_reviewer_queue(
         .join(PracticumTemplate, PracticumTemplate.id == PracticumEnrollment.template_id)
         .where(*filters)
     )
-    total_items = db.scalar(
-        select(func.count()).select_from(base.order_by(None).subquery())
-    ) or 0
+    total_items = db.scalar(select(func.count()).select_from(base.order_by(None).subquery())) or 0
     rows = list(
         db.scalars(
             base.order_by(
@@ -144,7 +138,7 @@ def get_reviewer_detail(
     db: Session = Depends(get_db),
 ) -> PracticumReviewerDetailRead:
     _require_reviewer(current_user)
-    enrollment = _reviewable_enrollment(db, enrollment_id)
+    enrollment = _detail_enrollment(db, enrollment_id)
     readiness = _readiness(db, enrollment)
     readiness_by_key = {item.objective_key: item for item in readiness.objectives}
     objectives = list(
@@ -227,10 +221,8 @@ def record_reviewer_decision(
     db: Session = Depends(get_db),
 ) -> PracticumReviewerDetailRead:
     _require_reviewer(current_user)
-    enrollment = _reviewable_enrollment(db, enrollment_id)
-    if payload.expected_enrollment_updated_at and (
-        enrollment.updated_at != payload.expected_enrollment_updated_at
-    ):
+    enrollment = _detail_enrollment(db, enrollment_id)
+    if payload.expected_enrollment_updated_at and enrollment.updated_at != payload.expected_enrollment_updated_at:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Practicum changed after the reviewer loaded it",
@@ -242,10 +234,7 @@ def record_reviewer_decision(
         )
     readiness = _readiness(db, enrollment)
     if not readiness.ready_for_human_review:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Practicum requirements are incomplete",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Practicum requirements are incomplete")
     db.add(
         PracticumReviewDecision(
             enrollment_id=enrollment.id,
@@ -261,10 +250,5 @@ def record_reviewer_decision(
         enrollment.status = "revision_required"
         enrollment.completed_at = None
     db.commit()
-    if enrollment.status == "completed":
-        raise HTTPException(
-            status_code=status.HTTP_200_OK,
-            detail="Practicum approved and removed from the active review queue",
-        )
     db.refresh(enrollment)
     return get_reviewer_detail(enrollment.id, current_user, db)
