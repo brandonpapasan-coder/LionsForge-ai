@@ -107,3 +107,27 @@ class ReviewQueueComparisonReportUnsigned(BaseModel):
 class ReviewQueueComparisonReport(ReviewQueueComparisonReportUnsigned):
     generated_at: datetime
     content_sha256: str
+
+
+class ReviewQueueComparisonReportVerification(BaseModel):
+    contract_version: Literal["1.0"] = "1.0"
+    artifact_type: Literal["cross_investigation_review_queue_comparison_report_verification"] = (
+        "cross_investigation_review_queue_comparison_report_verification"
+    )
+    valid: Literal[True] = True
+    supplied_content_sha256: str
+    recomputed_content_sha256: str
+    prior_content_sha256: str
+    current_content_sha256: str
+    added_item_count: int
+    removed_item_count: int
+    unchanged_item_count: int
+    reason_count_deltas: dict[str, int]
+    investigation_count_delta: int
+    current_state_checked: Literal[False] = False
+    interpretation_notice: str = (
+        "Verification confirms this uploaded report's contract and canonical digest only. It "
+        "does not establish truth, confidence, importance, urgency, risk, resolution, validation "
+        "evidence, advice, recommended action, or that the preserved comparison matches current "
+        "queue state."
+    )
