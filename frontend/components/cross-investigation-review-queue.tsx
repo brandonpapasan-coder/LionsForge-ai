@@ -37,9 +37,13 @@ export function CrossInvestigationReviewQueuePanel() {
   const [reportExportError, setReportExportError] = useState<string | null>(null);
   const [reportDigest, setReportDigest] = useState<string | null>(null);
   const [verificationFile, setVerificationFile] = useState<File | null>(null);
+  const [verificationPayload, setVerificationPayload] = useState<unknown>(null);
   const [verifying, setVerifying] = useState(false);
   const [verification, setVerification] = useState<ReviewQueueComparisonReportVerification | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [receiptExporting, setReceiptExporting] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [receiptDigest, setReceiptDigest] = useState<string | null>(null);
   const [reasonFilter, setReasonFilter] = useState<"all" | ReviewQueueReason>("all");
   const [investigationFilter, setInvestigationFilter] = useState("all");
   const [reloadToken, setReloadToken] = useState(0);
@@ -102,16 +106,12 @@ export function CrossInvestigationReviewQueuePanel() {
       try { parsed = JSON.parse(await comparisonFile.text()); }
       catch { setComparisonError("The selected file is not valid JSON."); return; }
       const response = await fetch("/api/investigations/review-queue/snapshot/compare", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed),
-        cache: "no-store",
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(parsed), cache: "no-store",
       });
       if (response.status === 401) { window.location.href = "/login"; return; }
       const payload = await response.json();
       if (!response.ok) {
-        const detail = typeof payload?.detail === "string" ? payload.detail : "Snapshot comparison failed.";
-        setComparisonError(detail);
+        setComparisonError(typeof payload?.detail === "string" ? payload.detail : "Snapshot comparison failed.");
         return;
       }
       setComparisonPayload(parsed);
@@ -130,10 +130,7 @@ export function CrossInvestigationReviewQueuePanel() {
     setReportDigest(null);
     try {
       const response = await fetch("/api/investigations/review-queue/snapshot/compare/report", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(comparisonPayload),
-        cache: "no-store",
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(comparisonPayload), cache: "no-store",
       });
       if (response.status === 401) { window.location.href = "/login"; return; }
       if (!response.ok) {
@@ -148,10 +145,7 @@ export function CrossInvestigationReviewQueuePanel() {
       const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = downloadFilename(
-        response.headers.get("content-disposition"),
-        "lionsforge-review-queue-comparison-report.json",
-      );
+      anchor.download = downloadFilename(response.headers.get("content-disposition"), "lionsforge-review-queue-comparison-report.json");
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -168,33 +162,66 @@ export function CrossInvestigationReviewQueuePanel() {
     if (!verificationFile) return;
     setVerifying(true);
     setVerification(null);
+    setVerificationPayload(null);
     setVerificationError(null);
+    setReceiptError(null);
+    setReceiptDigest(null);
     try {
       let parsed: unknown;
       try { parsed = JSON.parse(await verificationFile.text()); }
       catch { setVerificationError("The selected report is not valid JSON."); return; }
       const response = await fetch("/api/investigations/review-queue/snapshot/compare/report/verify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed),
-        cache: "no-store",
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(parsed), cache: "no-store",
       });
       if (response.status === 401) { window.location.href = "/login"; return; }
       const payload = await response.json();
       if (!response.ok) {
-        const detail = typeof payload?.detail === "string"
-          ? payload.detail
-          : response.status === 422
-            ? "The report contract or artifact type is unsupported."
-            : "Comparison report verification failed.";
+        const detail = typeof payload?.detail === "string" ? payload.detail : response.status === 422
+          ? "The report contract or artifact type is unsupported." : "Comparison report verification failed.";
         setVerificationError(detail);
         return;
       }
+      setVerificationPayload(parsed);
       setVerification(payload as ReviewQueueComparisonReportVerification);
     } catch {
       setVerificationError("Comparison report verification is temporarily unavailable. Retry verification.");
     } finally {
       setVerifying(false);
+    }
+  }
+
+  async function downloadVerificationReceipt() {
+    if (!verification || !verificationPayload) return;
+    setReceiptExporting(true);
+    setReceiptError(null);
+    setReceiptDigest(null);
+    try {
+      const response = await fetch("/api/investigations/review-queue/snapshot/compare/report/verify/receipt", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(verificationPayload), cache: "no-store",
+      });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      if (!response.ok) {
+        let detail = "The verification receipt could not be exported. No file was downloaded.";
+        try {
+          const payload = await response.json();
+          if (typeof payload?.detail === "string") detail = `${payload.detail} No file was downloaded.`;
+        } catch { /* preserve deterministic fallback */ }
+        setReceiptError(detail);
+        return;
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = downloadFilename(response.headers.get("content-disposition"), "lionsforge-comparison-verification-receipt.json");
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setReceiptDigest(response.headers.get("x-content-sha256"));
+    } catch {
+      setReceiptError("The verification receipt could not be exported. No file was downloaded.");
+    } finally {
+      setReceiptExporting(false);
     }
   }
 
@@ -205,10 +232,8 @@ export function CrossInvestigationReviewQueuePanel() {
   }, [queue]);
 
   const visibleItems = useMemo(
-    () => queue?.items.filter((item) => (
-      (reasonFilter === "all" || item.reason_type === reasonFilter)
-      && (investigationFilter === "all" || item.investigation_id === Number(investigationFilter))
-    )) ?? [],
+    () => queue?.items.filter((item) => ((reasonFilter === "all" || item.reason_type === reasonFilter)
+      && (investigationFilter === "all" || item.investigation_id === Number(investigationFilter)))) ?? [],
     [investigationFilter, queue, reasonFilter],
   );
 
@@ -240,8 +265,8 @@ export function CrossInvestigationReviewQueuePanel() {
       </div>
       <div className="lesson-card">
         <h3>Verify a comparison report</h3>
-        <p>The selected report stays browser-local until explicit verification and is not stored by this interface. Verification checks the uploaded contract and canonical digest only; it does not compare the report with current queue state.</p>
-        <label>Comparison report JSON<input aria-label="Comparison report JSON" type="file" accept="application/json,.json" onChange={(event) => { setVerificationFile(event.target.files?.[0] ?? null); setVerification(null); setVerificationError(null); }} /></label>
+        <p>The selected report stays browser-local until explicit verification or receipt export and is not stored by this interface. Verification checks the uploaded contract and canonical digest only; it does not compare the report with current queue state.</p>
+        <label>Comparison report JSON<input aria-label="Comparison report JSON" type="file" accept="application/json,.json" onChange={(event) => { setVerificationFile(event.target.files?.[0] ?? null); setVerification(null); setVerificationPayload(null); setVerificationError(null); setReceiptError(null); setReceiptDigest(null); }} /></label>
         <button type="button" disabled={!verificationFile || verifying} onClick={() => void verifyComparisonReport()}>{verifying ? "Verifying…" : "Verify comparison report"}</button>
         {verificationError ? <p role="alert">{verificationError}</p> : null}
         {verification ? <div aria-label="Comparison report verification results">
@@ -255,6 +280,10 @@ export function CrossInvestigationReviewQueuePanel() {
           {Object.keys(verification.reason_count_deltas).length === 0 ? <p>No preserved reason-count changes.</p> : <ul>{Object.entries(verification.reason_count_deltas).map(([reason, delta]) => <li key={reason}>{reason.replaceAll("_", " ")}: {delta > 0 ? "+" : ""}{delta}</li>)}</ul>}
           <p><strong>Current queue checked:</strong> no</p>
           <p>{verification.interpretation_notice}</p>
+          <button type="button" disabled={receiptExporting} onClick={() => void downloadVerificationReceipt()}>{receiptExporting ? "Preparing receipt…" : "Download verification receipt"}</button>
+          <p>The receipt records successful contract and digest verification only. It is not validation evidence, advice, or agreement with current queue state.</p>
+          {receiptDigest ? <p aria-label="Verification receipt digest"><strong>Receipt SHA-256:</strong> {receiptDigest}</p> : null}
+          {receiptError ? <p role="alert">{receiptError}</p> : null}
         </div> : null}
       </div>
     </> : null}
