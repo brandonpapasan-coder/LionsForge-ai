@@ -15,6 +15,8 @@ from app.schemas.review_queue import (
     ReviewQueueComparisonReport,
     ReviewQueueComparisonReportUnsigned,
     ReviewQueueComparisonReportVerification,
+    ReviewQueueComparisonVerificationReceipt,
+    ReviewQueueComparisonVerificationReceiptUnsigned,
     ReviewQueueSnapshot,
     ReviewQueueSnapshotComparison,
     ReviewQueueSnapshotUnsigned,
@@ -97,6 +99,36 @@ def _verified_comparison(
     )
 
 
+def _verified_report(
+    report: ReviewQueueComparisonReport,
+) -> ReviewQueueComparisonReportVerification:
+    unsigned = ReviewQueueComparisonReportUnsigned(
+        **report.model_dump(exclude={"generated_at", "content_sha256"})
+    )
+    recomputed_digest = _digest(unsigned)
+    if recomputed_digest != report.content_sha256:
+        raise HTTPException(
+            status_code=400,
+            detail="Comparison report digest does not match its canonical payload",
+        )
+
+    comparison = report.comparison
+    return ReviewQueueComparisonReportVerification(
+        supplied_content_sha256=report.content_sha256,
+        recomputed_content_sha256=recomputed_digest,
+        prior_content_sha256=comparison.prior_content_sha256,
+        current_content_sha256=comparison.current_content_sha256,
+        added_item_count=len(comparison.added_items),
+        removed_item_count=len(comparison.removed_items),
+        unchanged_item_count=len(comparison.unchanged_items),
+        reason_count_deltas={
+            key: comparison.reason_count_deltas[key]
+            for key in sorted(comparison.reason_count_deltas)
+        },
+        investigation_count_delta=comparison.investigation_count_delta,
+    )
+
+
 @router.get("/review-queue/snapshot")
 def export_review_queue_snapshot(
     current_user: User = Depends(get_current_user),
@@ -172,28 +204,38 @@ def verify_review_queue_comparison_report(
     report: ReviewQueueComparisonReport,
     _current_user: User = Depends(get_current_user),
 ) -> ReviewQueueComparisonReportVerification:
-    unsigned = ReviewQueueComparisonReportUnsigned(
-        **report.model_dump(exclude={"generated_at", "content_sha256"})
-    )
-    recomputed_digest = _digest(unsigned)
-    if recomputed_digest != report.content_sha256:
-        raise HTTPException(
-            status_code=400,
-            detail="Comparison report digest does not match its canonical payload",
-        )
+    return _verified_report(report)
 
-    comparison = report.comparison
-    return ReviewQueueComparisonReportVerification(
-        supplied_content_sha256=report.content_sha256,
-        recomputed_content_sha256=recomputed_digest,
-        prior_content_sha256=comparison.prior_content_sha256,
-        current_content_sha256=comparison.current_content_sha256,
-        added_item_count=len(comparison.added_items),
-        removed_item_count=len(comparison.removed_items),
-        unchanged_item_count=len(comparison.unchanged_items),
-        reason_count_deltas={
-            key: comparison.reason_count_deltas[key]
-            for key in sorted(comparison.reason_count_deltas)
+
+@router.post("/review-queue/snapshot/compare/report/verify/receipt")
+def export_review_queue_comparison_verification_receipt(
+    report: ReviewQueueComparisonReport,
+    _current_user: User = Depends(get_current_user),
+) -> Response:
+    verification = _verified_report(report)
+    unsigned = ReviewQueueComparisonVerificationReceiptUnsigned(
+        verified_report_content_sha256=verification.recomputed_content_sha256,
+        prior_content_sha256=verification.prior_content_sha256,
+        current_content_sha256=verification.current_content_sha256,
+        added_item_count=verification.added_item_count,
+        removed_item_count=verification.removed_item_count,
+        unchanged_item_count=verification.unchanged_item_count,
+        reason_count_deltas=verification.reason_count_deltas,
+        investigation_count_delta=verification.investigation_count_delta,
+    )
+    digest = _digest(unsigned)
+    receipt = ReviewQueueComparisonVerificationReceipt(
+        **unsigned.model_dump(),
+        generated_at=datetime.now(timezone.utc),
+        content_sha256=digest,
+    )
+    return Response(
+        content=_canonical_bytes(receipt),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="lionsforge-comparison-verification-receipt.json"'
+            ),
+            "X-Content-SHA256": digest,
         },
-        investigation_count_delta=comparison.investigation_count_delta,
     )
