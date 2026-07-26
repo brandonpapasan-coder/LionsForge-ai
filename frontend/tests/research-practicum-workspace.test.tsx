@@ -15,14 +15,25 @@ describe("research practicum workspace", () => {
     expect(proxy).toContain('/api/v1/education/practica/');
   });
 
-  it("surfaces learner reflection, evidence references, deterministic readiness, and human review history", () => {
+  it("surfaces learner reflection, searchable evidence, deterministic readiness, and human review history", () => {
     const workspace = readFileSync(join(root, "components/research-practicum-workspace.tsx"), "utf8");
 
     expect(workspace).toContain("Learner reflection");
+    expect(workspace).toContain("Search project evidence");
+    expect(workspace).toContain('aria-live="polite"');
     expect(workspace).toContain("Attach evidence");
     expect(workspace).toContain("Readiness summary");
     expect(workspace).toContain("Human review history");
     expect(workspace).toContain("Submit for review");
+  });
+
+  it("keeps practicum controls keyboard-visible, touch-sized, responsive, and reduced-motion safe", () => {
+    const styles = readFileSync(join(root, "app/education/education.css"), "utf8");
+
+    expect(styles).toContain("min-height: 44px");
+    expect(styles).toContain(":focus-visible");
+    expect(styles).toContain("@media (max-width: 600px)");
+    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
   it("integrates the practicum into the authenticated education page", () => {
