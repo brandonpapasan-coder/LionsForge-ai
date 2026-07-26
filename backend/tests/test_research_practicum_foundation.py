@@ -1,4 +1,6 @@
-from app.models.research_practicum import (
+from pathlib import Path
+
+from app.models import (
     PracticumEnrollment,
     PracticumEvidenceReference,
     PracticumObjective,
@@ -58,3 +60,14 @@ def test_review_decisions_have_no_update_timestamp():
 
     assert "created_at" in column_names
     assert "updated_at" not in column_names
+
+
+def test_practicum_migration_is_chained_and_reversible():
+    migration = Path(__file__).parents[1] / "alembic" / "versions" / "0035_research_practicum.py"
+    content = migration.read_text(encoding="utf-8")
+
+    assert 'revision: str = "0035_research_practicum"' in content
+    assert 'down_revision: str | None = "0034_remediation_history"' in content
+    assert 'op.create_table(\n        "practicum_templates"' in content
+    assert 'op.create_table(\n        "practicum_review_decisions"' in content
+    assert 'op.drop_table("practicum_templates")' in content
