@@ -232,3 +232,9 @@ export const researchPracticumClient = {
       body: JSON.stringify({ decision, notes, expected_enrollment_updated_at }),
     }),
 };
+
+export const researchPracticumReviewerClient = {
+  queue: researchPracticumClient.reviewerQueue,
+  detail: researchPracticumClient.reviewerDetail,
+  decide: researchPracticumClient.reviewerDecision,
+};
