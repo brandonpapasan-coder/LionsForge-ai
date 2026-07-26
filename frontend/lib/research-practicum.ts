@@ -92,6 +92,72 @@ export type PracticumReadiness = {
   latest_review_decision: PracticumReviewDecision | null;
 };
 
+export type PracticumReviewerEvidence = {
+  id: number;
+  title: string;
+  summary: string | null;
+  source_type: string;
+  status: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  record_source: "measured_research_record";
+};
+
+export type PracticumReviewerObjective = {
+  objective_key: string;
+  sequence: number;
+  title: string;
+  description: string;
+  competency: string;
+  reflection: string | null;
+  reflection_source: "learner_authored";
+  evidence: PracticumReviewerEvidence[];
+  readiness: PracticumObjectiveReadiness;
+};
+
+export type PracticumReviewerQueueItem = {
+  enrollment_id: number;
+  learner_user_id: number;
+  learner_display_name: string;
+  template_slug: string;
+  template_title: string;
+  template_version: number;
+  research_project_id: number;
+  research_project_title: string;
+  status: PracticumEnrollmentStatus;
+  submitted_for_review_at: string | null;
+  updated_at: string;
+  latest_review_decision: PracticumReviewDecision | null;
+};
+
+export type PracticumReviewerQueue = {
+  items: PracticumReviewerQueueItem[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+};
+
+export type PracticumReviewerDetail = {
+  enrollment: PracticumReviewerQueueItem;
+  objectives: PracticumReviewerObjective[];
+  readiness: PracticumReadiness;
+  review_history: PracticumReviewDecision[];
+  human_review_required: true;
+  advisory_notice: string;
+};
+
+export type PracticumReviewerQueueFilters = {
+  status?: "review_ready" | "revision_required";
+  template_slug?: string;
+  learner_user_id?: number;
+  submitted_from?: string;
+  submitted_to?: string;
+  page?: number;
+  page_size?: number;
+};
+
 export type ResearchProjectOption = { id: number; title: string; status: string };
 export type ResearchEvidenceOption = { id: number; project_id: number; title: string; source_type: string; tags: string[] };
 
@@ -111,6 +177,18 @@ async function practicumRequest<T>(path: string, init?: RequestInit): Promise<T>
     throw new Error(detail ?? "Request failed");
   }
   return payload as T;
+}
+
+function reviewerQueueQuery(filters: PracticumReviewerQueueFilters = {}): string {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.template_slug) params.set("template_slug", filters.template_slug);
+  if (filters.learner_user_id) params.set("learner_user_id", String(filters.learner_user_id));
+  if (filters.submitted_from) params.set("submitted_from", filters.submitted_from);
+  if (filters.submitted_to) params.set("submitted_to", filters.submitted_to);
+  params.set("page", String(filters.page ?? 1));
+  params.set("page_size", String(filters.page_size ?? 25));
+  return params.toString();
 }
 
 export const researchPracticumClient = {
@@ -139,4 +217,24 @@ export const researchPracticumClient = {
     practicumRequest<PracticumReadiness>(`/enrollments/${enrollmentId}/readiness`),
   submit: (enrollmentId: number) =>
     practicumRequest<PracticumReadiness>(`/enrollments/${enrollmentId}/submit`, { method: "POST" }),
+  reviewerQueue: (filters: PracticumReviewerQueueFilters = {}) =>
+    practicumRequest<PracticumReviewerQueue>(`/reviewer/queue?${reviewerQueueQuery(filters)}`),
+  reviewerDetail: (enrollmentId: number) =>
+    practicumRequest<PracticumReviewerDetail>(`/reviewer/enrollments/${enrollmentId}`),
+  reviewerDecision: (
+    enrollmentId: number,
+    decision: "approved" | "revision_required",
+    notes: string,
+    expected_enrollment_updated_at: string,
+  ) =>
+    practicumRequest<PracticumReviewerDetail>(`/reviewer/enrollments/${enrollmentId}/decision`, {
+      method: "POST",
+      body: JSON.stringify({ decision, notes, expected_enrollment_updated_at }),
+    }),
+};
+
+export const researchPracticumReviewerClient = {
+  queue: researchPracticumClient.reviewerQueue,
+  detail: researchPracticumClient.reviewerDetail,
+  decide: researchPracticumClient.reviewerDecision,
 };
