@@ -51,6 +51,7 @@ from app.api.routes import (
     research_packet_comparison_report_integrity,
     research_packet_integrity,
     research_planning,
+    research_practica,
     research_projects,
     research_sessions,
     research_trust_index,
@@ -74,6 +75,7 @@ def build_api_router(
     router.include_router(release_countdown.router, prefix="/release-countdown", tags=["release-countdown"])
     router.include_router(education.router, prefix="/education", tags=["education"])
     router.include_router(adaptive_learning_plan.router, prefix="/education", tags=["education"])
+    router.include_router(research_practica.router, prefix="/education/practica", tags=["education-practica"])
     router.include_router(investigations.router, prefix="/investigations", tags=["investigations"])
     router.include_router(claim_evidence_validation.router, prefix="/investigations", tags=["investigations"])
     router.include_router(evidence_gap_remediation.router, prefix="/investigations", tags=["investigations"])
