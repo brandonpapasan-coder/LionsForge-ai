@@ -52,8 +52,24 @@ const comparison = {
   investigation_count_delta: 1,
   interpretation_notice: "This comparison describes changes in stored workflow state only.",
 };
+const report = { artifact_type: "cross_investigation_review_queue_comparison_report", comparison, content_sha256: "digest123" };
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+function installDownloadSpies() {
+  const createObjectURL = vi.fn(() => "blob:download");
+  const revokeObjectURL = vi.fn();
+  vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+  let downloadedFilename = "";
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloadedFilename = this.download; });
+  return { createObjectURL, revokeObjectURL, click, downloadedFilename: () => downloadedFilename };
+}
+
+async function completeComparison(user: ReturnType<typeof userEvent.setup>) {
+  await user.upload(await screen.findByLabelText("Prior snapshot JSON"), jsonFile(snapshot));
+  await user.click(screen.getByRole("button", { name: "Compare snapshot" }));
+  await screen.findByLabelText("Snapshot comparison results");
+}
 
 describe("CrossInvestigationReviewQueuePanel", () => {
   it("renders stored provenance, filters, and investigation navigation", async () => {
@@ -71,16 +87,11 @@ describe("CrossInvestigationReviewQueuePanel", () => {
 
   it("downloads a successful snapshot with the backend filename", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockImplementationOnce(() => response(queue)).mockImplementationOnce(() => response(snapshot, 200, { "content-disposition": "attachment; filename=\"verified-review-queue.json\"" }));
-    vi.stubGlobal("fetch", fetchMock);
-    const createObjectURL = vi.fn(() => "blob:snapshot");
-    const revokeObjectURL = vi.fn();
-    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
-    let downloadedFilename = "";
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloadedFilename = this.download; });
+    vi.stubGlobal("fetch", vi.fn().mockImplementationOnce(() => response(queue)).mockImplementationOnce(() => response(snapshot, 200, { "content-disposition": "attachment; filename=\"verified-review-queue.json\"" })));
+    const download = installDownloadSpies();
     render(<CrossInvestigationReviewQueuePanel />);
     await user.click(await screen.findByRole("button", { name: "Download queue snapshot" }));
-    expect(downloadedFilename).toBe("verified-review-queue.json");
+    expect(download.downloadedFilename()).toBe("verified-review-queue.json");
   });
 
   it("compares a valid prior snapshot and renders deterministic deltas", async () => {
@@ -88,11 +99,57 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     const fetchMock = vi.fn().mockImplementationOnce(() => response(queue)).mockImplementationOnce(() => response(comparison));
     vi.stubGlobal("fetch", fetchMock);
     render(<CrossInvestigationReviewQueuePanel />);
-    await user.upload(await screen.findByLabelText("Prior snapshot JSON"), jsonFile(snapshot));
-    await user.click(screen.getByRole("button", { name: "Compare snapshot" }));
-    expect(await screen.findByLabelText("Snapshot comparison results")).toHaveTextContent("Added: 1");
+    await completeComparison(user);
+    expect(screen.getByLabelText("Snapshot comparison results")).toHaveTextContent("Added: 1");
     expect(screen.getByText(/blocked remediation: \+1/)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith("/api/investigations/review-queue/snapshot/compare", expect.objectContaining({ method: "POST" }));
+    expect(screen.getByRole("button", { name: "Download comparison report" })).toBeEnabled();
+  });
+
+  it("downloads a comparison report with backend filename and digest", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => response(queue))
+      .mockImplementationOnce(() => response(comparison))
+      .mockImplementationOnce(() => response(report, 200, {
+        "content-disposition": "attachment; filename=\"verified-comparison-report.json\"",
+        "x-content-sha256": "digest123",
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const download = installDownloadSpies();
+    render(<CrossInvestigationReviewQueuePanel />);
+    await completeComparison(user);
+    await user.click(screen.getByRole("button", { name: "Download comparison report" }));
+    expect(download.downloadedFilename()).toBe("verified-comparison-report.json");
+    expect(screen.getByLabelText("Comparison report digest")).toHaveTextContent("digest123");
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/investigations/review-queue/snapshot/compare/report", expect.objectContaining({ method: "POST", body: JSON.stringify(snapshot) }));
+  });
+
+  it("uses deterministic fallback report filename when backend omits it", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn()
+      .mockImplementationOnce(() => response(queue))
+      .mockImplementationOnce(() => response(comparison))
+      .mockImplementationOnce(() => response(report)));
+    const download = installDownloadSpies();
+    render(<CrossInvestigationReviewQueuePanel />);
+    await completeComparison(user);
+    await user.click(screen.getByRole("button", { name: "Download comparison report" }));
+    expect(download.downloadedFilename()).toBe("lionsforge-review-queue-comparison-report.json");
+  });
+
+  it("does not download a comparison report when export fails", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn()
+      .mockImplementationOnce(() => response(queue))
+      .mockImplementationOnce(() => response(comparison))
+      .mockImplementationOnce(() => response({ detail: "Snapshot digest does not match its canonical payload" }, 400)));
+    const download = installDownloadSpies();
+    render(<CrossInvestigationReviewQueuePanel />);
+    await completeComparison(user);
+    await user.click(screen.getByRole("button", { name: "Download comparison report" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No file was downloaded");
+    expect(download.createObjectURL).not.toHaveBeenCalled();
+    expect(download.click).not.toHaveBeenCalled();
   });
 
   it("rejects malformed JSON before sending a comparison request", async () => {
@@ -104,6 +161,7 @@ describe("CrossInvestigationReviewQueuePanel", () => {
     await user.click(screen.getByRole("button", { name: "Compare snapshot" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("not valid JSON");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Download comparison report" })).not.toBeInTheDocument();
   });
 
   it("shows backend digest mismatch without presenting comparison results", async () => {
