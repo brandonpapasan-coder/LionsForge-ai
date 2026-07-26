@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
   CrossInvestigationReviewQueue,
+  ReviewQueueComparisonReportVerification,
   ReviewQueueReason,
   ReviewQueueSnapshotComparison,
 } from "@/lib/investigations";
@@ -35,6 +36,10 @@ export function CrossInvestigationReviewQueuePanel() {
   const [reportExporting, setReportExporting] = useState(false);
   const [reportExportError, setReportExportError] = useState<string | null>(null);
   const [reportDigest, setReportDigest] = useState<string | null>(null);
+  const [verificationFile, setVerificationFile] = useState<File | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<ReviewQueueComparisonReportVerification | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const [reasonFilter, setReasonFilter] = useState<"all" | ReviewQueueReason>("all");
   const [investigationFilter, setInvestigationFilter] = useState("all");
   const [reloadToken, setReloadToken] = useState(0);
@@ -159,6 +164,40 @@ export function CrossInvestigationReviewQueuePanel() {
     }
   }
 
+  async function verifyComparisonReport() {
+    if (!verificationFile) return;
+    setVerifying(true);
+    setVerification(null);
+    setVerificationError(null);
+    try {
+      let parsed: unknown;
+      try { parsed = JSON.parse(await verificationFile.text()); }
+      catch { setVerificationError("The selected report is not valid JSON."); return; }
+      const response = await fetch("/api/investigations/review-queue/snapshot/compare/report/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(parsed),
+        cache: "no-store",
+      });
+      if (response.status === 401) { window.location.href = "/login"; return; }
+      const payload = await response.json();
+      if (!response.ok) {
+        const detail = typeof payload?.detail === "string"
+          ? payload.detail
+          : response.status === 422
+            ? "The report contract or artifact type is unsupported."
+            : "Comparison report verification failed.";
+        setVerificationError(detail);
+        return;
+      }
+      setVerification(payload as ReviewQueueComparisonReportVerification);
+    } catch {
+      setVerificationError("Comparison report verification is temporarily unavailable. Retry verification.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   const investigations = useMemo(() => {
     const values = new Map<number, string>();
     queue?.items.forEach((item) => values.set(item.investigation_id, item.investigation_title));
@@ -197,6 +236,25 @@ export function CrossInvestigationReviewQueuePanel() {
           <p>The report digest verifies exported artifact integrity only. The report describes stored workflow-state changes and is not validation evidence, advice, or a truth, confidence, importance, urgency, risk, resolution, or recommended-action judgment.</p>
           {reportDigest ? <p aria-label="Comparison report digest"><strong>Report SHA-256:</strong> {reportDigest}</p> : null}
           {reportExportError ? <p role="alert">{reportExportError}</p> : null}
+        </div> : null}
+      </div>
+      <div className="lesson-card">
+        <h3>Verify a comparison report</h3>
+        <p>The selected report stays browser-local until explicit verification and is not stored by this interface. Verification checks the uploaded contract and canonical digest only; it does not compare the report with current queue state.</p>
+        <label>Comparison report JSON<input aria-label="Comparison report JSON" type="file" accept="application/json,.json" onChange={(event) => { setVerificationFile(event.target.files?.[0] ?? null); setVerification(null); setVerificationError(null); }} /></label>
+        <button type="button" disabled={!verificationFile || verifying} onClick={() => void verifyComparisonReport()}>{verifying ? "Verifying…" : "Verify comparison report"}</button>
+        {verificationError ? <p role="alert">{verificationError}</p> : null}
+        {verification ? <div aria-label="Comparison report verification results">
+          <p><strong>Artifact integrity:</strong> valid</p>
+          <p><strong>Report SHA-256:</strong> {verification.recomputed_content_sha256}</p>
+          <p><strong>Prior snapshot SHA-256:</strong> {verification.prior_content_sha256}</p>
+          <p><strong>Current snapshot SHA-256:</strong> {verification.current_content_sha256}</p>
+          <p><strong>Added:</strong> {verification.added_item_count} · <strong>Removed:</strong> {verification.removed_item_count} · <strong>Unchanged:</strong> {verification.unchanged_item_count}</p>
+          <p><strong>Investigation count delta:</strong> {verification.investigation_count_delta > 0 ? "+" : ""}{verification.investigation_count_delta}</p>
+          <h4>Preserved reason-count deltas</h4>
+          {Object.keys(verification.reason_count_deltas).length === 0 ? <p>No preserved reason-count changes.</p> : <ul>{Object.entries(verification.reason_count_deltas).map(([reason, delta]) => <li key={reason}>{reason.replaceAll("_", " ")}: {delta > 0 ? "+" : ""}{delta}</li>)}</ul>}
+          <p><strong>Current queue checked:</strong> no</p>
+          <p>{verification.interpretation_notice}</p>
         </div> : null}
       </div>
     </> : null}
