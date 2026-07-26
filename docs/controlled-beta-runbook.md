@@ -168,3 +168,33 @@ python scripts/validate_launch_evidence_chain.py \
 The chain validator invokes every standalone validator and then checks release and rollback identity, immutable image digests, public-operations candidate binding, documented candidate ancestry, distinct upstream evidence identifiers, and decision ordering. A differing beta predecessor is accepted only when the GA record contains an explicit candidate-ancestry evidence identifier; a matching release SHA with different digests or rollback identity is rejected as ambiguous.
 
 A `VALID` chain means only that the supplied Markdown records are individually valid and mutually consistent. It does not establish evidence truth or freshness, confirm live infrastructure, authorize deployment or payment collection, enable registration, or declare controlled beta or general availability. The external gate issues remain authoritative and fail closed.
+
+## Generate and revalidate a portable chain receipt
+
+After the four-record chain validates, generate a canonical JSON receipt that binds the exact source files and release identity:
+
+```bash
+python scripts/launch_evidence_chain_receipt.py generate \
+  path/to/completed-production-record.md \
+  path/to/completed-public-operations-record.md \
+  path/to/completed-controlled-beta-record.md \
+  path/to/completed-ga-decision-record.md \
+  --output path/to/launch-evidence-chain-receipt.json
+```
+
+The generator refuses to emit a receipt unless the underlying chain has no findings. The receipt contains SHA-256 digests for all four Markdown records, the exact release and rollback SHAs, immutable backend and frontend image digests, the GA decision, a UTC generation timestamp, and schema and validator versions. It uses deterministic canonical JSON serialization.
+
+Revalidate the receipt against the original records before relying on it for audit or review:
+
+```bash
+python scripts/launch_evidence_chain_receipt.py validate \
+  path/to/completed-production-record.md \
+  path/to/completed-public-operations-record.md \
+  path/to/completed-controlled-beta-record.md \
+  path/to/completed-ga-decision-record.md \
+  path/to/launch-evidence-chain-receipt.json
+```
+
+Validation fails closed on malformed or unsupported receipt schemas, missing or extra fields, invalid timestamps or digest formats, substituted or modified records, swapped bindings, identity drift, or any new finding from the underlying launch-chain validator.
+
+A `VALID` receipt proves only that the supplied files match the recorded digests and form a valid chain under the recorded tool version. It does not prove evidence truth, freshness, ownership, live infrastructure, deployment state, or authorization. It does not enable staging, production, registration, payment collection, controlled beta, or general availability. The external gate issues remain authoritative and fail closed.
