@@ -128,3 +128,15 @@ A general-availability recommendation requires:
 - deletion, retention, backup, restore, and rollback evidence is current;
 - final legal, security, operations, product, and owner sign-off;
 - a completed GO, CONDITIONAL GO, or NO-GO record.
+
+## Validate the acceptance record
+
+Complete a private working copy of `docs/controlled-beta-acceptance-record.md` using non-secret evidence identifiers only, then run:
+
+```bash
+python scripts/validate_controlled_beta_acceptance.py path/to/completed-controlled-beta-record.md
+```
+
+The command exits `0` only when the Markdown is internally complete and consistent. It fails closed on malformed release identity, blank owners or measurements, unchecked entry gates, missing journey or resilience evidence, unsupported result values, invalid counts, contradictory decisions, multiple selected decisions, and apparent credentials or prohibited private content.
+
+A `VALID` result confirms record structure and internal consistency only. It does not prove that linked evidence is true, current, sufficient, independently verified, or tied to the live environment. It does not authorize controlled beta, public registration, payment collection, or general availability. Issues #29, #400, #401, #402, #403, and #461 remain governed by their live external evidence requirements.
