@@ -12,6 +12,7 @@ from app.api.routes.practicum_completion_audit import router as practicum_comple
 from app.api.routes.roadmap_action_ledger import router as roadmap_action_ledger_router
 from app.api.routes.roadmap_action_outcomes import router as roadmap_action_outcomes_router
 from app.api.routes.roadmap_outcome_insights import router as roadmap_outcome_insights_router
+from app.api.routes.roadmap_outcome_trends import router as roadmap_outcome_trends_router
 from app.api.routes.roadmap_practicum_enrollment import router as roadmap_practicum_enrollment_router
 from app.core.config import get_settings
 from app.core.observability import configure_request_observability
@@ -91,6 +92,11 @@ app.include_router(
     roadmap_outcome_insights_router,
     prefix=f"{settings.api_prefix}/education/roadmap-outcome-insights",
     tags=["education-roadmap-outcome-insights"],
+)
+app.include_router(
+    roadmap_outcome_trends_router,
+    prefix=f"{settings.api_prefix}/education/roadmap-outcome-trends",
+    tags=["education-roadmap-outcome-trends"],
 )
 
 
