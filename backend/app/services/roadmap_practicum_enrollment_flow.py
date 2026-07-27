@@ -16,10 +16,16 @@ from app.models.research_practicum import (
     PracticumTemplate,
 )
 from app.models.research_project import ResearchProject
+from app.models.roadmap_action_record import RoadmapActionRecord
 from app.models.user import User
 from app.services.learner_competency_gap_plan import sha256_digest as gap_plan_sha256
 from app.services.learner_competency_gap_plan_export import export_competency_gap_plan
-from app.services.roadmap_practicum_enrollment_receipt import build_action, build_receipt, validate_receipt
+from app.services.roadmap_practicum_enrollment_receipt import (
+    build_action,
+    build_receipt,
+    sha256_digest,
+    validate_receipt,
+)
 
 MAX_MISSING_PREREQUISITES = 25
 
@@ -130,6 +136,36 @@ def start_recommended_practicum(
                     objective_key=objective.objective_key,
                 )
             )
+        action = build_action(
+            learner_user_id=user.id,
+            enrollment_id=enrollment.id,
+            enrollment_status=enrollment.status,
+            template_slug=template.slug,
+            template_version=template.version,
+            research_project_id=project.id,
+            recommendation_reason_codes=recommendation["reason_codes"],
+            roadmap_plan_sha256=plan_digest,
+            portfolio_sha256=plan["portfolio_sha256"],
+            acted_at=now,
+        )
+        receipt = build_receipt(action, generated_at=now)
+        db.add(
+            RoadmapActionRecord(
+                learner_user_id=user.id,
+                enrollment_id=enrollment.id,
+                template_slug=template.slug,
+                template_version=template.version,
+                research_project_id=project.id,
+                recommendation_reason_codes=action["recommendation_reason_codes"],
+                roadmap_plan_sha256=action["roadmap_plan_sha256"],
+                portfolio_sha256=action["portfolio_sha256"],
+                action_sha256=receipt["action_sha256"],
+                action_receipt_sha256=sha256_digest(receipt),
+                action_schema_version=action["schema_version"],
+                action_generator_version=action["generator_version"],
+                acted_at=now.replace(tzinfo=None),
+            )
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -139,22 +175,7 @@ def start_recommended_practicum(
         ) from exc
 
     db.refresh(enrollment)
-    action = build_action(
-        learner_user_id=user.id,
-        enrollment_id=enrollment.id,
-        enrollment_status=enrollment.status,
-        template_slug=template.slug,
-        template_version=template.version,
-        research_project_id=project.id,
-        recommendation_reason_codes=recommendation["reason_codes"],
-        roadmap_plan_sha256=plan_digest,
-        portfolio_sha256=plan["portfolio_sha256"],
-        acted_at=now,
-    )
-    return {
-        "action": action,
-        "receipt": build_receipt(action, generated_at=now),
-    }
+    return {"action": action, "receipt": receipt}
 
 
 def validate_roadmap_enrollment_bundle(payload: Any) -> dict[str, Any]:

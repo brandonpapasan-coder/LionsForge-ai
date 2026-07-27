@@ -28,6 +28,7 @@ from app.models.research_practicum import (
 )
 from app.models.research_project import ResearchProject
 from app.models.research_session import ResearchSession
+from app.models.roadmap_action_record import RoadmapActionRecord
 from app.models.user import User
 
 _LEGACY_EXPORTS = {
@@ -47,7 +48,6 @@ def __getattr__(name: str) -> Any:
     target = _LEGACY_EXPORTS.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
     module_name, attribute_name = target
     value = getattr(import_module(module_name), attribute_name)
     globals()[name] = value
@@ -55,54 +55,16 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
-    "Alert",
-    "AssessmentAttempt",
-    "ClaimEvidence",
-    "Company",
-    "EvidenceRecord",
-    "EvidenceReviewEvent",
-    "ExecutiveBriefSnapshot",
-    "Investigation",
-    "InvestigationClaim",
-    "KnowledgeEntity",
-    "KnowledgeEntityAlias",
-    "KnowledgeEntityMergeAudit",
-    "KnowledgeFederationLink",
-    "KnowledgeFederationRevision",
-    "KnowledgeMemory",
-    "KnowledgeMemoryRevision",
-    "KnowledgeRelationship",
-    "LessonProgress",
-    "MarketLearningEvidenceLink",
-    "MarketLearningSession",
-    "MentorConversation",
-    "MentorMessage",
-    "Mission",
-    "MissionStep",
-    "Portfolio",
-    "PortfolioHolding",
-    "PracticumEnrollment",
-    "PracticumEvidenceReference",
-    "PracticumObjective",
-    "PracticumObjectiveProgress",
-    "PracticumReviewDecision",
-    "PracticumTemplate",
-    "RemediationProgress",
-    "RemediationProgressHistory",
-    "ResearchConclusion",
-    "ResearchConclusionDefense",
-    "ResearchConclusionDefenseRevision",
-    "ResearchConclusionRevision",
-    "ResearchEvidence",
-    "ResearchPlanRecommendation",
-    "ResearchPlanRevision",
-    "ResearchProject",
-    "ResearchReviewAction",
-    "ResearchReviewActionHistory",
-    "ResearchSession",
-    "SimulatedTrade",
-    "SimulationAccount",
-    "User",
-    "VirtualPosition",
-    "Watchlist",
+    "Alert", "AssessmentAttempt", "ClaimEvidence", "Company", "EvidenceRecord", "EvidenceReviewEvent",
+    "ExecutiveBriefSnapshot", "Investigation", "InvestigationClaim", "KnowledgeEntity", "KnowledgeEntityAlias",
+    "KnowledgeEntityMergeAudit", "KnowledgeFederationLink", "KnowledgeFederationRevision", "KnowledgeMemory",
+    "KnowledgeMemoryRevision", "KnowledgeRelationship", "LessonProgress", "MarketLearningEvidenceLink",
+    "MarketLearningSession", "MentorConversation", "MentorMessage", "Mission", "MissionStep", "Portfolio",
+    "PortfolioHolding", "PracticumEnrollment", "PracticumEvidenceReference", "PracticumObjective",
+    "PracticumObjectiveProgress", "PracticumReviewDecision", "PracticumTemplate", "RemediationProgress",
+    "RemediationProgressHistory", "ResearchConclusion", "ResearchConclusionDefense",
+    "ResearchConclusionDefenseRevision", "ResearchConclusionRevision", "ResearchEvidence",
+    "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject", "ResearchReviewAction",
+    "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord", "SimulatedTrade",
+    "SimulationAccount", "User", "VirtualPosition", "Watchlist",
 ]
