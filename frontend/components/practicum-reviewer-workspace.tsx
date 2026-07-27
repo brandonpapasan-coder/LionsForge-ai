@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  PracticumRequestError,
   PracticumReviewerDetail,
   PracticumReviewerQueue,
   PracticumReviewerQueueFilters,
@@ -17,6 +18,10 @@ function parseQueueStatus(value: string): ReviewQueueStatus | undefined {
   return value === "review_ready" || value === "revision_required" ? value : undefined;
 }
 
+function formatDecision(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
 export function PracticumReviewerWorkspace() {
   const [filters, setFilters] = useState(initialFilters);
   const [queue, setQueue] = useState<PracticumReviewerQueue | null>(null);
@@ -25,6 +30,7 @@ export function PracticumReviewerWorkspace() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -32,15 +38,18 @@ export function PracticumReviewerWorkspace() {
     try {
       const nextQueue = await researchPracticumReviewerClient.queue(filters);
       setQueue(nextQueue);
-      if (detail && !nextQueue.items.some((item) => item.enrollment_id === detail.enrollment.enrollment_id)) {
-        setDetail(null);
-      }
+      setDetail((current) => {
+        if (!current || current.enrollment.status === "completed") return current;
+        return nextQueue.items.some((item) => item.enrollment_id === current.enrollment.enrollment_id)
+          ? current
+          : null;
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load reviewer queue");
     } finally {
       setLoading(false);
     }
-  }, [detail, filters]);
+  }, [filters]);
 
   useEffect(() => {
     void loadQueue();
@@ -48,6 +57,7 @@ export function PracticumReviewerWorkspace() {
 
   async function openEnrollment(enrollmentId: number) {
     setError(null);
+    setSuccess(null);
     try {
       setDetail(await researchPracticumReviewerClient.detail(enrollmentId));
       setNotes("");
@@ -60,6 +70,7 @@ export function PracticumReviewerWorkspace() {
     if (!detail) return;
     setSaving(true);
     setError(null);
+    setSuccess(null);
     try {
       const updated = await researchPracticumReviewerClient.decide(
         detail.enrollment.enrollment_id,
@@ -69,9 +80,24 @@ export function PracticumReviewerWorkspace() {
       );
       setDetail(updated);
       setNotes("");
+      setSuccess(
+        decision === "approved"
+          ? "Approval recorded as a human review decision."
+          : "Revision request recorded and returned to the learner.",
+      );
       await loadQueue();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to record reviewer decision");
+      if (reason instanceof PracticumRequestError && reason.status === 409) {
+        try {
+          const refreshed = await researchPracticumReviewerClient.detail(detail.enrollment.enrollment_id);
+          setDetail(refreshed);
+          setError("This submission changed after you opened it. The latest review detail has been reloaded; inspect it before deciding again.");
+        } catch (refreshReason) {
+          setError(refreshReason instanceof Error ? refreshReason.message : "The submission changed and could not be reloaded");
+        }
+      } else {
+        setError(reason instanceof Error ? reason.message : "Unable to record reviewer decision");
+      }
     } finally {
       setSaving(false);
     }
@@ -107,6 +133,16 @@ export function PracticumReviewerWorkspace() {
           />
         </label>
         <label>
+          Learner search
+          <input
+            type="search"
+            maxLength={120}
+            placeholder="Name or email"
+            value={filters.learner_query ?? ""}
+            onChange={(event) => setFilters({ ...filters, learner_query: event.target.value || undefined, page: 1 })}
+          />
+        </label>
+        <label>
           Learner ID
           <input
             type="number"
@@ -119,6 +155,7 @@ export function PracticumReviewerWorkspace() {
       </section>
 
       {error && <p className="reviewer-error" role="alert">{error}</p>}
+      {success && <p className="reviewer-success" role="status">{success}</p>}
 
       <div className="reviewer-layout">
         <section className="reviewer-queue" aria-busy={loading}>
@@ -136,7 +173,7 @@ export function PracticumReviewerWorkspace() {
                     <strong>{item.learner_display_name}</strong>
                     <span>{item.template_title}</span>
                     <span>{item.research_project_title}</span>
-                    <small>{item.status.replaceAll("_", " ")}</small>
+                    <small>{formatDecision(item.status)}</small>
                   </button>
                 </li>
               ))}
@@ -172,7 +209,7 @@ export function PracticumReviewerWorkspace() {
                   <h2>{detail.enrollment.template_title}</h2>
                   <p>{detail.enrollment.research_project_title}</p>
                 </div>
-                <span>{detail.enrollment.status.replaceAll("_", " ")}</span>
+                <span>{formatDecision(detail.enrollment.status)}</span>
               </div>
 
               <aside className="reviewer-advisory">{detail.advisory_notice}</aside>
@@ -202,12 +239,30 @@ export function PracticumReviewerWorkspace() {
                     </div>
                     <div>
                       <h4>Deterministic workflow evaluation</h4>
-                      <p>{objective.readiness.status.replaceAll("_", " ")}</p>
+                      <p>{formatDecision(objective.readiness.status)}</p>
                       {objective.readiness.missing_requirements.map((requirement) => <p key={requirement}>{requirement}</p>)}
                     </div>
                   </article>
                 ))}
               </div>
+
+              <section className="reviewer-history" aria-labelledby="review-history-heading">
+                <h3 id="review-history-heading">Human review history</h3>
+                {detail.review_history.length ? (
+                  <ol>
+                    {detail.review_history.map((review) => (
+                      <li key={review.id}>
+                        <strong>{formatDecision(review.decision)}</strong>
+                        <span>Human reviewer #{review.reviewer_user_id}</span>
+                        <time dateTime={review.created_at}>{new Date(review.created_at).toLocaleString()}</time>
+                        <p>{review.notes || "No reviewer notes recorded."}</p>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p>No human review decisions have been recorded.</p>
+                )}
+              </section>
 
               {detail.enrollment.status === "review_ready" && (
                 <form className="reviewer-decision-form" onSubmit={(event) => event.preventDefault()}>
