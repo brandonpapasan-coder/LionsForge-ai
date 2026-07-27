@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.router import api_router
+from app.api.routes.practicum_completion_audit import router as practicum_completion_audit_router
 from app.core.config import get_settings
 from app.core.observability import configure_request_observability
 from app.db.init_db import init_db
@@ -50,6 +51,11 @@ app = FastAPI(
 )
 configure_request_observability(app)
 app.include_router(api_router, prefix=settings.api_prefix)
+app.include_router(
+    practicum_completion_audit_router,
+    prefix=f"{settings.api_prefix}/education/practica",
+    tags=["education-practica-audit"],
+)
 
 
 @app.get("/")

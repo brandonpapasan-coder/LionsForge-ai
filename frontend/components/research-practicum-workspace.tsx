@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ResearchProject, ResearchSession } from "@/lib/research";
 import {
+  type PracticumCompletionAuditBundle,
   type PracticumEnrollment,
   type PracticumReadiness,
   type PracticumTemplate,
@@ -17,10 +18,13 @@ export function ResearchPracticumWorkspace() {
   const [enrollments, setEnrollments] = useState<PracticumEnrollment[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<PracticumReadiness | null>(null);
+  const [auditBundle, setAuditBundle] = useState<PracticumCompletionAuditBundle | null>(null);
   const [evidence, setEvidence] = useState<ResearchEvidenceOption[]>([]);
   const [evidenceQuery, setEvidenceQuery] = useState("");
   const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const selected = enrollments.find((item) => item.id === selectedId) ?? enrollments[0] ?? null;
@@ -59,6 +63,8 @@ export function ResearchPracticumWorkspace() {
   useEffect(() => { void reload(); }, [reload]);
 
   useEffect(() => {
+    setAuditBundle(null);
+    setAuditError(null);
     if (!selected) {
       setReadiness(null);
       return;
@@ -120,6 +126,30 @@ export function ResearchPracticumWorkspace() {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     await run(() => researchPracticumClient.createEnrollment(String(data.get("template")), Number(data.get("project"))));
+  }
+
+  async function exportCompletionAudit() {
+    if (!selected || selected.status !== "completed") return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const bundle = await researchPracticumClient.completionAudit(selected.id);
+      setAuditBundle(bundle);
+      const blob = new Blob([`${JSON.stringify(bundle, null, 2)}\n`], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `practicum-completion-audit-${selected.id}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setAuditBundle(null);
+      setAuditError(requestError instanceof Error ? requestError.message : "The completion audit could not be generated.");
+    } finally {
+      setAuditLoading(false);
+    }
   }
 
   const locked = busy || selected?.status === "review_ready" || selected?.status === "completed";
@@ -223,6 +253,28 @@ export function ResearchPracticumWorkspace() {
 
           <h3>Human review history</h3>
           {selected.review_history.length === 0 ? <p>No human review decisions yet.</p> : selected.review_history.map((review) => <p key={review.id}><strong>{review.decision.replaceAll("_", " ")}</strong> · {review.notes ?? "No notes"}</p>)}
+
+          <aside aria-labelledby="completion-audit-heading">
+            <h3 id="completion-audit-heading">Completion audit record</h3>
+            <p>This portable audit artifact is not accreditation, licensing, degree equivalence, professional certification, or autonomous competency approval.</p>
+            {selected.status === "completed" ? (
+              <>
+                <button type="button" disabled={auditLoading} onClick={() => void exportCompletionAudit()}>
+                  {auditLoading ? "Generating audit record…" : "Export completion audit"}
+                </button>
+                {auditError ? <p role="alert">{auditError}</p> : null}
+                {auditBundle ? (
+                  <div role="status" aria-live="polite">
+                    <p>Record: enrollment #{auditBundle.record.enrollment_id} · template {auditBundle.record.template_slug} v{auditBundle.record.template_version}</p>
+                    <p>Integrity SHA-256: <code>{auditBundle.receipt.record_sha256}</code></p>
+                    <p>The exported JSON contains identifiers, objective outcomes, evidence-reference IDs, and human decision provenance. It does not copy research content or learner reflections.</p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p role="status">Completion audit export becomes available only after explicit human approval completes the practicum.</p>
+            )}
+          </aside>
         </article>
       ) : <p>No active practicum enrollment yet.</p>}
     </section>

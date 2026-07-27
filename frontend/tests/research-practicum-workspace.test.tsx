@@ -11,8 +11,11 @@ describe("research practicum workspace", () => {
     const proxy = readFileSync(join(root, "app/api/education/practica/[...path]/route.ts"), "utf8");
 
     expect(client).toContain('fetch(`/api/education/practica${path}`');
+    expect(client).toContain("completionAudit");
+    expect(client).toContain("/completion-audit");
     expect(proxy).toContain('cookieStore.get("lionsforge_session")');
-    expect(proxy).toContain('/api/v1/education/practica/');
+    expect(proxy).toContain("/api/v1/education/practica/");
+    expect(proxy).toContain("export const POST = proxy");
   });
 
   it("surfaces learner reflection, searchable evidence, deterministic readiness, and human review history", () => {
@@ -25,6 +28,23 @@ describe("research practicum workspace", () => {
     expect(workspace).toContain("Readiness summary");
     expect(workspace).toContain("Human review history");
     expect(workspace).toContain("Submit for review");
+  });
+
+  it("exports only completed practicum audit records with integrity and non-credential guardrails", () => {
+    const client = readFileSync(join(root, "lib/research-practicum.ts"), "utf8");
+    const workspace = readFileSync(join(root, "components/research-practicum-workspace.tsx"), "utf8");
+
+    expect(client).toContain("PracticumCompletionAuditBundle");
+    expect(client).toContain("record_sha256");
+    expect(workspace).toContain('selected.status === "completed"');
+    expect(workspace).toContain("Export completion audit");
+    expect(workspace).toContain("practicum-completion-audit-${selected.id}.json");
+    expect(workspace).toContain("Integrity SHA-256");
+    expect(workspace).toContain("not accreditation, licensing, degree equivalence, professional certification");
+    expect(workspace).toContain("does not copy research content or learner reflections");
+    expect(workspace).toContain("becomes available only after explicit human approval");
+    expect(workspace).toContain('role="alert"');
+    expect(workspace).toContain('role="status"');
   });
 
   it("keeps practicum controls keyboard-visible, touch-sized, responsive, and reduced-motion safe", () => {
