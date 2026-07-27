@@ -52,6 +52,7 @@ from app.api.routes import (
     research_packet_integrity,
     research_planning,
     research_practica,
+    research_practicum_legacy_reviews,
     research_practicum_reviews,
     research_projects,
     research_sessions,
@@ -76,6 +77,11 @@ def build_api_router(
     router.include_router(release_countdown.router, prefix="/release-countdown", tags=["release-countdown"])
     router.include_router(education.router, prefix="/education", tags=["education"])
     router.include_router(adaptive_learning_plan.router, prefix="/education", tags=["education"])
+    router.include_router(
+        research_practicum_legacy_reviews.router,
+        prefix="/education/practica",
+        tags=["education-practica-reviewer"],
+    )
     router.include_router(research_practica.router, prefix="/education/practica", tags=["education-practica"])
     router.include_router(
         research_practicum_reviews.router,
