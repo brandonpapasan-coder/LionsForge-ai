@@ -7,6 +7,30 @@ on:
         description: Exact 40-character commit SHA from main to validate
         required: true
         type: string
+      selection_rationale:
+        description: Why this fresh protected-main candidate was selected
+        required: true
+        type: string
+      backend_ci_run_id:
+        description: Successful Backend CI workflow run ID for the candidate
+        required: true
+        type: string
+      deployment_validation_run_id:
+        description: Successful Deployment Validation workflow run ID for the candidate
+        required: true
+        type: string
+      frontend_ci_run_id:
+        description: Successful Frontend CI workflow run ID for the candidate
+        required: true
+        type: string
+      internal_alpha_receipt_run_id:
+        description: Successful Internal Alpha Upload Receipt CI run ID for the candidate
+        required: true
+        type: string
+      security_gate_run_id:
+        description: Successful Security Gate workflow run ID for the candidate
+        required: true
+        type: string
       skip_endpoints:
         description: Validate configuration only and skip public endpoint checks
         required: false
@@ -14,6 +38,7 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -26,10 +51,15 @@ jobs:
       - name: Validate candidate input
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SELECTION_RATIONALE: ${{ inputs.selection_rationale }}
         run: |
           set -euo pipefail
           [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
             echo "candidate_sha must be exactly 40 lowercase hexadecimal characters" >&2
+            exit 1
+          }
+          test -n "${SELECTION_RATIONALE}" || {
+            echo "selection_rationale must not be empty" >&2
             exit 1
           }
 
@@ -51,6 +81,94 @@ jobs:
             echo "candidate_sha is not contained in origin/main" >&2
             exit 1
           }
+
+      - name: Collect authoritative workflow evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SELECTION_RATIONALE: ${{ inputs.selection_rationale }}
+          BACKEND_CI_RUN_ID: ${{ inputs.backend_ci_run_id }}
+          DEPLOYMENT_VALIDATION_RUN_ID: ${{ inputs.deployment_validation_run_id }}
+          FRONTEND_CI_RUN_ID: ${{ inputs.frontend_ci_run_id }}
+          INTERNAL_ALPHA_RECEIPT_RUN_ID: ${{ inputs.internal_alpha_receipt_run_id }}
+          SECURITY_GATE_RUN_ID: ${{ inputs.security_gate_run_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          run_ids = [
+              os.environ["BACKEND_CI_RUN_ID"],
+              os.environ["DEPLOYMENT_VALIDATION_RUN_ID"],
+              os.environ["FRONTEND_CI_RUN_ID"],
+              os.environ["INTERNAL_ALPHA_RECEIPT_RUN_ID"],
+              os.environ["SECURITY_GATE_RUN_ID"],
+          ]
+          workflows = []
+          for raw_run_id in run_ids:
+              if not raw_run_id.isdigit() or int(raw_run_id) <= 0:
+                  raise SystemExit("authoritative workflow run IDs must be positive integers")
+              completed = subprocess.run(
+                  ["gh", "api", f"repos/{os.environ['REPOSITORY']}/actions/runs/{raw_run_id}"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              payload = json.loads(completed.stdout)
+              workflows.append(
+                  {
+                      "name": payload.get("name"),
+                      "run_id": payload.get("id"),
+                      "run_number": payload.get("run_number"),
+                      "status": payload.get("status"),
+                      "conclusion": payload.get("conclusion"),
+                      "head_sha": payload.get("head_sha"),
+                  }
+              )
+
+          manifest_input = {
+              "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "selection_rationale": os.environ["SELECTION_RATIONALE"],
+              "protected_main_ancestry_verified": True,
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "workflow_runs": workflows,
+          }
+          Path("staging-candidate-manifest-input.json").write_text(
+              json.dumps(manifest_input, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Generate and validate candidate manifest
+        run: |
+          set -euo pipefail
+          python scripts/manage_staging_candidate_manifest.py generate \
+            staging-candidate-manifest-input.json \
+            staging-candidate-manifest.json
+          python scripts/manage_staging_candidate_manifest.py validate \
+            staging-candidate-manifest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("staging-candidate-manifest.json").read_text(encoding="utf-8"))
+          if payload.get("manifest", {}).get("decision") != "GO":
+              raise SystemExit("staging candidate manifest did not record GO")
+          PY
+
+      - name: Upload staging candidate manifest
+        id: upload_candidate_manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-candidate-manifest-${{ inputs.candidate_sha }}
+          path: staging-candidate-manifest.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -177,6 +295,9 @@ jobs:
         if: always()
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          MANIFEST_ARTIFACT_ID: ${{ steps.upload_candidate_manifest.outputs.artifact-id }}
+          MANIFEST_ARTIFACT_URL: ${{ steps.upload_candidate_manifest.outputs.artifact-url }}
+          MANIFEST_ARTIFACT_DIGEST: ${{ steps.upload_candidate_manifest.outputs.artifact-digest }}
           ARTIFACT_ID: ${{ steps.upload_evidence.outputs.artifact-id }}
           ARTIFACT_URL: ${{ steps.upload_evidence.outputs.artifact-url }}
           ARTIFACT_DIGEST: ${{ steps.upload_evidence.outputs.artifact-digest }}
@@ -188,6 +309,10 @@ jobs:
             echo
             echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
             echo "- Endpoint checks skipped: \`${{ inputs.skip_endpoints }}\`"
+            echo "- Candidate manifest upload: \`${{ steps.upload_candidate_manifest.outcome }}\`"
+            echo "- Candidate manifest artifact ID: \`${MANIFEST_ARTIFACT_ID:-unavailable}\`"
+            echo "- Candidate manifest digest: \`${MANIFEST_ARTIFACT_DIGEST:-unavailable}\`"
+            echo "- Candidate manifest URL: ${MANIFEST_ARTIFACT_URL:-unavailable}"
             echo "- Evidence upload: \`${{ steps.upload_evidence.outcome }}\`"
             echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
             echo "- Artifact digest: \`${ARTIFACT_DIGEST:-unavailable}\`"
