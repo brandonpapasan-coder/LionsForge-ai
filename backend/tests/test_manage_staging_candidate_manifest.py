@@ -79,6 +79,20 @@ def test_generation_input_matches_preflight_contract():
     assert validate_generation_input(changed) == []
 
 
+def test_generation_input_rejects_shape_timestamp_and_sensitive_fields():
+    assert validate_generation_input([]) == ["generation input must be an object"]
+
+    changed = generation_input()
+    changed["generated_at"] = "not-a-timestamp"
+    assert "generated_at must be a valid UTC timestamp string" in validate_generation_input(changed)
+
+    changed = generation_input()
+    changed["token"] = "not allowed"
+    findings = validate_generation_input(changed)
+    assert "unexpected generation input field: token" in findings
+    assert any("prohibited sensitive field" in finding for finding in findings)
+
+
 def test_manifest_fails_closed_without_ancestry_proof():
     manifest = build_manifest(
         candidate_sha=SHA,
@@ -147,7 +161,7 @@ def test_cli_generates_and_validates_go_bundle(tmp_path: Path):
     output = tmp_path / "manifest.json"
     source.write_text(json.dumps(generation_input()), encoding="utf-8")
     generated = subprocess.run(
-        [sys.executable, str(SCRIPT), "generate", str(source), str(output)],
+        [sys.executable, str(SCRIPT), "generate", str(source), "--output", str(output)],
         capture_output=True,
         text=True,
         check=False,
@@ -174,7 +188,7 @@ def test_cli_returns_two_for_valid_no_go_bundle(tmp_path: Path):
     output = tmp_path / "manifest.json"
     source.write_text(json.dumps(source_payload), encoding="utf-8")
     generated = subprocess.run(
-        [sys.executable, str(SCRIPT), "generate", str(source), str(output)],
+        [sys.executable, str(SCRIPT), "generate", str(source), "--output", str(output)],
         capture_output=True,
         text=True,
         check=False,
@@ -190,7 +204,7 @@ def test_cli_rejects_unexpected_generation_fields(tmp_path: Path):
     output = tmp_path / "manifest.json"
     source.write_text(json.dumps(source_payload), encoding="utf-8")
     generated = subprocess.run(
-        [sys.executable, str(SCRIPT), "generate", str(source), str(output)],
+        [sys.executable, str(SCRIPT), "generate", str(source), "--output", str(output)],
         capture_output=True,
         text=True,
         check=False,
