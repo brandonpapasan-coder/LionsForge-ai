@@ -1,0 +1,154 @@
+name: Staging Evidence Index
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character commit SHA from protected main
+        required: true
+        type: string
+      selection_rationale:
+        description: Why this SHA is the intended staging evidence candidate
+        required: true
+        type: string
+      entries_json:
+        description: JSON array containing all required staging evidence index entries
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  staging-evidence-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate candidate input
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SELECTION_RATIONALE: ${{ inputs.selection_rationale }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "candidate_sha must be exactly 40 lowercase hexadecimal characters" >&2
+            exit 1
+          }
+          test -n "${SELECTION_RATIONALE}" || {
+            echo "selection_rationale must not be empty" >&2
+            exit 1
+          }
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "${actual_sha}" = "${CANDIDATE_SHA}" || {
+            echo "checked-out SHA does not match candidate_sha" >&2
+            exit 1
+          }
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main || {
+            echo "candidate_sha is not contained in origin/main" >&2
+            exit 1
+          }
+
+      - name: Build generation input
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SELECTION_RATIONALE: ${{ inputs.selection_rationale }}
+          ENTRIES_JSON: ${{ inputs.entries_json }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          entries = json.loads(os.environ["ENTRIES_JSON"])
+          payload = {
+              "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "selection_rationale": os.environ["SELECTION_RATIONALE"],
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "entries": entries,
+          }
+          Path("staging-evidence-index-input.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Generate and validate evidence index
+        id: generate_index
+        run: |
+          set +e
+          python scripts/manage_staging_evidence_index.py generate \
+            staging-evidence-index-input.json \
+            --output staging-evidence-index.json
+          generation_status=$?
+          set -e
+          python scripts/manage_staging_evidence_index.py validate \
+            staging-evidence-index.json
+          readiness="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("staging-evidence-index.json").read_text(encoding="utf-8"))
+          print(payload["index"]["readiness"])
+          PY
+          )"
+          echo "readiness=${readiness}" >> "${GITHUB_OUTPUT}"
+          echo "generation_status=${generation_status}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload staging evidence index
+        id: upload_index
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-evidence-index-${{ inputs.candidate_sha }}
+          path: staging-evidence-index.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish staging evidence summary
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          READINESS: ${{ steps.generate_index.outputs.readiness }}
+          ARTIFACT_ID: ${{ steps.upload_index.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_index.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_index.outputs.artifact-digest }}
+        run: |
+          {
+            echo "## Staging evidence index"
+            echo
+            echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
+            echo "- Readiness: \`${READINESS:-unavailable}\`"
+            echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
+            echo "- Artifact digest: \`${ARTIFACT_DIGEST:-unavailable}\`"
+            echo "- Artifact URL: ${ARTIFACT_URL:-unavailable}"
+            echo
+            echo "This index summarizes supplied evidence only and does not independently prove live staging or authorize launch."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Enforce staging evidence READY
+        env:
+          READINESS: ${{ steps.generate_index.outputs.readiness }}
+          GENERATION_STATUS: ${{ steps.generate_index.outputs.generation_status }}
+        run: |
+          set -euo pipefail
+          test "${GENERATION_STATUS}" = "0" || {
+            echo "staging evidence index generation recorded NOT-READY" >&2
+            exit 2
+          }
+          test "${READINESS}" = "READY" || {
+            echo "staging evidence index did not record READY" >&2
+            exit 2
+          }
