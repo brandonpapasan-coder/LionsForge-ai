@@ -41,6 +41,11 @@ def utc_z(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def parse_utc(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    return parsed.astimezone(timezone.utc)
+
+
 def _scan(value: Any, path: str = "$") -> list[str]:
     findings: list[str] = []
     if isinstance(value, dict):
@@ -57,6 +62,16 @@ def _scan(value: Any, path: str = "$") -> list[str]:
 def build_manifest(*, candidate_sha: str, selection_rationale: str, ancestry_verified: bool,
                    workflows: list[dict[str, Any]], generated_at: datetime) -> dict[str, Any]:
     ordered = sorted(workflows, key=lambda item: item.get("name", ""))
+    eligible = (
+        ancestry_verified
+        and tuple(run.get("name") for run in ordered) == REQUIRED_WORKFLOWS
+        and all(
+            run.get("status") == "completed"
+            and run.get("conclusion") == "success"
+            and run.get("head_sha") == candidate_sha
+            for run in ordered
+        )
+    )
     manifest = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -68,10 +83,7 @@ def build_manifest(*, candidate_sha: str, selection_rationale: str, ancestry_ver
         "generated_at": utc_z(generated_at),
         "required_workflows": list(REQUIRED_WORKFLOWS),
         "workflow_runs": ordered,
-        "decision": "GO" if ancestry_verified and all(
-            run.get("status") == "completed" and run.get("conclusion") == "success" and run.get("head_sha") == candidate_sha
-            for run in ordered
-        ) and tuple(run.get("name") for run in ordered) == REQUIRED_WORKFLOWS else "NO-GO",
+        "decision": "GO" if eligible else "NO-GO",
         "interpretation_notice": NOTICE,
     }
     findings = validate_manifest(manifest)
@@ -130,8 +142,7 @@ def validate_manifest(value: Any) -> list[str]:
                 findings.append(f"workflow {run['name']} head SHA mismatch")
                 eligible = False
     ancestry = value.get("protected_main_ancestry_verified") is True
-    expected_decision = "GO" if ancestry and eligible else "NO-GO"
-    if value.get("decision") != expected_decision:
+    if value.get("decision") != ("GO" if ancestry and eligible else "NO-GO"):
         findings.append("manifest decision mismatch")
     if value.get("interpretation_notice") != NOTICE:
         findings.append("interpretation notice mismatch")
@@ -177,13 +188,38 @@ def validate_bundle(value: Any) -> list[str]:
     return sorted(set(findings))
 
 
+def generate_bundle(input_payload: Any) -> dict[str, Any]:
+    if not isinstance(input_payload, dict):
+        raise ValueError("generation input must be an object")
+    required = {"candidate_sha", "selection_rationale", "protected_main_ancestry_verified", "generated_at", "workflow_runs"}
+    if set(input_payload) != required:
+        raise ValueError("generation input fields are invalid")
+    generated_at = parse_utc(input_payload["generated_at"])
+    manifest = build_manifest(
+        candidate_sha=input_payload["candidate_sha"],
+        selection_rationale=input_payload["selection_rationale"],
+        ancestry_verified=input_payload["protected_main_ancestry_verified"],
+        workflows=input_payload["workflow_runs"],
+        generated_at=generated_at,
+    )
+    return {"manifest": manifest, "receipt": build_receipt(manifest, generated_at=generated_at)}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
+    generate = sub.add_parser("generate")
+    generate.add_argument("input", type=Path)
+    generate.add_argument("--output", type=Path, required=True)
     validate = sub.add_parser("validate")
     validate.add_argument("bundle", type=Path)
     args = parser.parse_args()
-    payload = json.loads(args.bundle.read_text())
+    if args.command == "generate":
+        bundle = generate_bundle(json.loads(args.input.read_text(encoding="utf-8")))
+        args.output.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"decision": bundle["manifest"]["decision"], "output": str(args.output)}, sort_keys=True))
+        return 0 if bundle["manifest"]["decision"] == "GO" else 2
+    payload = json.loads(args.bundle.read_text(encoding="utf-8"))
     findings = validate_bundle(payload)
     print(json.dumps({"valid": not findings, "findings": findings}, sort_keys=True))
     return 0 if not findings else 1
