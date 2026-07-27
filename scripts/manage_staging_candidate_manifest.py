@@ -171,10 +171,8 @@ def validate_manifest(value: Any) -> list[str]:
                 findings.append("workflow run identifiers must be positive integers")
                 eligible = False
             if run["status"] != "completed" or run["conclusion"] != "success":
-                findings.append(f"workflow {run['name']} is not successful")
                 eligible = False
             if run["head_sha"] != sha:
-                findings.append(f"workflow {run['name']} head SHA mismatch")
                 eligible = False
     ancestry = value.get("protected_main_ancestry_verified") is True
     if value.get("decision") != ("GO" if ancestry and eligible else "NO-GO"):
