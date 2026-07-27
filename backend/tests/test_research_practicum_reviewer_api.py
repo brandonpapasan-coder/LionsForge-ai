@@ -147,7 +147,11 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
         )
         return _detail(enrollment_status="revision_required", history=history)
 
-    monkeypatch.setattr(research_practicum_reviews, "record_decision", fake_record_decision)
+    monkeypatch.setattr(
+        research_practicum_reviews,
+        "record_decision",
+        fake_record_decision,
+    )
     response = client.post(
         f"{BASE}/enrollments/10/decision",
         json={
@@ -158,7 +162,15 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
     )
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json()["review_history"] == history
+    review = response.json()["review_history"][0]
+    assert review == {
+        "id": 31,
+        "reviewer_user_id": 91,
+        "decision": "revision_required",
+        "notes": "Strengthen source provenance.",
+        "decision_source": "human_reviewer",
+        "created_at": "2026-07-27T01:00:00Z",
+    }
     assert captured == {
         "enrollment_id": 10,
         "reviewer_id": 91,
@@ -173,7 +185,11 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
             detail="Practicum changed after the reviewer loaded it",
         )
 
-    monkeypatch.setattr(research_practicum_reviews, "record_decision", stale)
+    monkeypatch.setattr(
+        research_practicum_reviews,
+        "record_decision",
+        stale,
+    )
     stale_response = client.post(
         f"{BASE}/enrollments/10/decision",
         json={"decision": "approved", "expected_enrollment_updated_at": NOW.isoformat()},
