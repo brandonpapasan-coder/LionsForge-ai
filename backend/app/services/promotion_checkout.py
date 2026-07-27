@@ -19,6 +19,7 @@ from app.services.promotion_entitlements import (
     PromotionConflictError,
     PromotionUnavailableError,
     append_audit_record,
+    decide_lifecycle_transition,
     payment_provider_metadata,
 )
 
@@ -40,6 +41,14 @@ class ActivationResult:
     redemption_id: int
     entitlement_id: str
     provider_metadata: dict[str, str]
+
+
+@dataclass(frozen=True)
+class LifecyclePersistenceResult:
+    eligibility_status: str
+    redemption_status: str
+    protection_status: str
+    reason_code: str
 
 
 def build_checkout_disclosure(
@@ -120,59 +129,61 @@ def activate_reserved_promotion(
         raise PromotionConflictError("provider subscription already has a promotion redemption")
 
     entitlement_id = f"ent_{uuid4().hex}"
-    redemption = PromotionRedemption(
-        eligibility_id=eligibility.id,
-        provider=provider,
-        provider_customer_id=provider_customer_id,
-        provider_subscription_id=provider_subscription_id,
-        provider_discount_id=provider_discount_id,
-        internal_entitlement_id=entitlement_id,
-        started_at=activated_at,
-        status="active",
-    )
-    db.add(redemption)
     try:
-        db.flush()
-        protection = SubscriptionPriceProtection(
-            redemption_id=redemption.id,
-            protection_type="continuous_lifetime" if campaign.promotion_type == "beta" else "fixed_term",
-            protected_percent=campaign.discount_percent,
-            protected_until=regular_price_effective_at if campaign.promotion_type == "founding" else None,
-            continuous_subscription_required=campaign.promotion_type == "beta",
-            grace_period_days=grace_period_days,
-            regular_price_amount_cents=regular_price_amount_cents,
-            regular_price_currency=currency.upper(),
-            regular_price_effective_at=regular_price_effective_at,
-            status="active",
-        )
-        db.add(protection)
-        eligibility.status = "active"
-        eligibility.reserved_until = None
-        sequence = db.execute(
-            select(FoundingSubscriberSequence).where(
-                FoundingSubscriberSequence.eligibility_id == eligibility.id,
-                FoundingSubscriberSequence.allocation_status == "reserved",
+        with db.begin_nested():
+            redemption = PromotionRedemption(
+                eligibility_id=eligibility.id,
+                provider=provider,
+                provider_customer_id=provider_customer_id,
+                provider_subscription_id=provider_subscription_id,
+                provider_discount_id=provider_discount_id,
+                internal_entitlement_id=entitlement_id,
+                started_at=activated_at,
+                status="active",
             )
-        ).scalar_one_or_none()
-        if sequence is not None:
-            sequence.allocation_status = "consumed"
-        append_audit_record(
-            db,
-            event_type="promotion_activated",
-            reason_code="provider_subscription_confirmed",
-            actor_type="system",
-            occurred_at=activated_at,
-            payload={
-                "provider": provider,
-                "provider_subscription_id": provider_subscription_id,
-                "entitlement_id": entitlement_id,
-            },
-            campaign_id=campaign.id,
-            eligibility_id=eligibility.id,
-            redemption_id=redemption.id,
-        )
-        db.flush()
+            db.add(redemption)
+            db.flush()
+            protection = SubscriptionPriceProtection(
+                redemption_id=redemption.id,
+                protection_type="continuous_lifetime" if campaign.promotion_type == "beta" else "fixed_term",
+                protected_percent=campaign.discount_percent,
+                protected_until=regular_price_effective_at if campaign.promotion_type == "founding" else None,
+                continuous_subscription_required=campaign.promotion_type == "beta",
+                grace_period_days=grace_period_days,
+                regular_price_amount_cents=regular_price_amount_cents,
+                regular_price_currency=currency.upper(),
+                regular_price_effective_at=regular_price_effective_at,
+                status="active",
+            )
+            db.add(protection)
+            eligibility.status = "active"
+            eligibility.reserved_until = None
+            sequence = db.execute(
+                select(FoundingSubscriberSequence).where(
+                    FoundingSubscriberSequence.eligibility_id == eligibility.id,
+                    FoundingSubscriberSequence.allocation_status == "reserved",
+                )
+            ).scalar_one_or_none()
+            if sequence is not None:
+                sequence.allocation_status = "consumed"
+            append_audit_record(
+                db,
+                event_type="promotion_activated",
+                reason_code="provider_subscription_confirmed",
+                actor_type="system",
+                occurred_at=activated_at,
+                payload={
+                    "provider": provider,
+                    "provider_subscription_id": provider_subscription_id,
+                    "entitlement_id": entitlement_id,
+                },
+                campaign_id=campaign.id,
+                eligibility_id=eligibility.id,
+                redemption_id=redemption.id,
+            )
+            db.flush()
     except IntegrityError as exc:
+        db.expire(eligibility)
         raise PromotionConflictError("promotion activation conflicted with existing entitlement state") from exc
 
     return ActivationResult(
@@ -183,4 +194,64 @@ def activate_reserved_promotion(
             campaign_slug=campaign.slug,
             entitlement_id=entitlement_id,
         ),
+    )
+
+
+def persist_subscription_lifecycle_event(
+    db: Session,
+    *,
+    campaign: PromotionCampaign,
+    eligibility: PromotionEligibility,
+    redemption: PromotionRedemption,
+    protection: SubscriptionPriceProtection,
+    event_type: str,
+    occurred_at: datetime,
+    within_payment_grace: bool = False,
+    provider_event_id: str | None = None,
+) -> LifecyclePersistenceResult:
+    if redemption.eligibility_id != eligibility.id or eligibility.campaign_id != campaign.id:
+        raise PromotionConflictError("promotion lifecycle records are not consistently linked")
+    if protection.redemption_id != redemption.id:
+        raise PromotionConflictError("price protection is not linked to the redemption")
+
+    decision = decide_lifecycle_transition(
+        event_type=event_type,
+        promotion_type=campaign.promotion_type,
+        continuous_subscription_required=protection.continuous_subscription_required,
+        within_payment_grace=within_payment_grace,
+    )
+    terminal = decision.eligibility_status in {"ended", "ineligible"}
+    redemption_status = "ended" if terminal else decision.eligibility_status
+
+    with db.begin_nested():
+        eligibility.status = decision.eligibility_status
+        redemption.status = redemption_status
+        protection.status = decision.protection_status
+        if terminal:
+            redemption.ended_at = occurred_at
+        append_audit_record(
+            db,
+            event_type=f"promotion_{event_type}",
+            reason_code=decision.reason_code,
+            actor_type="payment_provider",
+            occurred_at=occurred_at,
+            payload={
+                "provider": redemption.provider,
+                "provider_event_id": provider_event_id,
+                "provider_subscription_id": redemption.provider_subscription_id,
+                "eligibility_status": decision.eligibility_status,
+                "redemption_status": redemption_status,
+                "protection_status": decision.protection_status,
+            },
+            campaign_id=campaign.id,
+            eligibility_id=eligibility.id,
+            redemption_id=redemption.id,
+        )
+        db.flush()
+
+    return LifecyclePersistenceResult(
+        eligibility_status=decision.eligibility_status,
+        redemption_status=redemption_status,
+        protection_status=decision.protection_status,
+        reason_code=decision.reason_code,
     )
