@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401 - register all mapped tables
 from app.db.session import Base
@@ -15,8 +15,15 @@ from app.models.promotion import (
     PromotionAuditRecord,
     PromotionCampaign,
     PromotionEligibility,
+    PromotionRedemption,
+    SubscriptionPriceProtection,
+)
+from app.services.promotion_checkout import (
+    activate_reserved_promotion,
+    persist_subscription_lifecycle_event,
 )
 from app.services.promotion_entitlements import (
+    PromotionConflictError,
     PromotionUnavailableError,
     release_abandoned_reservations,
     reserve_founding_position,
@@ -33,14 +40,14 @@ def _database(tmp_path: Path):
     return engine, sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def _create_campaign(session_factory, *, capacity: int) -> int:
+def _create_campaign(session_factory, *, capacity: int, promotion_type: str = "founding") -> int:
     with session_factory() as db:
         campaign = PromotionCampaign(
-            slug=f"founding-capacity-{capacity}",
-            promotion_type="founding",
+            slug=f"{promotion_type}-capacity-{capacity}",
+            promotion_type=promotion_type,
             discount_percent=50,
-            duration_months=12,
-            capacity=capacity,
+            duration_months=12 if promotion_type == "founding" else None,
+            capacity=capacity if promotion_type == "founding" else None,
             active=True,
         )
         db.add(campaign)
@@ -164,5 +171,149 @@ def test_simultaneous_checkout_cannot_oversubscribe_capacity(tmp_path: Path) -> 
     assert results.count("qualified") == 2
     assert results.count("regular_price") == 4
     assert positions == [1, 2]
+
+    engine.dispose()
+
+
+def _activate_beta(session_factory, campaign_id: int, *, user_id: int, subscription_id: str):
+    now = datetime(2026, 7, 27, 12, 0)
+    with session_factory() as db:
+        campaign = db.get(PromotionCampaign, campaign_id)
+        eligibility = PromotionEligibility(
+            campaign_id=campaign.id,
+            user_id=user_id,
+            status="reserved",
+            verified_account_id=f"acct-{user_id}",
+            reserved_until=now + timedelta(minutes=30),
+            eligibility_reason="verified_beta_tester",
+        )
+        db.add(eligibility)
+        db.flush()
+        result = activate_reserved_promotion(
+            db,
+            campaign=campaign,
+            eligibility=eligibility,
+            provider="stripe",
+            provider_customer_id=f"cus-{user_id}",
+            provider_subscription_id=subscription_id,
+            provider_discount_id=f"disc-{user_id}",
+            regular_price_amount_cents=2000,
+            currency="USD",
+            activated_at=now,
+            regular_price_effective_at=None,
+        )
+        db.commit()
+        return eligibility.id, result.redemption_id
+
+
+def test_refund_and_chargeback_persist_deterministic_entitlement_state(tmp_path: Path) -> None:
+    engine, session_factory = _database(tmp_path)
+    campaign_id = _create_campaign(session_factory, capacity=1, promotion_type="beta")
+    eligibility_id, redemption_id = _activate_beta(
+        session_factory, campaign_id, user_id=401, subscription_id="sub-lifecycle"
+    )
+
+    with session_factory() as db:
+        campaign = db.get(PromotionCampaign, campaign_id)
+        eligibility = db.get(PromotionEligibility, eligibility_id)
+        redemption = db.get(PromotionRedemption, redemption_id)
+        protection = db.scalar(select(SubscriptionPriceProtection).where(
+            SubscriptionPriceProtection.redemption_id == redemption.id
+        ))
+        refund = persist_subscription_lifecycle_event(
+            db,
+            campaign=campaign,
+            eligibility=eligibility,
+            redemption=redemption,
+            protection=protection,
+            event_type="refund",
+            occurred_at=datetime(2026, 7, 28, 12, 0),
+            provider_event_id="evt-refund",
+        )
+        db.commit()
+        assert refund.eligibility_status == "review"
+        assert redemption.status == "review"
+        assert protection.status == "suspended"
+        assert redemption.ended_at is None
+
+    with session_factory() as db:
+        campaign = db.get(PromotionCampaign, campaign_id)
+        eligibility = db.get(PromotionEligibility, eligibility_id)
+        redemption = db.get(PromotionRedemption, redemption_id)
+        protection = db.scalar(select(SubscriptionPriceProtection).where(
+            SubscriptionPriceProtection.redemption_id == redemption.id
+        ))
+        chargeback = persist_subscription_lifecycle_event(
+            db,
+            campaign=campaign,
+            eligibility=eligibility,
+            redemption=redemption,
+            protection=protection,
+            event_type="chargeback",
+            occurred_at=datetime(2026, 7, 29, 12, 0),
+            provider_event_id="evt-chargeback",
+        )
+        db.commit()
+        assert chargeback.eligibility_status == "ended"
+        assert redemption.status == "ended"
+        assert protection.status == "ended"
+        assert redemption.ended_at == datetime(2026, 7, 29, 12, 0)
+        events = db.scalars(select(PromotionAuditRecord.event_type).order_by(PromotionAuditRecord.id)).all()
+        assert "promotion_refund" in events
+        assert "promotion_chargeback" in events
+
+    engine.dispose()
+
+
+def test_provider_subscription_conflict_leaves_reservation_unmodified(tmp_path: Path) -> None:
+    engine, session_factory = _database(tmp_path)
+    campaign_id = _create_campaign(session_factory, capacity=1, promotion_type="beta")
+    _activate_beta(session_factory, campaign_id, user_id=501, subscription_id="sub-duplicate")
+    now = datetime(2026, 7, 27, 13, 0)
+
+    with session_factory() as db:
+        campaign = db.get(PromotionCampaign, campaign_id)
+        eligibility = PromotionEligibility(
+            campaign_id=campaign.id,
+            user_id=502,
+            status="reserved",
+            verified_account_id="acct-502",
+            reserved_until=now + timedelta(minutes=30),
+            eligibility_reason="verified_beta_tester",
+        )
+        db.add(eligibility)
+        db.commit()
+        eligibility_id = eligibility.id
+
+    with session_factory() as db:
+        campaign = db.get(PromotionCampaign, campaign_id)
+        eligibility = db.get(PromotionEligibility, eligibility_id)
+        with pytest.raises(PromotionConflictError, match="already has a promotion redemption"):
+            activate_reserved_promotion(
+                db,
+                campaign=campaign,
+                eligibility=eligibility,
+                provider="stripe",
+                provider_customer_id="cus-502",
+                provider_subscription_id="sub-duplicate",
+                provider_discount_id="disc-502",
+                regular_price_amount_cents=2000,
+                currency="USD",
+                activated_at=now,
+                regular_price_effective_at=None,
+            )
+        db.commit()
+
+    with session_factory() as db:
+        eligibility = db.get(PromotionEligibility, eligibility_id)
+        assert eligibility.status == "reserved"
+        assert eligibility.reserved_until is not None
+        assert db.scalar(select(PromotionRedemption).where(
+            PromotionRedemption.eligibility_id == eligibility_id
+        )) is None
+        assert db.scalar(select(SubscriptionPriceProtection).join(
+            PromotionRedemption,
+            SubscriptionPriceProtection.redemption_id == PromotionRedemption.id,
+        ).where(PromotionRedemption.eligibility_id == eligibility_id)) is None
 
     engine.dispose()
