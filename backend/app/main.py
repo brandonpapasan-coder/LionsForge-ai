@@ -10,6 +10,7 @@ from app.api.routes.learner_competency_gap_plan import router as learner_compete
 from app.api.routes.learner_competency_portfolio import router as learner_competency_portfolio_router
 from app.api.routes.practicum_completion_audit import router as practicum_completion_audit_router
 from app.api.routes.roadmap_action_ledger import router as roadmap_action_ledger_router
+from app.api.routes.roadmap_action_outcomes import router as roadmap_action_outcomes_router
 from app.api.routes.roadmap_practicum_enrollment import router as roadmap_practicum_enrollment_router
 from app.core.config import get_settings
 from app.core.observability import configure_request_observability
@@ -79,6 +80,11 @@ app.include_router(
     roadmap_action_ledger_router,
     prefix=f"{settings.api_prefix}/education/roadmap-action-ledger",
     tags=["education-roadmap-action-ledger"],
+)
+app.include_router(
+    roadmap_action_outcomes_router,
+    prefix=f"{settings.api_prefix}/education/roadmap-action-outcomes",
+    tags=["education-roadmap-action-outcomes"],
 )
 
 
