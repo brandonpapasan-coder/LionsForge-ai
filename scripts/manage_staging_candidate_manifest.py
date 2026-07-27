@@ -59,6 +59,41 @@ def _scan(value: Any, path: str = "$") -> list[str]:
     return findings
 
 
+def validate_generation_input(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return ["generation input must be an object"]
+    required = {
+        "candidate_sha",
+        "selection_rationale",
+        "protected_main_ancestry_verified",
+        "generated_at",
+        "workflow_runs",
+    }
+    findings = [f"unexpected generation input field: {key}" for key in sorted(set(value) - required)]
+    findings += [f"missing generation input field: {key}" for key in sorted(required - set(value))]
+    sha = value.get("candidate_sha")
+    if not isinstance(sha, str) or not _SHA.fullmatch(sha):
+        findings.append("candidate_sha must be a lowercase 40-character commit SHA")
+    rationale = value.get("selection_rationale")
+    if not isinstance(rationale, str) or not rationale.strip() or len(rationale) > 500:
+        findings.append("selection_rationale must contain 1 to 500 characters")
+    if not isinstance(value.get("protected_main_ancestry_verified"), bool):
+        findings.append("protected_main_ancestry_verified must be boolean")
+    generated_at = value.get("generated_at")
+    if not isinstance(generated_at, str):
+        findings.append("generated_at must be a UTC timestamp string")
+    else:
+        try:
+            parse_utc(generated_at)
+        except (TypeError, ValueError):
+            findings.append("generated_at must be a valid UTC timestamp string")
+    runs = value.get("workflow_runs")
+    if not isinstance(runs, list):
+        findings.append("workflow_runs must be an array")
+    findings.extend(_scan(value))
+    return sorted(set(findings))
+
+
 def build_manifest(*, candidate_sha: str, selection_rationale: str, ancestry_verified: bool,
                    workflows: list[dict[str, Any]], generated_at: datetime) -> dict[str, Any]:
     ordered = sorted(workflows, key=lambda item: item.get("name", ""))
@@ -189,11 +224,9 @@ def validate_bundle(value: Any) -> list[str]:
 
 
 def generate_bundle(input_payload: Any) -> dict[str, Any]:
-    if not isinstance(input_payload, dict):
-        raise ValueError("generation input must be an object")
-    required = {"candidate_sha", "selection_rationale", "protected_main_ancestry_verified", "generated_at", "workflow_runs"}
-    if set(input_payload) != required:
-        raise ValueError("generation input fields are invalid")
+    findings = validate_generation_input(input_payload)
+    if findings:
+        raise ValueError("Invalid generation input: " + "; ".join(findings))
     generated_at = parse_utc(input_payload["generated_at"])
     manifest = build_manifest(
         candidate_sha=input_payload["candidate_sha"],
