@@ -9,6 +9,7 @@ from app.api.router import api_router
 from app.api.routes.learner_competency_gap_plan import router as learner_competency_gap_plan_router
 from app.api.routes.learner_competency_portfolio import router as learner_competency_portfolio_router
 from app.api.routes.practicum_completion_audit import router as practicum_completion_audit_router
+from app.api.routes.roadmap_practicum_enrollment import router as roadmap_practicum_enrollment_router
 from app.core.config import get_settings
 from app.core.observability import configure_request_observability
 from app.db.init_db import init_db
@@ -67,6 +68,11 @@ app.include_router(
     learner_competency_gap_plan_router,
     prefix=f"{settings.api_prefix}/education/competency-gap-plan",
     tags=["education-competency-gap-plan"],
+)
+app.include_router(
+    roadmap_practicum_enrollment_router,
+    prefix=f"{settings.api_prefix}/education/roadmap-practicum-enrollment",
+    tags=["education-roadmap-practicum-enrollment"],
 )
 
 
