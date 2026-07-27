@@ -44,7 +44,7 @@ The workflow:
 9. publishes the manifest artifact ID, URL, and upload digest in the workflow summary;
 10. continues with the existing staging configuration, endpoint, provenance, and upload-receipt controls.
 
-Any missing, duplicate, unknown, unsuccessful, incomplete, or candidate-mismatched workflow run causes failure before staging validation proceeds.
+Any missing, duplicate, unknown, unsuccessful, incomplete, or candidate-mismatched workflow run causes failure before staging validation proceeds. A manually supplied run ID cannot override the workflow name, conclusion, run number, or head SHA returned by GitHub.
 
 ## Local generation
 
