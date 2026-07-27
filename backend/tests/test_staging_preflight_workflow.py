@@ -37,6 +37,8 @@ def test_staging_preflight_requires_authoritative_workflow_run_ids() -> None:
     assert "actions: read" in text
     assert 'if not raw_run_id.isdigit() or int(raw_run_id) <= 0:' in text
     assert '["gh", "api", f"repos/{os.environ[\'REPOSITORY\']}/actions/runs/{raw_run_id}"]' in text
+    assert '"name": payload.get("name")' in text
+    assert '"head_sha": payload.get("head_sha")' in text
 
 
 def test_staging_preflight_generates_and_validates_candidate_manifest() -> None:
@@ -46,6 +48,7 @@ def test_staging_preflight_generates_and_validates_candidate_manifest() -> None:
     assert "manage_staging_candidate_manifest.py validate" in text
     assert 'payload.get("manifest", {}).get("decision") != "GO"' in text
     assert "staging candidate manifest did not record GO" in text
+    assert text.index("Generate and validate candidate manifest") < text.index("Configure AWS credentials")
 
 
 def test_staging_preflight_retains_candidate_manifest() -> None:
