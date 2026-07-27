@@ -84,7 +84,7 @@ def test_beta_reactivation_after_lapse_does_not_restore_lifetime_discount() -> N
     assert decision.reason_code == "continuous_subscription_broken"
 
 
-def test_founding_cancellation_releases_unconsumed_position_policy() -> None:
+def test_founding_cancellation_does_not_expand_paid_cohort() -> None:
     decision = decide_lifecycle_transition(
         event_type="canceled",
         promotion_type="founding",
@@ -92,18 +92,19 @@ def test_founding_cancellation_releases_unconsumed_position_policy() -> None:
     )
 
     assert decision.eligibility_status == "ended"
-    assert decision.release_founding_position is True
+    assert decision.release_founding_position is False
 
 
-def test_chargeback_ends_entitlement_deterministically() -> None:
+def test_chargeback_ends_entitlement_without_reopening_founding_position() -> None:
     decision = decide_lifecycle_transition(
         event_type="chargeback",
-        promotion_type="beta",
-        continuous_subscription_required=True,
+        promotion_type="founding",
+        continuous_subscription_required=False,
     )
 
     assert decision.eligibility_status == "ended"
     assert decision.protection_status == "ended"
+    assert decision.release_founding_position is False
     assert decision.reason_code == "subscription_chargeback"
 
 
