@@ -98,14 +98,14 @@ jobs:
           set -e
           python scripts/manage_staging_evidence_index.py validate \
             staging-evidence-index.json
-          readiness="$(python - <<'PY'
+          decision="$(python - <<'PY'
           import json
           from pathlib import Path
           payload = json.loads(Path("staging-evidence-index.json").read_text(encoding="utf-8"))
-          print(payload["index"]["readiness"])
+          print(payload["index"]["decision"])
           PY
           )"
-          echo "readiness=${readiness}" >> "${GITHUB_OUTPUT}"
+          echo "decision=${decision}" >> "${GITHUB_OUTPUT}"
           echo "generation_status=${generation_status}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload staging evidence index
@@ -121,7 +121,7 @@ jobs:
         if: always()
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-          READINESS: ${{ steps.generate_index.outputs.readiness }}
+          DECISION: ${{ steps.generate_index.outputs.decision }}
           ARTIFACT_ID: ${{ steps.upload_index.outputs.artifact-id }}
           ARTIFACT_URL: ${{ steps.upload_index.outputs.artifact-url }}
           ARTIFACT_DIGEST: ${{ steps.upload_index.outputs.artifact-digest }}
@@ -130,7 +130,7 @@ jobs:
             echo "## Staging evidence index"
             echo
             echo "- Candidate SHA: \`${CANDIDATE_SHA}\`"
-            echo "- Readiness: \`${READINESS:-unavailable}\`"
+            echo "- Decision: \`${DECISION:-unavailable}\`"
             echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
             echo "- Artifact digest: \`${ARTIFACT_DIGEST:-unavailable}\`"
             echo "- Artifact URL: ${ARTIFACT_URL:-unavailable}"
@@ -140,7 +140,7 @@ jobs:
 
       - name: Enforce staging evidence READY
         env:
-          READINESS: ${{ steps.generate_index.outputs.readiness }}
+          DECISION: ${{ steps.generate_index.outputs.decision }}
           GENERATION_STATUS: ${{ steps.generate_index.outputs.generation_status }}
         run: |
           set -euo pipefail
@@ -148,7 +148,7 @@ jobs:
             echo "staging evidence index generation recorded NOT-READY" >&2
             exit 2
           }
-          test "${READINESS}" = "READY" || {
+          test "${DECISION}" = "READY" || {
             echo "staging evidence index did not record READY" >&2
             exit 2
           }
