@@ -85,7 +85,7 @@ def test_queue_executes_filters_pagination_and_deterministic_contract(client, mo
             "total_pages": 1,
         }
 
-    monkeypatch.setattr(research_practicum_reviews.reviewer_service, "list_queue", fake_list_queue)
+    monkeypatch.setattr(research_practicum_reviews, "list_queue", fake_list_queue)
     response = client.get(
         f"{BASE}/queue",
         params={
@@ -113,7 +113,7 @@ def test_queue_executes_filters_pagination_and_deterministic_contract(client, mo
 
 def test_completed_detail_remains_readable_outside_active_queue(client, monkeypatch):
     monkeypatch.setattr(
-        research_practicum_reviews.reviewer_service,
+        research_practicum_reviews,
         "get_detail",
         lambda db, enrollment_id: _detail(enrollment_status="completed"),
     )
@@ -147,11 +147,7 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
         )
         return _detail(enrollment_status="revision_required", history=history)
 
-    monkeypatch.setattr(
-        research_practicum_reviews.reviewer_service,
-        "record_decision",
-        fake_record_decision,
-    )
+    monkeypatch.setattr(research_practicum_reviews, "record_decision", fake_record_decision)
     response = client.post(
         f"{BASE}/enrollments/10/decision",
         json={
@@ -177,11 +173,7 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
             detail="Practicum changed after the reviewer loaded it",
         )
 
-    monkeypatch.setattr(
-        research_practicum_reviews.reviewer_service,
-        "record_decision",
-        stale,
-    )
+    monkeypatch.setattr(research_practicum_reviews, "record_decision", stale)
     stale_response = client.post(
         f"{BASE}/enrollments/10/decision",
         json={"decision": "approved", "expected_enrollment_updated_at": NOW.isoformat()},
