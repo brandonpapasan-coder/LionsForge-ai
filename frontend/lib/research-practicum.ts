@@ -92,6 +92,50 @@ export type PracticumReadiness = {
   latest_review_decision: PracticumReviewDecision | null;
 };
 
+export type PracticumCompletionAuditObjective = {
+  objective_key: string;
+  sequence: number;
+  status: "approved";
+  referenced_evidence_ids: number[];
+};
+
+export type PracticumCompletionAuditDecision = {
+  decision_id: number;
+  reviewer_user_id: number;
+  decision: "approved" | "revision_required";
+  created_at: string;
+  decision_source: "human_reviewer";
+};
+
+export type PracticumCompletionAuditRecord = {
+  schema: "lionsforge.practicum-completion-record";
+  schema_version: 1;
+  generator_version: string;
+  enrollment_id: number;
+  learner_user_id: number;
+  template_slug: string;
+  template_version: number;
+  research_project_id: number;
+  status: "completed";
+  completed_at: string;
+  objectives: PracticumCompletionAuditObjective[];
+  review_history: PracticumCompletionAuditDecision[];
+  advisory_notice: string;
+};
+
+export type PracticumCompletionAuditReceipt = {
+  schema: "lionsforge.practicum-completion-receipt";
+  schema_version: 1;
+  generator_version: string;
+  record_sha256: string;
+  generated_at: string;
+};
+
+export type PracticumCompletionAuditBundle = {
+  record: PracticumCompletionAuditRecord;
+  receipt: PracticumCompletionAuditReceipt;
+};
+
 export type PracticumReviewerEvidence = {
   id: number;
   title: string;
@@ -226,6 +270,10 @@ export const researchPracticumClient = {
     practicumRequest<PracticumReadiness>(`/enrollments/${enrollmentId}/readiness`),
   submit: (enrollmentId: number) =>
     practicumRequest<PracticumReadiness>(`/enrollments/${enrollmentId}/submit`, { method: "POST" }),
+  completionAudit: (enrollmentId: number) =>
+    practicumRequest<PracticumCompletionAuditBundle>(`/enrollments/${enrollmentId}/completion-audit`, {
+      method: "POST",
+    }),
   reviewerQueue: (filters: PracticumReviewerQueueFilters = {}) =>
     practicumRequest<PracticumReviewerQueue>(`/reviewer/queue?${reviewerQueueQuery(filters)}`),
   reviewerDetail: (enrollmentId: number) =>
