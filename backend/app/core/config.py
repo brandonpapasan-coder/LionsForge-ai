@@ -23,7 +23,26 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = 30.0
     openai_max_retries: int = 2
 
+    promotions_enabled: bool = False
+    beta_lifetime_discount_enabled: bool = False
+    founding_subscriber_enrollment_enabled: bool = False
+    paid_beta_authorized: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    def public_beta_promotion_enabled(self) -> bool:
+        return (
+            self.promotions_enabled
+            and self.beta_lifetime_discount_enabled
+            and self.paid_beta_authorized
+        )
+
+    def public_founding_promotion_enabled(self) -> bool:
+        return (
+            self.promotions_enabled
+            and self.founding_subscriber_enrollment_enabled
+            and self.paid_beta_authorized
+        )
 
 
 @lru_cache
