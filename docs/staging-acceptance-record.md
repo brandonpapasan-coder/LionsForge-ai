@@ -1,99 +1,111 @@
-# LionsForge AI Staging Acceptance Record
+# LionsForge AI staging acceptance record
 
-Complete one copy of this record for each release candidate. Do not include secret values, access tokens, kubeconfig content, credentials, or sensitive user data.
+The staging acceptance record is the deterministic evidence bundle for issue #29. It binds one protected-main candidate to the full staging acceptance evidence set and records either `GO` or `NO-GO`.
 
-## Release identity
+It does not provision infrastructure, deploy workloads, perform live checks, or authorize production, beta, legal, or general availability.
 
-- Release candidate SHA:
-- Staging deploy workflow run:
-- Staging frontend deploy workflow run:
-- Staging URL:
-- Acceptance date/time (UTC):
-- Acceptance owner:
-- Backend image digest:
-- Running backend image digest verified: Yes / No
-- Frontend image digest:
-- Running frontend image digest verified: Yes / No
-- Previous deployable image SHA:
-- Database migration revision before deploy:
-- Database migration revision after deploy:
+## Required evidence categories
 
-## Automated validation
+Supply exactly one record for each category, sorted by category name:
 
-| Gate | Result | Run or evidence reference | Notes |
-|---|---|---|---|
-| Backend CI | Pending | | |
-| Frontend CI | Pending | | |
-| Security Gate | Pending | | |
-| Deployment Validation | Pending | | |
-| Staging Deploy | Pending | | |
-| Staging Frontend Deploy | Pending | | |
-| Authenticated smoke test | Pending | | |
-| OpenAI provider health | Pending | | Record only enabled/status/model metadata. |
-| Mentor schema validation | Pending | | Do not copy sensitive conversation data. |
+- `backend_deployment`
+- `backup_restore`
+- `candidate_manifest`
+- `frontend_deployment`
+- `https_api_smoke`
+- `https_web_smoke`
+- `observability`
+- `rollback`
+- `staging_preflight`
+- `staging_preflight_upload_receipt`
 
-Allowed results: `Passed`, `Failed`, `Blocked`, `Not run`.
+Each evidence item must contain only these fields:
 
-## Infrastructure readiness
+```json
+{
+  "category": "backend_deployment",
+  "candidate_sha": "0123456789abcdef0123456789abcdef01234567",
+  "artifact_id": 123456,
+  "artifact_url": "https://github.com/example/repository/actions/runs/1/artifacts/123456",
+  "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verified": true,
+  "status": "passed",
+  "observed_at": "2026-07-27T21:30:00Z",
+  "summary": "Backend image digest and running-container digest were verified for the candidate."
+}
+```
 
-| Check | Result | Owner | Notes |
-|---|---|---|---|
-| Kubernetes cluster and namespace | Pending | | |
-| Ingress, DNS, and HTTPS | Pending | | |
-| PostgreSQL connectivity | Pending | | |
-| Database backup and restore test | Pending | | |
-| GHCR image-pull access | Pending | | |
-| Error and latency observability | Pending | | |
-| Acceptance user provisioned | Pending | | |
+Allowed status values are `passed`, `failed`, and `incomplete`.
 
-## Manual acceptance journey
+## Decision behavior
 
-| Step | Result | Evidence reference | Notes |
-|---|---|---|---|
-| Sign in and load Executive Dashboard | Pending | | |
-| Create research project and save notebook | Pending | | |
-| Create and reopen research session | Pending | | |
-| Open Mentor with resolved research context | Pending | | |
-| Receive complete evidence-first Mentor response | Pending | | |
-| Reopen and continue Mentor conversation | Pending | | |
-| Start and complete Education lesson | Pending | | |
-| Create or review evidence and verify knowledge-quality update | Pending | | |
-| Sign out and sign back in | Pending | | |
-| Verify persisted research, Mentor, education, evidence, and knowledge state | Pending | | |
-| Verify legacy finance surfaces are absent by default | Pending | | Compatibility mode is not part of default acceptance. |
-| Execute rollback verification | Pending | | |
+`GO` is produced only when every required item:
 
-## Defects
+- is structurally valid;
+- is marked `verified: true`;
+- has `status: passed`;
+- uses the exact candidate SHA;
+- includes a positive artifact ID, HTTPS artifact URL, SHA-256 artifact digest, UTC observation time, and bounded summary.
 
-| Severity | Issue | Owner | Status | Release impact |
-|---|---|---|---|---|
-| | | | | |
+Structurally valid evidence that is failed, incomplete, unverified, or candidate-mismatched produces a valid receipted `NO-GO` record. Missing, duplicate, extra, malformed, sensitive, or tampered evidence is rejected.
 
-Severity definitions:
+## Local generation
 
-- `Critical`: security isolation failure, credential exposure, unrecoverable data loss, or complete service outage.
-- `High`: required user journey failure, unreliable persistence, provider failure without fallback, or unsafe rollback.
-- `Medium`: degraded but recoverable workflow with a documented workaround.
-- `Low`: cosmetic, copy, or non-blocking usability defect.
+Create an input file with the candidate identity, rationale, UTC generation time, and all ten evidence records:
 
-## Rollback evidence
+```json
+{
+  "candidate_sha": "0123456789abcdef0123456789abcdef01234567",
+  "selection_rationale": "Fresh protected-main candidate selected for staging acceptance.",
+  "generated_at": "2026-07-27T21:30:00Z",
+  "evidence": []
+}
+```
 
-- Previous image successfully identified: Yes / No
-- Migration boundary reviewed: Yes / No
-- Rollback command or workflow executed: Yes / No
-- Service health restored after rollback: Yes / No
-- Forward redeploy completed after rollback test: Yes / No
-- Notes:
+Run:
 
-## Final decision
+```bash
+python scripts/manage_staging_acceptance_record.py generate \
+  staging-acceptance-input.json \
+  --output staging-acceptance-record.json
 
-- Decision: `GO` / `NO-GO`
-- Decision owner:
-- Decision timestamp (UTC):
-- Unresolved critical defects:
-- Unresolved high-severity defects:
-- Conditions or follow-up actions:
+python scripts/manage_staging_acceptance_record.py validate \
+  staging-acceptance-record.json
+```
 
-### Required sign-off statement
+Exit codes:
 
-> I verified that this decision is based on the exact release candidate SHA and backend and frontend image digests recorded above, that the running staging backend and frontend images matched those digests, that no credentials are included in this record, and that all blocking gates and defects have been evaluated according to `docs/release-checklist.md`.
+- `0`: valid `GO` bundle or successful validation;
+- `2`: valid generated `NO-GO` bundle;
+- `1` or another nonzero code: malformed input or invalid bundle.
+
+## GitHub workflow
+
+Dispatch **Staging Acceptance Record** with:
+
+- the exact protected-main candidate SHA;
+- the candidate-selection rationale;
+- the JSON array containing all ten evidence records.
+
+The workflow verifies candidate identity and ancestry, generates and validates the bundle, uploads `staging-acceptance-record-<candidate_sha>` with 90-day retention, and publishes the artifact ID, URL, digest, and decision.
+
+A valid `NO-GO` bundle is uploaded before the workflow fails so the blocking evidence remains auditable.
+
+## Operator acceptance checklist
+
+Before supplying evidence, independently verify:
+
+- the candidate manifest and staging-preflight receipt are valid and candidate-bound;
+- backend and frontend registry digests match running containers;
+- API and web HTTPS smoke checks passed;
+- rollback was executed successfully;
+- backup and restore were exercised successfully;
+- observability evidence demonstrates usable health, error, and latency visibility.
+
+Do not mark an item passed merely because an artifact exists. `verified: true` means an operator independently checked the artifact contents and candidate binding.
+
+## Handling rules
+
+Never include secrets, tokens, passwords, API keys, private user data, request content, kubeconfig values, database URLs, credentials, or raw customer material. Store only evidence identifiers, digests, bounded summaries, verification results, and timestamps.
+
+The record is repository evidence only. Independent operators must still provision staging and execute every live acceptance exercise required by issue #29.
