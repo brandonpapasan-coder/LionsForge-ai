@@ -2,7 +2,7 @@ from datetime import datetime
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -41,17 +41,13 @@ def _require_reviewer(user: User) -> None:
         )
 
 
-def _queue_item(db: Session, enrollment: PracticumEnrollment) -> PracticumReviewerQueueItemRead:
-    learner = db.get(User, enrollment.user_id)
-    template = db.get(PracticumTemplate, enrollment.template_id)
-    project = db.get(ResearchProject, enrollment.research_project_id)
-    latest_review = db.scalar(
-        select(PracticumReviewDecision)
-        .where(PracticumReviewDecision.enrollment_id == enrollment.id)
-        .order_by(PracticumReviewDecision.created_at.desc(), PracticumReviewDecision.id.desc())
-    )
-    if template is None or project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practicum context not found")
+def _queue_item(
+    enrollment: PracticumEnrollment,
+    learner: User | None,
+    template: PracticumTemplate,
+    project: ResearchProject,
+    latest_review: PracticumReviewDecision | None,
+) -> PracticumReviewerQueueItemRead:
     return PracticumReviewerQueueItemRead(
         enrollment_id=enrollment.id,
         learner_user_id=enrollment.user_id,
@@ -68,6 +64,20 @@ def _queue_item(db: Session, enrollment: PracticumEnrollment) -> PracticumReview
     )
 
 
+def _queue_item_for_enrollment(db: Session, enrollment: PracticumEnrollment) -> PracticumReviewerQueueItemRead:
+    learner = db.get(User, enrollment.user_id)
+    template = db.get(PracticumTemplate, enrollment.template_id)
+    project = db.get(ResearchProject, enrollment.research_project_id)
+    latest_review = db.scalar(
+        select(PracticumReviewDecision)
+        .where(PracticumReviewDecision.enrollment_id == enrollment.id)
+        .order_by(PracticumReviewDecision.created_at.desc(), PracticumReviewDecision.id.desc())
+    )
+    if template is None or project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practicum context not found")
+    return _queue_item(enrollment, learner, template, project, latest_review)
+
+
 def _detail_enrollment(db: Session, enrollment_id: int) -> PracticumEnrollment:
     enrollment = db.get(PracticumEnrollment, enrollment_id)
     if enrollment is None or enrollment.status not in REVIEW_DETAIL_STATUSES:
@@ -80,6 +90,7 @@ def list_reviewer_queue(
     queue_status: str | None = Query(default=None, alias="status"),
     template_slug: str | None = None,
     learner_user_id: int | None = Query(default=None, gt=0),
+    learner_query: str | None = Query(default=None, min_length=1, max_length=120),
     submitted_from: datetime | None = None,
     submitted_to: datetime | None = None,
     page: int = Query(default=1, ge=1),
@@ -100,19 +111,40 @@ def list_reviewer_queue(
         filters.append(PracticumTemplate.slug == template_slug)
     if learner_user_id:
         filters.append(PracticumEnrollment.user_id == learner_user_id)
+    if learner_query:
+        normalized_query = learner_query.strip().lower()
+        if normalized_query:
+            pattern = f"%{normalized_query}%"
+            filters.append(
+                or_(
+                    func.lower(func.coalesce(User.full_name, "")).like(pattern),
+                    func.lower(User.email).like(pattern),
+                )
+            )
     if submitted_from:
         filters.append(PracticumEnrollment.submitted_for_review_at >= submitted_from)
     if submitted_to:
         filters.append(PracticumEnrollment.submitted_for_review_at <= submitted_to)
 
+    latest_review_id = (
+        select(PracticumReviewDecision.id)
+        .where(PracticumReviewDecision.enrollment_id == PracticumEnrollment.id)
+        .order_by(PracticumReviewDecision.created_at.desc(), PracticumReviewDecision.id.desc())
+        .limit(1)
+        .correlate(PracticumEnrollment)
+        .scalar_subquery()
+    )
     base = (
-        select(PracticumEnrollment)
+        select(PracticumEnrollment, User, PracticumTemplate, ResearchProject, PracticumReviewDecision)
+        .join(User, User.id == PracticumEnrollment.user_id)
         .join(PracticumTemplate, PracticumTemplate.id == PracticumEnrollment.template_id)
+        .join(ResearchProject, ResearchProject.id == PracticumEnrollment.research_project_id)
+        .outerjoin(PracticumReviewDecision, PracticumReviewDecision.id == latest_review_id)
         .where(*filters)
     )
     total_items = db.scalar(select(func.count()).select_from(base.order_by(None).subquery())) or 0
     rows = list(
-        db.scalars(
+        db.execute(
             base.order_by(
                 PracticumEnrollment.submitted_for_review_at.asc().nulls_last(),
                 PracticumEnrollment.updated_at.asc(),
@@ -123,7 +155,7 @@ def list_reviewer_queue(
         ).all()
     )
     return PracticumReviewerQueueRead(
-        items=[_queue_item(db, row) for row in rows],
+        items=[_queue_item(enrollment, learner, template, project, latest_review) for enrollment, learner, template, project, latest_review in rows],
         page=page,
         page_size=page_size,
         total_items=total_items,
@@ -205,7 +237,7 @@ def get_reviewer_detail(
         ).all()
     )
     return PracticumReviewerDetailRead(
-        enrollment=_queue_item(db, enrollment),
+        enrollment=_queue_item_for_enrollment(db, enrollment),
         objectives=reviewer_objectives,
         readiness=readiness,
         review_history=[_review_read(row) for row in review_history],
