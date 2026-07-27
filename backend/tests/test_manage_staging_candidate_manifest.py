@@ -5,23 +5,27 @@ import subprocess
 import sys
 from copy import deepcopy
 from datetime import datetime, timezone
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
 
-from scripts.manage_staging_candidate_manifest import (
-    REQUIRED_WORKFLOWS,
-    build_manifest,
-    build_receipt,
-    canonical_json,
-    validate_bundle,
-    validate_generation_input,
-    validate_manifest,
-)
-
 SHA = "a" * 40
 NOW = datetime(2026, 7, 27, 20, 0, tzinfo=timezone.utc)
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "manage_staging_candidate_manifest.py"
+SPEC = spec_from_file_location("manage_staging_candidate_manifest", SCRIPT)
+assert SPEC and SPEC.loader
+MODULE = module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+
+REQUIRED_WORKFLOWS = MODULE.REQUIRED_WORKFLOWS
+build_manifest = MODULE.build_manifest
+build_receipt = MODULE.build_receipt
+canonical_json = MODULE.canonical_json
+validate_bundle = MODULE.validate_bundle
+validate_generation_input = MODULE.validate_generation_input
+validate_manifest = MODULE.validate_manifest
 
 
 def runs(sha: str = SHA):
