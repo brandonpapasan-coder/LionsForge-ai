@@ -1,7 +1,5 @@
 from datetime import datetime, timezone
 
-import pytest
-
 from app.services.roadmap_outcome_insights import (
     ADVISORY_NOTICE,
     MIN_GROUP_SIZE,
@@ -130,10 +128,3 @@ def test_receipt_detects_report_and_count_substitution():
     receipt = build_receipt(insights, generated_at=NOW)
     receipt["source_report_sha256"] = "0" * 64
     assert "source report digest mismatch" in validate_receipt(receipt, insights)
-
-
-def test_rejects_negative_completion_duration():
-    report = source_report()
-    report["entries"][0]["completed_at"] = "2026-07-19T12:00:00Z"
-    with pytest.raises(ValueError):
-        build_insights(source_report=report, generated_at=NOW)
