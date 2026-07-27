@@ -8,6 +8,7 @@ import { LearnerCompetencyGapPlan } from "@/components/learner-competency-gap-pl
 import { LearnerCompetencyPortfolio } from "@/components/learner-competency-portfolio";
 import { LearnerRoadmapActionHistory } from "@/components/learner-roadmap-action-history";
 import { LearnerRoadmapActionOutcomes } from "@/components/learner-roadmap-action-outcomes";
+import { LearnerRoadmapOutcomeInsights } from "@/components/learner-roadmap-outcome-insights";
 import { ResearchPracticumWorkspace } from "@/components/research-practicum-workspace";
 import "./education.css";
 
@@ -23,6 +24,7 @@ export default async function EducationPage() {
       <LearnerCompetencyGapPlan />
       <LearnerRoadmapActionHistory />
       <LearnerRoadmapActionOutcomes />
+      <LearnerRoadmapOutcomeInsights />
       <CompetencyTrends />
     </>
   );
