@@ -53,8 +53,9 @@ def decide_lifecycle_transition(
     if event_type == "refund":
         return LifecycleDecision("review", "suspended", False, "refund_requires_policy_review")
     if event_type in TERMINAL_LIFECYCLE_EVENTS:
-        release = promotion_type == "founding" and event_type in {"canceled", "lapsed"}
-        return LifecycleDecision("ended", "ended", release, f"subscription_{event_type}")
+        # A position is consumed once a paid founding subscription activates. Later
+        # cancellation, lapse, refund, or chargeback never expands the first-20,000 cohort.
+        return LifecycleDecision("ended", "ended", False, f"subscription_{event_type}")
     if event_type == "reactivated":
         if continuous_subscription_required:
             return LifecycleDecision("ineligible", "ended", False, "continuous_subscription_broken")
@@ -114,39 +115,60 @@ def reserve_founding_position(
 
     capacity = min(campaign.capacity or FOUNDING_CAPACITY, FOUNDING_CAPACITY)
     for _ in range(8):
-        highest = db.execute(
-            select(func.max(FoundingSubscriberSequence.position)).where(
-                FoundingSubscriberSequence.campaign_id == campaign.id,
-                FoundingSubscriberSequence.allocation_status.in_(("reserved", "consumed")),
-            )
-        ).scalar_one()
-        position = (highest or 0) + 1
-        if position > capacity:
-            raise PromotionUnavailableError("founding subscriber allocation is exhausted")
-
-        eligibility = PromotionEligibility(
-            campaign_id=campaign.id,
-            user_id=user_id,
-            status="reserved",
-            verified_account_id=verified_account_id,
-            reserved_until=now + timedelta(minutes=RESERVATION_MINUTES),
-            eligibility_reason="founding_checkout",
-        )
-        db.add(eligibility)
         try:
-            db.flush()
-            sequence = FoundingSubscriberSequence(
-                campaign_id=campaign.id,
-                eligibility_id=eligibility.id,
-                position=position,
-                allocation_status="reserved",
-                reserved_at=now,
-            )
-            db.add(sequence)
-            db.flush()
-            return eligibility, sequence
+            with db.begin_nested():
+                eligibility = PromotionEligibility(
+                    campaign_id=campaign.id,
+                    user_id=user_id,
+                    status="reserved",
+                    verified_account_id=verified_account_id,
+                    reserved_until=now + timedelta(minutes=RESERVATION_MINUTES),
+                    eligibility_reason="founding_checkout",
+                )
+                db.add(eligibility)
+                db.flush()
+
+                released = db.execute(
+                    select(FoundingSubscriberSequence)
+                    .where(
+                        FoundingSubscriberSequence.campaign_id == campaign.id,
+                        FoundingSubscriberSequence.allocation_status == "released",
+                    )
+                    .order_by(FoundingSubscriberSequence.position)
+                    .with_for_update(skip_locked=True)
+                    .limit(1)
+                ).scalar_one_or_none()
+                if released is not None:
+                    released.eligibility_id = eligibility.id
+                    released.allocation_status = "reserved"
+                    released.reserved_at = now
+                    released.released_at = None
+                    db.flush()
+                    return eligibility, released
+
+                highest = db.execute(
+                    select(func.max(FoundingSubscriberSequence.position)).where(
+                        FoundingSubscriberSequence.campaign_id == campaign.id
+                    )
+                ).scalar_one()
+                position = (highest or 0) + 1
+                if position > capacity:
+                    raise PromotionUnavailableError("founding subscriber allocation is exhausted")
+
+                sequence = FoundingSubscriberSequence(
+                    campaign_id=campaign.id,
+                    eligibility_id=eligibility.id,
+                    position=position,
+                    allocation_status="reserved",
+                    reserved_at=now,
+                )
+                db.add(sequence)
+                db.flush()
+                return eligibility, sequence
         except IntegrityError:
-            db.rollback()
+            # The savepoint rolls back only this allocation attempt. The caller's
+            # surrounding transaction remains usable for a bounded retry.
+            continue
     raise PromotionConflictError("founding position contention exceeded retry limit")
 
 
@@ -169,6 +191,16 @@ def release_abandoned_reservations(db: Session, *, now: datetime) -> int:
         if sequence is not None:
             sequence.allocation_status = "released"
             sequence.released_at = now
+        append_audit_record(
+            db,
+            campaign_id=eligibility.campaign_id,
+            eligibility_id=eligibility.id,
+            event_type="checkout_reservation_expired",
+            reason_code="abandoned_checkout_released",
+            actor_type="system",
+            occurred_at=now,
+            payload={"founding_position": sequence.position if sequence is not None else None},
+        )
     return len(expired)
 
 
