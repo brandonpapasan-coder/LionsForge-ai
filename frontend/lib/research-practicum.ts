@@ -152,6 +152,7 @@ export type PracticumReviewerQueueFilters = {
   status?: "review_ready" | "revision_required";
   template_slug?: string;
   learner_user_id?: number;
+  learner_query?: string;
   submitted_from?: string;
   submitted_to?: string;
   page?: number;
@@ -161,6 +162,13 @@ export type PracticumReviewerQueueFilters = {
 export type ResearchProjectOption = { id: number; title: string; status: string };
 export type ResearchEvidenceOption = { id: number; project_id: number; title: string; source_type: string; tags: string[] };
 
+export class PracticumRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "PracticumRequestError";
+  }
+}
+
 async function practicumRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/education/practica${path}`, {
     ...init,
@@ -169,12 +177,12 @@ async function practicumRequest<T>(path: string, init?: RequestInit): Promise<T>
   });
   if (response.status === 401) {
     window.location.href = "/login";
-    throw new Error("Authentication required");
+    throw new PracticumRequestError("Authentication required", response.status);
   }
   const payload = await response.json().catch(() => ({ detail: "Request failed" }));
   if (!response.ok) {
     const detail = typeof payload.detail === "string" ? payload.detail : payload.detail?.message;
-    throw new Error(detail ?? "Request failed");
+    throw new PracticumRequestError(detail ?? "Request failed", response.status);
   }
   return payload as T;
 }
@@ -184,6 +192,7 @@ function reviewerQueueQuery(filters: PracticumReviewerQueueFilters = {}): string
   if (filters.status) params.set("status", filters.status);
   if (filters.template_slug) params.set("template_slug", filters.template_slug);
   if (filters.learner_user_id) params.set("learner_user_id", String(filters.learner_user_id));
+  if (filters.learner_query?.trim()) params.set("learner_query", filters.learner_query.trim());
   if (filters.submitted_from) params.set("submitted_from", filters.submitted_from);
   if (filters.submitted_to) params.set("submitted_to", filters.submitted_to);
   params.set("page", String(filters.page ?? 1));
