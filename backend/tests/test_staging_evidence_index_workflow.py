@@ -32,7 +32,7 @@ def test_generates_and_validates_before_enforcement() -> None:
     text = workflow_text()
     assert "manage_staging_evidence_index.py generate" in text
     assert "manage_staging_evidence_index.py validate" in text
-    assert 'print(payload["index"]["readiness"])' in text
+    assert 'print(payload["index"]["decision"])' in text
     assert text.index("Generate and validate evidence index") < text.index("Upload staging evidence index")
     assert text.index("Upload staging evidence index") < text.index("Enforce staging evidence READY")
 
@@ -61,6 +61,6 @@ def test_summary_exposes_artifact_identity_and_guardrail() -> None:
 def test_final_step_fails_closed_unless_ready() -> None:
     text = workflow_text()
     assert 'test "${GENERATION_STATUS}" = "0"' in text
-    assert 'test "${READINESS}" = "READY"' in text
+    assert 'test "${DECISION}" = "READY"' in text
     assert "staging evidence index generation recorded NOT-READY" in text
     assert "staging evidence index did not record READY" in text
