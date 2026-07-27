@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.router import api_router
+from app.api.routes.learner_competency_gap_plan import router as learner_competency_gap_plan_router
 from app.api.routes.learner_competency_portfolio import router as learner_competency_portfolio_router
 from app.api.routes.practicum_completion_audit import router as practicum_completion_audit_router
 from app.core.config import get_settings
@@ -61,6 +62,11 @@ app.include_router(
     learner_competency_portfolio_router,
     prefix=f"{settings.api_prefix}/education/competency-portfolio",
     tags=["education-competency-portfolio"],
+)
+app.include_router(
+    learner_competency_gap_plan_router,
+    prefix=f"{settings.api_prefix}/education/competency-gap-plan",
+    tags=["education-competency-gap-plan"],
 )
 
 
