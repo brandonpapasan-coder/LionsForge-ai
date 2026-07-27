@@ -114,7 +114,7 @@ def test_authenticated_routes_are_registered_and_forward_query_filters(monkeypat
     monkeypatch.setattr("app.api.routes.roadmap_outcome_insights.export_roadmap_outcome_insights", fake_export)
     client = TestClient(app)
     response = client.get(
-        "/api/education/roadmap-outcome-insights",
+        "/api/v1/education/roadmap-outcome-insights",
         params={
             "template_slug": "source-validation",
             "reason_code": "adds_not_yet_demonstrated_competency",
@@ -130,5 +130,5 @@ def test_authenticated_routes_are_registered_and_forward_query_filters(monkeypat
     assert captured["template_slug"] == "source-validation"
     assert captured["outcome_status"] == "completed"
     paths = app.openapi()["paths"]
-    assert "/api/education/roadmap-outcome-insights" in paths
-    assert "/api/education/roadmap-outcome-insights/validate" in paths
+    assert "/api/v1/education/roadmap-outcome-insights" in paths
+    assert "/api/v1/education/roadmap-outcome-insights/validate" in paths
