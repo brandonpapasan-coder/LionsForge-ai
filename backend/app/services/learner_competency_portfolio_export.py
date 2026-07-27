@@ -65,13 +65,15 @@ def export_competency_portfolio(
             objective_by_key = {objective.objective_key: objective for objective in objectives}
             record = bundle["record"]
             final_decision_id = record["review_history"][-1]["decision_id"]
+            by_competency: dict[str, dict[str, Any]] = {}
             for record_objective in record["objectives"]:
                 objective = objective_by_key.get(record_objective["objective_key"])
                 if objective is None:
                     raise ValueError("objective context missing")
                 if competency_key and objective.competency != competency_key:
                     continue
-                rows.append(
+                row = by_competency.setdefault(
+                    objective.competency,
                     {
                         "competency_key": objective.competency,
                         "competency_label": objective.competency.replace("_", " ").title(),
@@ -80,12 +82,15 @@ def export_competency_portfolio(
                         "template_version": record["template_version"],
                         "research_project_id": record["research_project_id"],
                         "completed_at": enrollment.completed_at,
-                        "objective_keys": [record_objective["objective_key"]],
-                        "referenced_evidence_ids": record_objective["referenced_evidence_ids"],
+                        "objective_keys": [],
+                        "referenced_evidence_ids": [],
                         "final_review_decision_id": final_decision_id,
                         "completion_record_sha256": bundle["receipt"]["record_sha256"],
-                    }
+                    },
                 )
+                row["objective_keys"].append(record_objective["objective_key"])
+                row["referenced_evidence_ids"].extend(record_objective["referenced_evidence_ids"])
+            rows.extend(by_competency.values())
         except (KeyError, TypeError, ValueError):
             if len(exclusion_findings) < MAX_EXCLUSION_FINDINGS:
                 exclusion_findings.append(
