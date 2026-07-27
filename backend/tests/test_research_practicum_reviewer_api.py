@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException, status
 
 from app.api.deps import get_current_user
+from app.api.routes import research_practicum_reviews
 from app.db.session import get_db
 from app.main import app
 
@@ -84,10 +85,7 @@ def test_queue_executes_filters_pagination_and_deterministic_contract(client, mo
             "total_pages": 1,
         }
 
-    monkeypatch.setattr(
-        "app.api.routes.research_practicum_reviews.reviewer_service.list_queue",
-        fake_list_queue,
-    )
+    monkeypatch.setattr(research_practicum_reviews.reviewer_service, "list_queue", fake_list_queue)
     response = client.get(
         f"{BASE}/queue",
         params={
@@ -115,7 +113,8 @@ def test_queue_executes_filters_pagination_and_deterministic_contract(client, mo
 
 def test_completed_detail_remains_readable_outside_active_queue(client, monkeypatch):
     monkeypatch.setattr(
-        "app.api.routes.research_practicum_reviews.reviewer_service.get_detail",
+        research_practicum_reviews.reviewer_service,
+        "get_detail",
         lambda db, enrollment_id: _detail(enrollment_status="completed"),
     )
 
@@ -149,7 +148,8 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
         return _detail(enrollment_status="revision_required", history=history)
 
     monkeypatch.setattr(
-        "app.api.routes.research_practicum_reviews.reviewer_service.record_decision",
+        research_practicum_reviews.reviewer_service,
+        "record_decision",
         fake_record_decision,
     )
     response = client.post(
@@ -178,7 +178,8 @@ def test_decision_endpoint_preserves_history_and_propagates_stale_conflicts(clie
         )
 
     monkeypatch.setattr(
-        "app.api.routes.research_practicum_reviews.reviewer_service.record_decision",
+        research_practicum_reviews.reviewer_service,
+        "record_decision",
         stale,
     )
     stale_response = client.post(
