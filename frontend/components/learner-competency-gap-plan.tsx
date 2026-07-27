@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import type { ResearchProject } from "@/lib/research";
 import {
   competencyGapPlanClient,
+  type CompetencyGapRecommendation,
   type CompetencyGapStatus,
   type LearnerCompetencyGapPlanBundle,
 } from "@/lib/competency-gap-plan";
@@ -31,17 +33,36 @@ function downloadPlan(bundle: LearnerCompetencyGapPlanBundle) {
 
 export function LearnerCompetencyGapPlan() {
   const [bundle, setBundle] = useState<LearnerCompetencyGapPlanBundle | null>(null);
+  const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [statusFilter, setStatusFilter] = useState<"all" | CompetencyGapStatus>("all");
   const [competencyFilter, setCompetencyFilter] = useState("");
+  const [selectedRecommendation, setSelectedRecommendation] = useState<CompetencyGapRecommendation | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    competencyGapPlanClient
-      .load()
-      .then((value) => { if (active) setBundle(value); })
+    Promise.all([
+      competencyGapPlanClient.load(),
+      fetch("/api/research-projects", { cache: "no-store" }).then(async (response) => {
+        if (response.status === 401) {
+          window.location.href = "/login";
+          return [] as ResearchProject[];
+        }
+        if (!response.ok) throw new Error("Research projects could not be loaded.");
+        return (await response.json()) as ResearchProject[];
+      }),
+    ])
+      .then(([planBundle, projectRows]) => {
+        if (!active) return;
+        setBundle(planBundle);
+        setProjects(projectRows);
+      })
       .catch((requestError) => {
         if (active) setError(requestError instanceof Error ? requestError.message : "The competency roadmap could not be loaded.");
       })
@@ -63,6 +84,32 @@ export function LearnerCompetencyGapPlan() {
     if (!competencyFilter.trim() && statusFilter === "all") return bundle?.plan.recommendations ?? [];
     return (bundle?.plan.recommendations ?? []).filter((item) => item.competency_keys.some((key) => visibleKeys.has(key)));
   }, [bundle, competencyFilter, filteredCompetencies, statusFilter]);
+
+  function beginEnrollment(item: CompetencyGapRecommendation) {
+    setSelectedRecommendation(item);
+    setSelectedProjectId("");
+    setConfirmed(false);
+    setActionError(null);
+  }
+
+  async function submitEnrollment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRecommendation || !selectedProjectId || !confirmed) return;
+    setSubmitting(true);
+    setActionError(null);
+    try {
+      await competencyGapPlanClient.startRecommendedPracticum(
+        selectedRecommendation.template_slug,
+        selectedRecommendation.template_version,
+        Number(selectedProjectId),
+      );
+      window.location.reload();
+    } catch (requestError) {
+      setActionError(requestError instanceof Error ? requestError.message : "The recommended practicum could not be started.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <section className="lesson-card" aria-labelledby="competency-gap-plan-heading">
@@ -125,8 +172,36 @@ export function LearnerCompetencyGapPlan() {
               <p>Objectives: {item.objective_keys.join(", ")}</p>
               <p>Reason: {item.reason_codes.map((code) => REASON_LABELS[code]).join("; ")}</p>
               <p>Prerequisites: {item.prerequisite_lesson_slugs.length ? item.prerequisite_lesson_slugs.join(", ") : "None listed"}</p>
+              <button type="button" onClick={() => beginEnrollment(item)}>Start recommended practicum</button>
             </article>
           ))}
+
+          {selectedRecommendation ? (
+            <form className="practicum-form-grid" onSubmit={submitEnrollment} aria-label="Confirm recommended practicum enrollment">
+              <h3>Confirm learner-requested enrollment</h3>
+              <p>
+                You selected <strong>{selectedRecommendation.template_slug}</strong> version {selectedRecommendation.template_version}. The server will regenerate the current roadmap, confirm this exact recommendation remains active, verify prerequisites and project ownership, and prevent duplicate enrollment.
+              </p>
+              <p>Recommendation reason: {selectedRecommendation.reason_codes.map((code) => REASON_LABELS[code]).join("; ")}</p>
+              <p>Estimated effort: {selectedRecommendation.estimated_minutes} minutes. Prerequisites: {selectedRecommendation.prerequisite_lesson_slugs.length ? selectedRecommendation.prerequisite_lesson_slugs.join(", ") : "None listed"}.</p>
+              <label>
+                Research project
+                <select required value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>
+                  <option value="">Select one of your research projects</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
+                </select>
+              </label>
+              {projects.length === 0 ? <p role="status">Create a research project before starting a recommended practicum.</p> : null}
+              <label>
+                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                I explicitly request this enrollment and understand the roadmap is educational guidance, not a credential or autonomous competency decision.
+              </label>
+              <button type="submit" disabled={submitting || !selectedProjectId || !confirmed}>{submitting ? "Starting practicum…" : "Confirm and start practicum"}</button>
+              <button type="button" disabled={submitting} onClick={() => setSelectedRecommendation(null)}>Cancel</button>
+              <p role="status" aria-live="polite">{submitting ? "Revalidating the current recommendation and enrollment requirements…" : "No enrollment occurs until you explicitly submit this form."}</p>
+              {actionError ? <p role="alert">{actionError}</p> : null}
+            </form>
+          ) : null}
         </>
       ) : null}
     </section>
