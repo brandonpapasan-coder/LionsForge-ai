@@ -35,6 +35,20 @@ def test_founding_checkout_discloses_regular_renewal_amount_and_date() -> None:
     assert "USD 29.99" in disclosure.disclosure_text
 
 
+def test_founding_campaign_capacity_is_bound_to_twenty_thousand() -> None:
+    campaign = PromotionCampaign(
+        id=1,
+        slug="founding-2026",
+        promotion_type="founding",
+        discount_percent=50,
+        duration_months=12,
+        capacity=20_000,
+        active=True,
+    )
+
+    assert campaign.capacity == 20_000
+
+
 def test_founding_checkout_fails_closed_without_transition_date() -> None:
     campaign = PromotionCampaign(
         id=1,
