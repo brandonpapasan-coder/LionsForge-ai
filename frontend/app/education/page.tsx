@@ -9,6 +9,7 @@ import { LearnerCompetencyPortfolio } from "@/components/learner-competency-port
 import { LearnerRoadmapActionHistory } from "@/components/learner-roadmap-action-history";
 import { LearnerRoadmapActionOutcomes } from "@/components/learner-roadmap-action-outcomes";
 import { LearnerRoadmapOutcomeInsights } from "@/components/learner-roadmap-outcome-insights";
+import { LearnerRoadmapOutcomeTrends } from "@/components/learner-roadmap-outcome-trends";
 import { ResearchPracticumWorkspace } from "@/components/research-practicum-workspace";
 import "./education.css";
 
@@ -25,6 +26,7 @@ export default async function EducationPage() {
       <LearnerRoadmapActionHistory />
       <LearnerRoadmapActionOutcomes />
       <LearnerRoadmapOutcomeInsights />
+      <LearnerRoadmapOutcomeTrends />
       <CompetencyTrends />
     </>
   );
