@@ -56,8 +56,15 @@ def test_reviewer_route_contract_enforces_authorization_filters_and_stale_decisi
     assert "PracticumEnrollment.status.in_(REVIEWABLE_STATUSES)" in route
     assert "PracticumTemplate.slug == template_slug" in route
     assert "PracticumEnrollment.user_id == learner_user_id" in route
+    assert "learner_query: str | None" in route
+    assert "func.lower(func.coalesce(User.full_name" in route
+    assert "func.lower(User.email).like(pattern)" in route
     assert "submitted_for_review_at.asc().nulls_last()" in route
     assert ".offset((page - 1) * page_size)" in route
+    assert ".join(User, User.id == PracticumEnrollment.user_id)" in route
+    assert ".join(ResearchProject, ResearchProject.id == PracticumEnrollment.research_project_id)" in route
+    assert "latest_review_id" in route
+    assert "items=[_queue_item(" in route
     assert '@router.get("/enrollments/{enrollment_id}"' in route
     assert 'record_source: Literal["measured_research_record"]' in (
         root / "app" / "schemas" / "research_practicum.py"
@@ -80,3 +87,4 @@ def test_reviewer_detail_keeps_completed_decisions_readable_but_out_of_queue():
     assert 'REVIEW_DETAIL_STATUSES = REVIEWABLE_STATUSES | {"completed"}' in route
     assert "PracticumEnrollment.status.in_(REVIEWABLE_STATUSES)" in route
     assert "enrollment.status not in REVIEW_DETAIL_STATUSES" in route
+    assert "review_history=[_review_read(row) for row in review_history]" in route
