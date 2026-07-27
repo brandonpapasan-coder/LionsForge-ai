@@ -2,6 +2,9 @@
 
 Revision ID: 0037_promotion_entitlements
 Revises: 0036_roadmap_action_ledger
+
+The revision identifier is intentionally kept within Alembic's default
+32-character version column limit used by PostgreSQL validation.
 """
 
 from collections.abc import Sequence
