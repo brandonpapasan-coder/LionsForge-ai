@@ -11,7 +11,7 @@ from app.services.sandbox_payment_verification import (
 
 
 @pytest.fixture
-def request() -> SandboxVerificationRequest:
+def verification_request() -> SandboxVerificationRequest:
     return SandboxVerificationRequest(
         operator_user_id=7,
         account_id=11,
@@ -32,11 +32,13 @@ def request() -> SandboxVerificationRequest:
     )
 
 
-def test_complete_internal_sandbox_request_is_allowed(request: SandboxVerificationRequest) -> None:
-    decision = evaluate_sandbox_verification(request)
+def test_complete_internal_sandbox_request_is_allowed(
+    verification_request: SandboxVerificationRequest,
+) -> None:
+    decision = evaluate_sandbox_verification(verification_request)
     assert decision.allowed is True
     assert decision.reason_code == "sandbox_verification_allowed"
-    assert decision.verification_digest == sandbox_verification_digest(request)
+    assert decision.verification_digest == sandbox_verification_digest(verification_request)
 
 
 @pytest.mark.parametrize(
@@ -54,15 +56,17 @@ def test_complete_internal_sandbox_request_is_allowed(request: SandboxVerificati
     ],
 )
 def test_verification_fails_closed(
-    request: SandboxVerificationRequest,
+    verification_request: SandboxVerificationRequest,
     changes: dict[str, object],
     reason: str,
 ) -> None:
-    decision = evaluate_sandbox_verification(replace(request, **changes))
+    decision = evaluate_sandbox_verification(replace(verification_request, **changes))
     assert decision.allowed is False
     assert decision.reason_code == reason
 
 
-def test_digest_changes_when_evidence_changes(request: SandboxVerificationRequest) -> None:
-    changed = replace(request, webhook_event_digest="e" * 64)
-    assert sandbox_verification_digest(request) != sandbox_verification_digest(changed)
+def test_digest_changes_when_evidence_changes(
+    verification_request: SandboxVerificationRequest,
+) -> None:
+    changed = replace(verification_request, webhook_event_digest="e" * 64)
+    assert sandbox_verification_digest(verification_request) != sandbox_verification_digest(changed)
