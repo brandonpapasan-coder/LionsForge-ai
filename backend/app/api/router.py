@@ -25,6 +25,7 @@ from app.api.routes import (
     multi_agent_consensus,
     news,
     personal_intelligence,
+    promotion_rollout,
     release_countdown,
     remediation_progress,
     research,
@@ -75,6 +76,7 @@ def build_api_router(
     router.include_router(auth.router, prefix="/auth", tags=["auth"])
     router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     router.include_router(release_countdown.router, prefix="/release-countdown", tags=["release-countdown"])
+    router.include_router(promotion_rollout.router, prefix="/promotion-rollout", tags=["promotion-rollout"])
     router.include_router(education.router, prefix="/education", tags=["education"])
     router.include_router(adaptive_learning_plan.router, prefix="/education", tags=["education"])
     router.include_router(
