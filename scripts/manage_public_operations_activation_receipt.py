@@ -26,6 +26,9 @@ _SENSITIVE_FIELD = re.compile(
     r"(?:password|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|client[_ -]?secret|credential)",
     re.IGNORECASE,
 )
+_ALLOWED_SECURITY_CONTROL_FIELDS = {
+    "Secrets and credentials excluded from logs",
+}
 
 
 def _load_activation_validator():
@@ -69,7 +72,10 @@ def _contains_sensitive_field(text: str) -> bool:
         line = raw_line.strip()
         if line.startswith("- ") and ":" in line:
             field_name = line[2:].split(":", 1)[0].strip()
-            if _SENSITIVE_FIELD.search(field_name):
+            if (
+                _SENSITIVE_FIELD.search(field_name)
+                and field_name not in _ALLOWED_SECURITY_CONTROL_FIELDS
+            ):
                 return True
         if line.startswith("|") and line.endswith("|"):
             first_cell = line.strip("|").split("|", 1)[0].strip()
