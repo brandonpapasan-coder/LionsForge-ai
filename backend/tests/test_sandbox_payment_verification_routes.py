@@ -25,7 +25,7 @@ def test_operator_guard_allows_superusers_and_rejects_other_users() -> None:
 
 
 def test_sandbox_verification_routes_are_registered() -> None:
-    paths = {route.path for route in api_router.routes}
+    paths = {route.path for route in api_router.routes if hasattr(route, "path")}
     assert "/sandbox-payment-verification/runs" in paths
     assert "/sandbox-payment-verification/runs/{run_id}" in paths
 
@@ -57,7 +57,8 @@ def test_router_registration_is_unconditional_and_operator_only_surface() -> Non
 def test_migration_and_models_are_registered_structurally() -> None:
     migration = Path("alembic/versions/0040_sandbox_payment_verification.py").read_text(encoding="utf-8")
     models_init = Path("app/models/__init__.py").read_text(encoding="utf-8")
-    assert 'down_revision = "0039_provider_readiness"' in migration or 'down_revision = "0039_payment_provider_validation"' in migration
+    assert 'revision = "0040_sandbox_payment_verify"' in migration
+    assert 'down_revision = "0039_provider_validation"' in migration
     assert "sandbox_payment_verification_runs" in migration
     assert "sandbox_payment_verification_evidence" in migration
     assert "SandboxPaymentVerificationRun" in models_init
