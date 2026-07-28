@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -24,6 +24,10 @@ class PromotionRolloutStatus:
     authorized_by: str | None
     reason_code: str | None
     gates: dict[str, bool]
+    countdown_state: str
+    countdown_launch_at: datetime | None
+    countdown_evaluated_at: datetime
+    countdown_seconds_remaining: int | None
     provider_validation_status: str | None
     provider_validation_reason: str | None
     provider_validation_digest: str | None
@@ -49,11 +53,38 @@ def _count(db: Session, model, field, value: str) -> int:
     return int(db.scalar(select(func.count()).select_from(model).where(field == value)) or 0)
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _countdown(
+    *,
+    launch_at: datetime | None,
+    evaluated_at: datetime,
+) -> tuple[str, datetime | None, int | None]:
+    if launch_at is None:
+        return "not_scheduled", None, None
+
+    normalized_launch = _as_utc(launch_at)
+    remaining = max(0, int((normalized_launch - _as_utc(evaluated_at)).total_seconds()))
+    state = "scheduled" if remaining > 0 else "reached"
+    return state, normalized_launch, remaining
+
+
 def read_promotion_rollout_status(
     db: Session,
     *,
     gates: PromotionGateSnapshot,
+    countdown_launch_at: datetime | None = None,
+    evaluated_at: datetime | None = None,
 ) -> PromotionRolloutStatus:
+    evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
+    countdown_state, normalized_launch_at, countdown_seconds_remaining = _countdown(
+        launch_at=countdown_launch_at,
+        evaluated_at=evaluated_at,
+    )
     latest = db.scalar(
         select(PromotionRolloutAuthorization)
         .order_by(PromotionRolloutAuthorization.authorized_at.desc(), PromotionRolloutAuthorization.id.desc())
@@ -78,6 +109,10 @@ def read_promotion_rollout_status(
             "founding_subscriber_enrollment_enabled": gates.founding_subscriber_enrollment_enabled,
             "provider_ready": gates.provider_ready,
         },
+        countdown_state=countdown_state,
+        countdown_launch_at=normalized_launch_at,
+        countdown_evaluated_at=evaluated_at,
+        countdown_seconds_remaining=countdown_seconds_remaining,
         provider_validation_status=provider_validation.validation_status if provider_validation else None,
         provider_validation_reason=provider_validation.reason_code if provider_validation else None,
         provider_validation_digest=provider_validation.configuration_digest if provider_validation else None,
