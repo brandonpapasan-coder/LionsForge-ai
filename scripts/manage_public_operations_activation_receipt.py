@@ -22,7 +22,7 @@ NOTICE = (
 )
 _SHA = re.compile(r"[0-9a-f]{40}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
-_SENSITIVE = re.compile(
+_SENSITIVE_FIELD = re.compile(
     r"(?:password|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|client[_ -]?secret|credential)",
     re.IGNORECASE,
 )
@@ -64,10 +64,24 @@ def parse_utc(value: str) -> datetime:
     return datetime.fromisoformat(value.removesuffix("Z") + "+00:00").astimezone(timezone.utc)
 
 
+def _contains_sensitive_field(text: str) -> bool:
+    for raw_line in canonical_record(text).splitlines():
+        line = raw_line.strip()
+        if line.startswith("- ") and ":" in line:
+            field_name = line[2:].split(":", 1)[0].strip()
+            if _SENSITIVE_FIELD.search(field_name):
+                return True
+        if line.startswith("|") and line.endswith("|"):
+            first_cell = line.strip("|").split("|", 1)[0].strip()
+            if _SENSITIVE_FIELD.fullmatch(first_cell):
+                return True
+    return False
+
+
 def validate_source_record(text: str) -> list[str]:
     canonical = canonical_record(text)
     findings: list[str] = []
-    if _SENSITIVE.search(canonical):
+    if _contains_sensitive_field(canonical):
         findings.append("activation record contains a prohibited sensitive-field term")
     validator = _load_activation_validator()
     findings.extend(f"activation-record:{item.code}:{item.message}" for item in validator.validate_record(canonical))
