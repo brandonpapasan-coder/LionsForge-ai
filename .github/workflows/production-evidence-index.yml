@@ -1,0 +1,135 @@
+name: Production Evidence Index
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character production candidate SHA from protected main
+        required: true
+        type: string
+      staging_candidate_sha:
+        description: Exact accepted staging candidate SHA
+        required: true
+        type: string
+      selection_rationale:
+        description: Why this production candidate and staging lineage were selected
+        required: true
+        type: string
+      entries_json:
+        description: JSON array containing all required production evidence entries
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  production-evidence-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate candidate inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          STAGING_CANDIDATE_SHA: ${{ inputs.staging_candidate_sha }}
+          SELECTION_RATIONALE: ${{ inputs.selection_rationale }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "${STAGING_CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          test -n "${SELECTION_RATIONALE}"
+
+      - name: Checkout exact production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify production candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "${actual_sha}" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Build generation input
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          STAGING_CANDIDATE_SHA: ${{ inputs.staging_candidate_sha }}
+          SELECTION_RATIONALE: ${{ inputs.selection_rationale }}
+          ENTRIES_JSON: ${{ inputs.entries_json }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          payload = {
+              "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "staging_candidate_sha": os.environ["STAGING_CANDIDATE_SHA"],
+              "selection_rationale": os.environ["SELECTION_RATIONALE"],
+              "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "entries": json.loads(os.environ["ENTRIES_JSON"]),
+          }
+          Path("production-evidence-index-input.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+      - name: Generate and validate production evidence index
+        id: generate_index
+        run: |
+          set +e
+          python scripts/manage_production_evidence_index.py generate production-evidence-index-input.json --output production-evidence-index.json
+          generation_status=$?
+          set -e
+          python scripts/manage_production_evidence_index.py validate production-evidence-index.json
+          decision="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path("production-evidence-index.json").read_text(encoding="utf-8"))["index"]["decision"])
+          PY
+          )"
+          echo "decision=${decision}" >> "${GITHUB_OUTPUT}"
+          echo "generation_status=${generation_status}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload production evidence index
+        id: upload_index
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-evidence-index-${{ inputs.candidate_sha }}
+          path: production-evidence-index.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish production evidence summary
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          STAGING_CANDIDATE_SHA: ${{ inputs.staging_candidate_sha }}
+          DECISION: ${{ steps.generate_index.outputs.decision }}
+          ARTIFACT_ID: ${{ steps.upload_index.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_index.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_index.outputs.artifact-digest }}
+        run: |
+          {
+            echo "## Production evidence index"
+            echo "- Production candidate: \`${CANDIDATE_SHA}\`"
+            echo "- Accepted staging candidate: \`${STAGING_CANDIDATE_SHA}\`"
+            echo "- Decision: \`${DECISION:-unavailable}\`"
+            echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
+            echo "- Artifact digest: \`${ARTIFACT_DIGEST:-unavailable}\`"
+            echo "- Artifact URL: ${ARTIFACT_URL:-unavailable}"
+            echo
+            echo "This index summarizes supplied evidence only and does not authorize public registration, beta, or launch."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Enforce production evidence READY
+        env:
+          DECISION: ${{ steps.generate_index.outputs.decision }}
+          GENERATION_STATUS: ${{ steps.generate_index.outputs.generation_status }}
+        run: |
+          set -euo pipefail
+          test "${GENERATION_STATUS}" = "0" || { echo "production evidence index generation recorded NOT-READY" >&2; exit 2; }
+          test "${DECISION}" = "READY" || { echo "production evidence index did not record READY" >&2; exit 2; }
