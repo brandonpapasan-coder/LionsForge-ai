@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     beta_lifetime_discount_enabled: bool = False
     founding_subscriber_enrollment_enabled: bool = False
     paid_beta_authorized: bool = False
+    promotion_countdown_launch_at: datetime | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
