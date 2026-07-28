@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.sandbox_payment_verification import (
@@ -39,6 +40,36 @@ def verification_evidence_chain_digest(
     )
 
 
+def _find_verification_run(
+    db: Session,
+    *,
+    operator_user_id: int,
+    idempotency_key: str,
+) -> SandboxPaymentVerificationRun | None:
+    return db.scalar(
+        select(SandboxPaymentVerificationRun).where(
+            SandboxPaymentVerificationRun.operator_user_id == operator_user_id,
+            SandboxPaymentVerificationRun.idempotency_key == idempotency_key,
+        )
+    )
+
+
+def _resolve_verification_replay(
+    existing: SandboxPaymentVerificationRun,
+    *,
+    account_id: int,
+    eligibility_id: int,
+    request_digest: str,
+) -> SandboxPaymentVerificationRun:
+    if (
+        existing.account_id != account_id
+        or existing.eligibility_id != eligibility_id
+        or existing.request_digest != request_digest
+    ):
+        raise PromotionConflictError("sandbox verification idempotency key was reused with different data")
+    return existing
+
+
 def reserve_verification_run(
     db: Session,
     *,
@@ -53,20 +84,18 @@ def reserve_verification_run(
     started_at: datetime,
 ) -> SandboxPaymentVerificationRun:
     request_digest = canonical_payload_digest(request_payload)
-    existing = db.scalar(
-        select(SandboxPaymentVerificationRun).where(
-            SandboxPaymentVerificationRun.operator_user_id == operator_user_id,
-            SandboxPaymentVerificationRun.idempotency_key == idempotency_key,
-        )
+    existing = _find_verification_run(
+        db,
+        operator_user_id=operator_user_id,
+        idempotency_key=idempotency_key,
     )
     if existing is not None:
-        if (
-            existing.account_id != account_id
-            or existing.eligibility_id != eligibility_id
-            or existing.request_digest != request_digest
-        ):
-            raise PromotionConflictError("sandbox verification idempotency key was reused with different data")
-        return existing
+        return _resolve_verification_replay(
+            existing,
+            account_id=account_id,
+            eligibility_id=eligibility_id,
+            request_digest=request_digest,
+        )
 
     run = SandboxPaymentVerificationRun(
         account_id=account_id,
@@ -82,8 +111,29 @@ def reserve_verification_run(
         started_at=started_at,
         expires_at=started_at + VERIFICATION_TTL,
     )
-    db.add(run)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.add(run)
+            db.flush()
+    except IntegrityError as exc:
+        # The savepoint rolls back only this losing insert. The surrounding
+        # transaction remains usable so the committed winner can be resolved.
+        existing = _find_verification_run(
+            db,
+            operator_user_id=operator_user_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing is None:
+            raise PromotionConflictError(
+                "sandbox verification idempotency contention could not be resolved"
+            ) from exc
+        return _resolve_verification_replay(
+            existing,
+            account_id=account_id,
+            eligibility_id=eligibility_id,
+            request_digest=request_digest,
+        )
+
     append_audit_record(
         db,
         event_type="sandbox_payment_verification_reserved",
