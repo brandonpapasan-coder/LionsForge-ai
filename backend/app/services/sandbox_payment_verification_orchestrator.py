@@ -7,7 +7,10 @@ from typing import Mapping, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.sandbox_payment_verification import SandboxPaymentVerificationEvidence
+from app.models.sandbox_payment_verification import (
+    SandboxPaymentVerificationEvidence,
+    SandboxPaymentVerificationRun,
+)
 from app.services.promotion_entitlements import PromotionUnavailableError
 from app.services.sandbox_payment_verification import (
     SandboxVerificationRequest,
@@ -15,8 +18,10 @@ from app.services.sandbox_payment_verification import (
 )
 from app.services.sandbox_payment_verification_persistence import (
     append_verification_evidence,
+    canonical_payload_digest,
     complete_verification_run,
     reserve_verification_run,
+    verification_evidence_chain_digest,
 )
 
 
@@ -37,27 +42,44 @@ class SandboxVerificationResult:
     status: str
 
 
-def _read_completed_checkout_evidence(
+def _validate_completed_evidence_chain(
     db: Session,
     *,
-    verification_run_id: int,
+    run: SandboxPaymentVerificationRun,
     checkout_request_id: int,
 ) -> str:
-    evidence = db.scalar(
-        select(SandboxPaymentVerificationEvidence).where(
-            SandboxPaymentVerificationEvidence.verification_run_id == verification_run_id,
-            SandboxPaymentVerificationEvidence.evidence_type == "sandbox_checkout",
-        )
+    evidence = list(
+        db.scalars(
+            select(SandboxPaymentVerificationEvidence).where(
+                SandboxPaymentVerificationEvidence.verification_run_id == run.id
+            )
+        ).all()
     )
-    if evidence is None:
-        raise PromotionUnavailableError("stored sandbox checkout evidence is missing")
+    if len(evidence) != 2:
+        raise PromotionUnavailableError("stored sandbox verification evidence set is incomplete")
 
-    stored_checkout_request_id = evidence.redacted_payload.get("checkout_request_id")
-    provider_session_id = evidence.redacted_payload.get("provider_session_id")
+    by_type = {item.evidence_type: item for item in evidence}
+    if set(by_type) != {"sandbox_checkout", "synthetic_webhook"}:
+        raise PromotionUnavailableError("stored sandbox verification evidence types are invalid")
+
+    for item in evidence:
+        if canonical_payload_digest(item.redacted_payload) != item.evidence_digest:
+            raise PromotionUnavailableError("stored sandbox verification evidence digest mismatch")
+
+    checkout_evidence = by_type["sandbox_checkout"]
+    stored_checkout_request_id = checkout_evidence.redacted_payload.get("checkout_request_id")
+    provider_session_id = checkout_evidence.redacted_payload.get("provider_session_id")
     if stored_checkout_request_id != checkout_request_id:
         raise PromotionUnavailableError("stored sandbox checkout evidence does not match reservation")
     if not isinstance(provider_session_id, str) or not provider_session_id:
         raise PromotionUnavailableError("stored sandbox checkout evidence omitted session id")
+
+    final_digest = verification_evidence_chain_digest(
+        run=run,
+        evidence_digests=[item.evidence_digest for item in evidence],
+    )
+    if run.evidence_digest != final_digest:
+        raise PromotionUnavailableError("stored sandbox verification evidence chain mismatch")
     return provider_session_id
 
 
@@ -98,9 +120,9 @@ def execute_sandbox_payment_verification(
         if run.status == "completed":
             if run.checkout_request_id != checkout_request_id or not run.evidence_digest:
                 raise PromotionUnavailableError("stored sandbox verification is incomplete")
-            provider_session_id = _read_completed_checkout_evidence(
+            provider_session_id = _validate_completed_evidence_chain(
                 db,
-                verification_run_id=run.id,
+                run=run,
                 checkout_request_id=checkout_request_id,
             )
             return SandboxVerificationResult(
