@@ -13,6 +13,14 @@ from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
 from app.models.mentor import MentorConversation, MentorMessage
 from app.models.mission import Mission, MissionStep
+from app.models.promotion import (
+    FoundingSubscriberSequence,
+    PromotionAuditRecord,
+    PromotionCampaign,
+    PromotionEligibility,
+    PromotionRedemption,
+    SubscriptionPriceProtection,
+)
 from app.models.remediation_progress import RemediationProgress, RemediationProgressHistory
 from app.models.research_conclusion import ResearchConclusion, ResearchConclusionRevision
 from app.models.research_conclusion_defense import ResearchConclusionDefense, ResearchConclusionDefenseRevision
@@ -56,15 +64,16 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "Alert", "AssessmentAttempt", "ClaimEvidence", "Company", "EvidenceRecord", "EvidenceReviewEvent",
-    "ExecutiveBriefSnapshot", "Investigation", "InvestigationClaim", "KnowledgeEntity", "KnowledgeEntityAlias",
-    "KnowledgeEntityMergeAudit", "KnowledgeFederationLink", "KnowledgeFederationRevision", "KnowledgeMemory",
-    "KnowledgeMemoryRevision", "KnowledgeRelationship", "LessonProgress", "MarketLearningEvidenceLink",
-    "MarketLearningSession", "MentorConversation", "MentorMessage", "Mission", "MissionStep", "Portfolio",
-    "PortfolioHolding", "PracticumEnrollment", "PracticumEvidenceReference", "PracticumObjective",
-    "PracticumObjectiveProgress", "PracticumReviewDecision", "PracticumTemplate", "RemediationProgress",
-    "RemediationProgressHistory", "ResearchConclusion", "ResearchConclusionDefense",
-    "ResearchConclusionDefenseRevision", "ResearchConclusionRevision", "ResearchEvidence",
-    "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject", "ResearchReviewAction",
-    "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord", "SimulatedTrade",
-    "SimulationAccount", "User", "VirtualPosition", "Watchlist",
+    "ExecutiveBriefSnapshot", "FoundingSubscriberSequence", "Investigation", "InvestigationClaim",
+    "KnowledgeEntity", "KnowledgeEntityAlias", "KnowledgeEntityMergeAudit", "KnowledgeFederationLink",
+    "KnowledgeFederationRevision", "KnowledgeMemory", "KnowledgeMemoryRevision", "KnowledgeRelationship",
+    "LessonProgress", "MarketLearningEvidenceLink", "MarketLearningSession", "MentorConversation",
+    "MentorMessage", "Mission", "MissionStep", "Portfolio", "PortfolioHolding", "PracticumEnrollment",
+    "PracticumEvidenceReference", "PracticumObjective", "PracticumObjectiveProgress", "PracticumReviewDecision",
+    "PracticumTemplate", "PromotionAuditRecord", "PromotionCampaign", "PromotionEligibility",
+    "PromotionRedemption", "RemediationProgress", "RemediationProgressHistory", "ResearchConclusion",
+    "ResearchConclusionDefense", "ResearchConclusionDefenseRevision", "ResearchConclusionRevision",
+    "ResearchEvidence", "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject",
+    "ResearchReviewAction", "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord",
+    "SimulatedTrade", "SimulationAccount", "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
 ]
