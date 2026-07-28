@@ -21,6 +21,11 @@ from app.models.promotion import (
     PromotionRedemption,
     SubscriptionPriceProtection,
 )
+from app.models.promotion_rollout import (
+    PromotionCheckoutRequest,
+    PromotionProviderEvent,
+    PromotionRolloutAuthorization,
+)
 from app.models.remediation_progress import RemediationProgress, RemediationProgressHistory
 from app.models.research_conclusion import ResearchConclusion, ResearchConclusionRevision
 from app.models.research_conclusion_defense import ResearchConclusionDefense, ResearchConclusionDefenseRevision
@@ -70,10 +75,11 @@ __all__ = [
     "LessonProgress", "MarketLearningEvidenceLink", "MarketLearningSession", "MentorConversation",
     "MentorMessage", "Mission", "MissionStep", "Portfolio", "PortfolioHolding", "PracticumEnrollment",
     "PracticumEvidenceReference", "PracticumObjective", "PracticumObjectiveProgress", "PracticumReviewDecision",
-    "PracticumTemplate", "PromotionAuditRecord", "PromotionCampaign", "PromotionEligibility",
-    "PromotionRedemption", "RemediationProgress", "RemediationProgressHistory", "ResearchConclusion",
-    "ResearchConclusionDefense", "ResearchConclusionDefenseRevision", "ResearchConclusionRevision",
-    "ResearchEvidence", "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject",
-    "ResearchReviewAction", "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord",
-    "SimulatedTrade", "SimulationAccount", "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
+    "PracticumTemplate", "PromotionAuditRecord", "PromotionCampaign", "PromotionCheckoutRequest",
+    "PromotionEligibility", "PromotionProviderEvent", "PromotionRedemption", "PromotionRolloutAuthorization",
+    "RemediationProgress", "RemediationProgressHistory", "ResearchConclusion", "ResearchConclusionDefense",
+    "ResearchConclusionDefenseRevision", "ResearchConclusionRevision", "ResearchEvidence",
+    "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject", "ResearchReviewAction",
+    "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord", "SimulatedTrade",
+    "SimulationAccount", "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
 ]
