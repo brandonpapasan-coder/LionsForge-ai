@@ -33,6 +33,7 @@ def promotion_rollout_status(
     return read_promotion_rollout_status(
         db,
         gates=gates,
+        countdown_start_at=settings.promotion_countdown_start_at,
         countdown_launch_at=settings.promotion_countdown_launch_at,
         evaluated_at=datetime.now(UTC),
     ).to_dict()
