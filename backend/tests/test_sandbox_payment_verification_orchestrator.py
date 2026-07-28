@@ -62,8 +62,10 @@ class Webhook:
     def __init__(self, *, event_digest: str, verified: bool = True) -> None:
         self.event_digest = event_digest
         self.verified = verified
+        self.calls = 0
 
     def verify(self, *, provider_session_id: str):
+        self.calls += 1
         return {
             "verified": self.verified,
             "event_type": "checkout.session.completed",
@@ -98,6 +100,85 @@ def test_successful_verification_persists_only_redacted_evidence(tmp_path: Path)
         serialized = str([item.redacted_payload for item in evidence])
         assert "must-not-persist" not in serialized
         assert _digest("verified-webhook") in serialized
+    engine.dispose()
+
+
+def test_completed_replay_returns_original_session_without_adapter_calls(tmp_path: Path) -> None:
+    engine, factory = _db(tmp_path)
+    request = _request()
+    checkout = Checkout()
+    webhook = Webhook(event_digest=_digest("verified-webhook"))
+    with factory() as db:
+        first = execute_sandbox_payment_verification(
+            db,
+            request=request,
+            checkout_request_id=17,
+            checkout_executor=checkout,
+            webhook_verifier=webhook,
+            now=request.requested_at,
+        )
+        db.commit()
+
+    with factory() as db:
+        replay = execute_sandbox_payment_verification(
+            db,
+            request=request,
+            checkout_request_id=17,
+            checkout_executor=checkout,
+            webhook_verifier=webhook,
+            now=request.requested_at,
+        )
+        db.commit()
+
+    assert first.provider_session_id == "cs_test_123"
+    assert replay.provider_session_id == first.provider_session_id
+    assert replay.verification_run_id == first.verification_run_id
+    assert replay.evidence_digest == first.evidence_digest
+    assert checkout.calls == 1
+    assert webhook.calls == 1
+    engine.dispose()
+
+
+def test_completed_replay_fails_closed_when_checkout_evidence_is_malformed(tmp_path: Path) -> None:
+    engine, factory = _db(tmp_path)
+    request = _request()
+    checkout = Checkout()
+    webhook = Webhook(event_digest=_digest("verified-webhook"))
+    with factory() as db:
+        execute_sandbox_payment_verification(
+            db,
+            request=request,
+            checkout_request_id=17,
+            checkout_executor=checkout,
+            webhook_verifier=webhook,
+            now=request.requested_at,
+        )
+        db.commit()
+
+    with factory() as db:
+        evidence = db.scalar(
+            select(SandboxPaymentVerificationEvidence).where(
+                SandboxPaymentVerificationEvidence.evidence_type == "sandbox_checkout"
+            )
+        )
+        assert evidence is not None
+        evidence.redacted_payload = {"checkout_request_id": 999, "provider_session_id": "cs_test_123"}
+        db.commit()
+
+    with factory() as db:
+        with pytest.raises(PromotionUnavailableError, match="does not match reservation"):
+            execute_sandbox_payment_verification(
+                db,
+                request=request,
+                checkout_request_id=17,
+                checkout_executor=checkout,
+                webhook_verifier=webhook,
+                now=request.requested_at,
+            )
+        db.rollback()
+
+    assert checkout.calls == 1
+    assert webhook.calls == 1
     engine.dispose()
 
 
