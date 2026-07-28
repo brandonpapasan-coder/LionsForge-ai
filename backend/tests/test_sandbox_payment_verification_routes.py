@@ -27,7 +27,7 @@ def test_operator_guard_allows_superusers_and_rejects_other_users() -> None:
 def test_sandbox_verification_routes_are_registered() -> None:
     app = FastAPI()
     app.include_router(api_router)
-    paths = {route.path for route in app.routes}
+    paths = {route.path for route in app.routes if hasattr(route, "path")}
     assert "/sandbox-payment-verification/runs" in paths
     assert "/sandbox-payment-verification/runs/{run_id}" in paths
 
