@@ -25,9 +25,13 @@ class PromotionRolloutStatus:
     reason_code: str | None
     gates: dict[str, bool]
     countdown_state: str
+    countdown_start_at: datetime | None
     countdown_launch_at: datetime | None
     countdown_evaluated_at: datetime
+    countdown_seconds_total: int | None
+    countdown_seconds_elapsed: int | None
     countdown_seconds_remaining: int | None
+    countdown_progress_percent: float | None
     provider_validation_status: str | None
     provider_validation_reason: str | None
     provider_validation_digest: str | None
@@ -61,27 +65,50 @@ def _as_utc(value: datetime) -> datetime:
 
 def _countdown(
     *,
+    start_at: datetime | None,
     launch_at: datetime | None,
     evaluated_at: datetime,
-) -> tuple[str, datetime | None, int | None]:
+) -> tuple[str, datetime | None, datetime | None, int | None, int | None, int | None, float | None]:
     if launch_at is None:
-        return "not_scheduled", None, None
+        return "not_scheduled", None, None, None, None, None, None
 
     normalized_launch = _as_utc(launch_at)
-    remaining = max(0, int((normalized_launch - _as_utc(evaluated_at)).total_seconds()))
+    normalized_evaluated = _as_utc(evaluated_at)
+    remaining = max(0, int((normalized_launch - normalized_evaluated).total_seconds()))
     state = "scheduled" if remaining > 0 else "reached"
-    return state, normalized_launch, remaining
+
+    if start_at is None:
+        return state, None, normalized_launch, None, None, remaining, None
+
+    normalized_start = _as_utc(start_at)
+    total = int((normalized_launch - normalized_start).total_seconds())
+    if total <= 0:
+        return state, normalized_start, normalized_launch, None, None, remaining, None
+
+    elapsed = min(total, max(0, int((normalized_evaluated - normalized_start).total_seconds())))
+    progress = round((elapsed / total) * 100, 2)
+    return state, normalized_start, normalized_launch, total, elapsed, remaining, progress
 
 
 def read_promotion_rollout_status(
     db: Session,
     *,
     gates: PromotionGateSnapshot,
+    countdown_start_at: datetime | None = None,
     countdown_launch_at: datetime | None = None,
     evaluated_at: datetime | None = None,
 ) -> PromotionRolloutStatus:
     evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
-    countdown_state, normalized_launch_at, countdown_seconds_remaining = _countdown(
+    (
+        countdown_state,
+        normalized_start_at,
+        normalized_launch_at,
+        countdown_seconds_total,
+        countdown_seconds_elapsed,
+        countdown_seconds_remaining,
+        countdown_progress_percent,
+    ) = _countdown(
+        start_at=countdown_start_at,
         launch_at=countdown_launch_at,
         evaluated_at=evaluated_at,
     )
@@ -110,9 +137,13 @@ def read_promotion_rollout_status(
             "provider_ready": gates.provider_ready,
         },
         countdown_state=countdown_state,
+        countdown_start_at=normalized_start_at,
         countdown_launch_at=normalized_launch_at,
         countdown_evaluated_at=evaluated_at,
+        countdown_seconds_total=countdown_seconds_total,
+        countdown_seconds_elapsed=countdown_seconds_elapsed,
         countdown_seconds_remaining=countdown_seconds_remaining,
+        countdown_progress_percent=countdown_progress_percent,
         provider_validation_status=provider_validation.validation_status if provider_validation else None,
         provider_validation_reason=provider_validation.reason_code if provider_validation else None,
         provider_validation_digest=provider_validation.configuration_digest if provider_validation else None,
