@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.payment_provider import PaymentProviderValidation
 from app.models.promotion import FoundingSubscriberSequence, PromotionEligibility
 from app.models.promotion_rollout import (
     PromotionCheckoutRequest,
@@ -23,6 +24,11 @@ class PromotionRolloutStatus:
     authorized_by: str | None
     reason_code: str | None
     gates: dict[str, bool]
+    provider_validation_status: str | None
+    provider_validation_reason: str | None
+    provider_validation_digest: str | None
+    provider_validated_at: datetime | None
+    provider_validation_expires_at: datetime | None
     reserved_eligibilities: int
     active_eligibilities: int
     grace_eligibilities: int
@@ -53,6 +59,11 @@ def read_promotion_rollout_status(
         .order_by(PromotionRolloutAuthorization.authorized_at.desc(), PromotionRolloutAuthorization.id.desc())
         .limit(1)
     )
+    provider_validation = db.scalar(
+        select(PaymentProviderValidation)
+        .order_by(PaymentProviderValidation.validated_at.desc(), PaymentProviderValidation.id.desc())
+        .limit(1)
+    )
     rollout_state = latest.rollout_state if latest is not None else PromotionRolloutState.DISABLED.value
     return PromotionRolloutStatus(
         rollout_state=rollout_state,
@@ -67,6 +78,11 @@ def read_promotion_rollout_status(
             "founding_subscriber_enrollment_enabled": gates.founding_subscriber_enrollment_enabled,
             "provider_ready": gates.provider_ready,
         },
+        provider_validation_status=provider_validation.validation_status if provider_validation else None,
+        provider_validation_reason=provider_validation.reason_code if provider_validation else None,
+        provider_validation_digest=provider_validation.configuration_digest if provider_validation else None,
+        provider_validated_at=provider_validation.validated_at if provider_validation else None,
+        provider_validation_expires_at=provider_validation.expires_at if provider_validation else None,
         reserved_eligibilities=_count(db, PromotionEligibility, PromotionEligibility.status, "reserved"),
         active_eligibilities=_count(db, PromotionEligibility, PromotionEligibility.status, "active"),
         grace_eligibilities=_count(db, PromotionEligibility, PromotionEligibility.status, "grace"),
