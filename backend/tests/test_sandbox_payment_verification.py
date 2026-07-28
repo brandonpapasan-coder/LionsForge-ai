@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -57,8 +57,32 @@ def test_verification_fails_closed(
     assert decision.reason_code == reason
 
 
-def test_digest_changes_when_authoritative_checkout_evidence_changes(
+def test_digest_is_stable_when_only_server_timestamp_changes(
     verification_request: SandboxVerificationRequest,
 ) -> None:
-    changed = replace(verification_request, checkout_request_digest="e" * 64)
+    later = replace(verification_request, requested_at=verification_request.requested_at + timedelta(minutes=5))
+    assert sandbox_verification_digest(verification_request) == sandbox_verification_digest(later)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("operator_user_id", 8),
+        ("account_id", 12),
+        ("eligibility_id", 14),
+        ("provider", "other"),
+        ("provider_configuration_digest", "d" * 64),
+        ("rollout_configuration_digest", "e" * 64),
+        ("checkout_request_digest", "f" * 64),
+        ("provider_mode", "other"),
+        ("rollout_state", "other"),
+        ("idempotency_key", "sandbox-verification-2"),
+    ],
+)
+def test_digest_changes_when_authoritative_identity_changes(
+    verification_request: SandboxVerificationRequest,
+    field: str,
+    value: object,
+) -> None:
+    changed = replace(verification_request, **{field: value})
     assert sandbox_verification_digest(verification_request) != sandbox_verification_digest(changed)
