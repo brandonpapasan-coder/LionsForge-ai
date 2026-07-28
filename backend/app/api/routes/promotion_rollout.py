@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -28,4 +30,10 @@ def promotion_rollout_status(
         # Provider readiness remains false until a separately validated provider configuration is introduced.
         provider_ready=False,
     )
-    return read_promotion_rollout_status(db, gates=gates).to_dict()
+    return read_promotion_rollout_status(
+        db,
+        gates=gates,
+        countdown_start_at=settings.promotion_countdown_start_at,
+        countdown_launch_at=settings.promotion_countdown_launch_at,
+        evaluated_at=datetime.now(UTC),
+    ).to_dict()
