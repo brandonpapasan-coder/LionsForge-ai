@@ -146,6 +146,30 @@ def reserve_verification_run(
     return run
 
 
+def _find_verification_evidence(
+    db: Session,
+    *,
+    verification_run_id: int,
+    evidence_type: str,
+) -> SandboxPaymentVerificationEvidence | None:
+    return db.scalar(
+        select(SandboxPaymentVerificationEvidence).where(
+            SandboxPaymentVerificationEvidence.verification_run_id == verification_run_id,
+            SandboxPaymentVerificationEvidence.evidence_type == evidence_type,
+        )
+    )
+
+
+def _resolve_evidence_replay(
+    existing: SandboxPaymentVerificationEvidence,
+    *,
+    evidence_digest: str,
+) -> SandboxPaymentVerificationEvidence:
+    if existing.evidence_digest != evidence_digest:
+        raise PromotionConflictError("sandbox verification evidence was replayed with different content")
+    return existing
+
+
 def append_verification_evidence(
     db: Session,
     *,
@@ -155,16 +179,14 @@ def append_verification_evidence(
     recorded_at: datetime,
 ) -> SandboxPaymentVerificationEvidence:
     evidence_digest = canonical_payload_digest(redacted_payload)
-    existing = db.scalar(
-        select(SandboxPaymentVerificationEvidence).where(
-            SandboxPaymentVerificationEvidence.verification_run_id == run.id,
-            SandboxPaymentVerificationEvidence.evidence_type == evidence_type,
-        )
+    existing = _find_verification_evidence(
+        db,
+        verification_run_id=run.id,
+        evidence_type=evidence_type,
     )
     if existing is not None:
-        if existing.evidence_digest != evidence_digest:
-            raise PromotionConflictError("sandbox verification evidence was replayed with different content")
-        return existing
+        return _resolve_evidence_replay(existing, evidence_digest=evidence_digest)
+
     evidence = SandboxPaymentVerificationEvidence(
         verification_run_id=run.id,
         evidence_type=evidence_type,
@@ -172,8 +194,21 @@ def append_verification_evidence(
         redacted_payload=redacted_payload,
         recorded_at=recorded_at,
     )
-    db.add(evidence)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.add(evidence)
+            db.flush()
+    except IntegrityError as exc:
+        existing = _find_verification_evidence(
+            db,
+            verification_run_id=run.id,
+            evidence_type=evidence_type,
+        )
+        if existing is None:
+            raise PromotionConflictError(
+                "sandbox verification evidence contention could not be resolved"
+            ) from exc
+        return _resolve_evidence_replay(existing, evidence_digest=evidence_digest)
     return evidence
 
 
