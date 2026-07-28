@@ -55,14 +55,14 @@ def reserve_verification_run(
     request_digest = canonical_payload_digest(request_payload)
     existing = db.scalar(
         select(SandboxPaymentVerificationRun).where(
-            SandboxPaymentVerificationRun.idempotency_key == idempotency_key
+            SandboxPaymentVerificationRun.operator_user_id == operator_user_id,
+            SandboxPaymentVerificationRun.idempotency_key == idempotency_key,
         )
     )
     if existing is not None:
         if (
             existing.account_id != account_id
             or existing.eligibility_id != eligibility_id
-            or existing.operator_user_id != operator_user_id
             or existing.request_digest != request_digest
         ):
             raise PromotionConflictError("sandbox verification idempotency key was reused with different data")
