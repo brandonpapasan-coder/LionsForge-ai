@@ -41,7 +41,6 @@ def sandbox_verification_digest(request: SandboxVerificationRequest) -> str:
         "provider_mode": request.provider_mode,
         "rollout_state": request.rollout_state,
         "idempotency_key": request.idempotency_key,
-        "requested_at": request.requested_at.isoformat(),
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
