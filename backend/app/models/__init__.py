@@ -43,6 +43,10 @@ from app.models.research_practicum import (
 from app.models.research_project import ResearchProject
 from app.models.research_session import ResearchSession
 from app.models.roadmap_action_record import RoadmapActionRecord
+from app.models.sandbox_payment_verification import (
+    SandboxPaymentVerificationEvidence,
+    SandboxPaymentVerificationRun,
+)
 from app.models.user import User
 
 _LEGACY_EXPORTS = {
@@ -82,5 +86,6 @@ __all__ = [
     "ResearchConclusionDefense", "ResearchConclusionDefenseRevision", "ResearchConclusionRevision",
     "ResearchEvidence", "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject",
     "ResearchReviewAction", "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord",
-    "SimulatedTrade", "SimulationAccount", "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
+    "SandboxPaymentVerificationEvidence", "SandboxPaymentVerificationRun", "SimulatedTrade", "SimulationAccount",
+    "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
 ]

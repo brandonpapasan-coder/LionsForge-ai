@@ -58,6 +58,7 @@ from app.api.routes import (
     research_projects,
     research_sessions,
     research_trust_index,
+    sandbox_payment_verification,
     system,
     user_authored_memory,
 )
@@ -77,6 +78,11 @@ def build_api_router(
     router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     router.include_router(release_countdown.router, prefix="/release-countdown", tags=["release-countdown"])
     router.include_router(promotion_rollout.router, prefix="/promotion-rollout", tags=["promotion-rollout"])
+    router.include_router(
+        sandbox_payment_verification.router,
+        prefix="/sandbox-payment-verification",
+        tags=["sandbox-payment-verification"],
+    )
     router.include_router(education.router, prefix="/education", tags=["education"])
     router.include_router(adaptive_learning_plan.router, prefix="/education", tags=["education"])
     router.include_router(
