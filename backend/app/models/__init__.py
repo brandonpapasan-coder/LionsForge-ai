@@ -13,6 +13,7 @@ from app.models.knowledge_graph import KnowledgeEntity, KnowledgeRelationship
 from app.models.knowledge_memory import KnowledgeMemory, KnowledgeMemoryRevision
 from app.models.mentor import MentorConversation, MentorMessage
 from app.models.mission import Mission, MissionStep
+from app.models.payment_provider import PaymentProviderValidation
 from app.models.promotion import (
     FoundingSubscriberSequence,
     PromotionAuditRecord,
@@ -73,13 +74,13 @@ __all__ = [
     "KnowledgeEntity", "KnowledgeEntityAlias", "KnowledgeEntityMergeAudit", "KnowledgeFederationLink",
     "KnowledgeFederationRevision", "KnowledgeMemory", "KnowledgeMemoryRevision", "KnowledgeRelationship",
     "LessonProgress", "MarketLearningEvidenceLink", "MarketLearningSession", "MentorConversation",
-    "MentorMessage", "Mission", "MissionStep", "Portfolio", "PortfolioHolding", "PracticumEnrollment",
-    "PracticumEvidenceReference", "PracticumObjective", "PracticumObjectiveProgress", "PracticumReviewDecision",
-    "PracticumTemplate", "PromotionAuditRecord", "PromotionCampaign", "PromotionCheckoutRequest",
-    "PromotionEligibility", "PromotionProviderEvent", "PromotionRedemption", "PromotionRolloutAuthorization",
-    "RemediationProgress", "RemediationProgressHistory", "ResearchConclusion", "ResearchConclusionDefense",
-    "ResearchConclusionDefenseRevision", "ResearchConclusionRevision", "ResearchEvidence",
-    "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject", "ResearchReviewAction",
-    "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord", "SimulatedTrade",
-    "SimulationAccount", "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
+    "MentorMessage", "Mission", "MissionStep", "PaymentProviderValidation", "Portfolio", "PortfolioHolding",
+    "PracticumEnrollment", "PracticumEvidenceReference", "PracticumObjective", "PracticumObjectiveProgress",
+    "PracticumReviewDecision", "PracticumTemplate", "PromotionAuditRecord", "PromotionCampaign",
+    "PromotionCheckoutRequest", "PromotionEligibility", "PromotionProviderEvent", "PromotionRedemption",
+    "PromotionRolloutAuthorization", "RemediationProgress", "RemediationProgressHistory", "ResearchConclusion",
+    "ResearchConclusionDefense", "ResearchConclusionDefenseRevision", "ResearchConclusionRevision",
+    "ResearchEvidence", "ResearchPlanRecommendation", "ResearchPlanRevision", "ResearchProject",
+    "ResearchReviewAction", "ResearchReviewActionHistory", "ResearchSession", "RoadmapActionRecord",
+    "SimulatedTrade", "SimulationAccount", "SubscriptionPriceProtection", "User", "VirtualPosition", "Watchlist",
 ]
