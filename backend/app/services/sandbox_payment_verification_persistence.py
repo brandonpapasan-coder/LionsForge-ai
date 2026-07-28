@@ -17,10 +17,26 @@ from app.services.promotion_entitlements import PromotionConflictError, append_a
 VERIFICATION_TTL = timedelta(hours=24)
 
 
-def _digest(payload: dict[str, Any]) -> str:
+def canonical_payload_digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     ).hexdigest()
+
+
+def verification_evidence_chain_digest(
+    *,
+    run: SandboxPaymentVerificationRun,
+    evidence_digests: list[str],
+) -> str:
+    return canonical_payload_digest(
+        {
+            "run_id": run.id,
+            "request_digest": run.request_digest,
+            "provider_configuration_digest": run.provider_configuration_digest,
+            "rollout_configuration_digest": run.rollout_configuration_digest,
+            "evidence_digests": sorted(evidence_digests),
+        }
+    )
 
 
 def reserve_verification_run(
@@ -36,7 +52,7 @@ def reserve_verification_run(
     request_payload: dict[str, Any],
     started_at: datetime,
 ) -> SandboxPaymentVerificationRun:
-    request_digest = _digest(request_payload)
+    request_digest = canonical_payload_digest(request_payload)
     existing = db.scalar(
         select(SandboxPaymentVerificationRun).where(
             SandboxPaymentVerificationRun.idempotency_key == idempotency_key
@@ -88,7 +104,7 @@ def append_verification_evidence(
     redacted_payload: dict[str, Any],
     recorded_at: datetime,
 ) -> SandboxPaymentVerificationEvidence:
-    evidence_digest = _digest(redacted_payload)
+    evidence_digest = canonical_payload_digest(redacted_payload)
     existing = db.scalar(
         select(SandboxPaymentVerificationEvidence).where(
             SandboxPaymentVerificationEvidence.verification_run_id == run.id,
@@ -119,15 +135,7 @@ def complete_verification_run(
     checkout_request_id: int,
     completed_at: datetime,
 ) -> SandboxPaymentVerificationRun:
-    final_digest = _digest(
-        {
-            "run_id": run.id,
-            "request_digest": run.request_digest,
-            "provider_configuration_digest": run.provider_configuration_digest,
-            "rollout_configuration_digest": run.rollout_configuration_digest,
-            "evidence_digests": sorted(evidence_digests),
-        }
-    )
+    final_digest = verification_evidence_chain_digest(run=run, evidence_digests=evidence_digests)
     if run.status == "completed":
         if run.evidence_digest != final_digest or run.checkout_request_id != checkout_request_id:
             raise PromotionConflictError("completed sandbox verification does not match stored evidence")
