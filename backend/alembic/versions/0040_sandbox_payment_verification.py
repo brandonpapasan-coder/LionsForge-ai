@@ -1,14 +1,14 @@
 """add sandbox payment verification records
 
 Revision ID: 0040_sandbox_payment_verification
-Revises: 0039_payment_provider_validation
+Revises: 0039_provider_validation
 """
 
 from alembic import op
 import sqlalchemy as sa
 
 revision = "0040_sandbox_payment_verification"
-down_revision = "0039_payment_provider_validation"
+down_revision = "0039_provider_validation"
 branch_labels = None
 depends_on = None
 
