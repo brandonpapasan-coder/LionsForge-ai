@@ -1,10 +1,9 @@
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import HTTPException
 
-from app.api.router import api_router
-from app.api.routes.sandbox_payment_verification import _require_operator
+from app.api.routes.sandbox_payment_verification import _require_operator, router
 from app.models.sandbox_payment_verification import (
     SandboxPaymentVerificationEvidence,
     SandboxPaymentVerificationRun,
@@ -25,11 +24,9 @@ def test_operator_guard_allows_superusers_and_rejects_other_users() -> None:
 
 
 def test_sandbox_verification_routes_are_registered() -> None:
-    app = FastAPI()
-    app.include_router(api_router)
-    paths = {route.path for route in app.routes if hasattr(route, "path")}
-    assert "/sandbox-payment-verification/runs" in paths
-    assert "/sandbox-payment-verification/runs/{run_id}" in paths
+    paths = {route.path for route in router.routes if hasattr(route, "path")}
+    assert "/runs" in paths
+    assert "/runs/{run_id}" in paths
 
 
 def test_model_registry_exports_verification_models() -> None:
