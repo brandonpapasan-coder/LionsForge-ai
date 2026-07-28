@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -38,13 +39,8 @@ def _request() -> SandboxVerificationRequest:
         provider_configuration_digest=_digest("provider"),
         rollout_configuration_digest=_digest("rollout"),
         checkout_request_digest=_digest("checkout"),
-        webhook_event_digest=_digest("webhook"),
         provider_mode="sandbox",
         rollout_state="internal",
-        provider_validation_current=True,
-        preflight_allowed=True,
-        account_verified=True,
-        eligibility_reserved=True,
         idempotency_key="verify-1",
         requested_at=datetime(2026, 7, 28, 13, 0),
     )
@@ -80,7 +76,7 @@ def test_successful_verification_persists_only_redacted_evidence(tmp_path: Path)
     engine, factory = _db(tmp_path)
     request = _request()
     checkout = Checkout()
-    webhook = Webhook(event_digest=request.webhook_event_digest)
+    webhook = Webhook(event_digest=_digest("verified-webhook"))
     with factory() as db:
         result = execute_sandbox_payment_verification(
             db,
@@ -101,6 +97,7 @@ def test_successful_verification_persists_only_redacted_evidence(tmp_path: Path)
         assert {item.evidence_type for item in evidence} == {"sandbox_checkout", "synthetic_webhook"}
         serialized = str([item.redacted_payload for item in evidence])
         assert "must-not-persist" not in serialized
+        assert _digest("verified-webhook") in serialized
     engine.dispose()
 
 
@@ -114,7 +111,7 @@ def test_provider_failure_rolls_back_new_verification_run(tmp_path: Path) -> Non
                 request=request,
                 checkout_request_id=17,
                 checkout_executor=Checkout(fail=True),
-                webhook_verifier=Webhook(event_digest=request.webhook_event_digest),
+                webhook_verifier=Webhook(event_digest=_digest("verified-webhook")),
                 now=request.requested_at,
             )
         db.rollback()
@@ -122,17 +119,17 @@ def test_provider_failure_rolls_back_new_verification_run(tmp_path: Path) -> Non
     engine.dispose()
 
 
-def test_webhook_digest_mismatch_fails_closed_and_rolls_back(tmp_path: Path) -> None:
+def test_invalid_webhook_digest_fails_closed_and_rolls_back(tmp_path: Path) -> None:
     engine, factory = _db(tmp_path)
     request = _request()
     with factory() as db:
-        with pytest.raises(PromotionUnavailableError, match="evidence digest mismatch"):
+        with pytest.raises(PromotionUnavailableError, match="event digest is invalid"):
             execute_sandbox_payment_verification(
                 db,
                 request=request,
                 checkout_request_id=17,
                 checkout_executor=Checkout(),
-                webhook_verifier=Webhook(event_digest=_digest("mutated")),
+                webhook_verifier=Webhook(event_digest="short"),
                 now=request.requested_at,
             )
         db.rollback()
@@ -141,20 +138,19 @@ def test_webhook_digest_mismatch_fails_closed_and_rolls_back(tmp_path: Path) -> 
     engine.dispose()
 
 
-def test_denied_preflight_never_calls_provider(tmp_path: Path) -> None:
+def test_denied_server_derived_state_never_calls_provider(tmp_path: Path) -> None:
     engine, factory = _db(tmp_path)
-    request = _request()
-    denied = SandboxVerificationRequest(**{**request.__dict__, "preflight_allowed": False})
+    request = replace(_request(), provider_mode="live")
     checkout = Checkout()
     with factory() as db:
-        with pytest.raises(PromotionUnavailableError, match="promotion_preflight_denied"):
+        with pytest.raises(PromotionUnavailableError, match="sandbox_mode_required"):
             execute_sandbox_payment_verification(
                 db,
-                request=denied,
+                request=request,
                 checkout_request_id=17,
                 checkout_executor=checkout,
-                webhook_verifier=Webhook(event_digest=denied.webhook_event_digest),
-                now=denied.requested_at,
+                webhook_verifier=Webhook(event_digest=_digest("verified-webhook")),
+                now=request.requested_at,
             )
         assert checkout.calls == 0
     engine.dispose()

@@ -6,7 +6,7 @@ from typing import Mapping, Protocol
 
 from sqlalchemy.orm import Session
 
-from app.models.sandbox_payment_verification import SandboxPaymentVerificationRun
+from app.services.promotion_entitlements import PromotionUnavailableError
 from app.services.sandbox_payment_verification import (
     SandboxVerificationRequest,
     evaluate_sandbox_verification,
@@ -16,7 +16,6 @@ from app.services.sandbox_payment_verification_persistence import (
     complete_verification_run,
     reserve_verification_run,
 )
-from app.services.promotion_entitlements import PromotionUnavailableError
 
 
 class SandboxCheckoutExecutor(Protocol):
@@ -54,7 +53,6 @@ def execute_sandbox_payment_verification(
     payload = {
         "verification_digest": decision.verification_digest,
         "checkout_request_digest": request.checkout_request_digest,
-        "webhook_event_digest": request.webhook_event_digest,
     }
 
     with db.begin_nested():
@@ -117,8 +115,6 @@ def execute_sandbox_payment_verification(
             raise PromotionUnavailableError("synthetic webhook event type is invalid")
         if not isinstance(event_digest, str) or len(event_digest) != 64:
             raise PromotionUnavailableError("synthetic webhook event digest is invalid")
-        if event_digest != request.webhook_event_digest:
-            raise PromotionUnavailableError("synthetic webhook evidence digest mismatch")
 
         webhook_evidence = append_verification_evidence(
             db,

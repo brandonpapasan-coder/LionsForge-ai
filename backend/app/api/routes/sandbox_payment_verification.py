@@ -12,8 +12,8 @@ from app.db.session import get_db
 from app.models.sandbox_payment_verification import SandboxPaymentVerificationRun
 from app.models.user import User
 from app.services.promotion_entitlements import PromotionConflictError, PromotionUnavailableError
-from app.services.sandbox_payment_verification import SandboxVerificationRequest
 from app.services.sandbox_payment_verification_orchestrator import execute_sandbox_payment_verification
+from app.services.sandbox_payment_verification_readiness import derive_sandbox_verification_request
 
 router = APIRouter()
 
@@ -22,18 +22,7 @@ class SandboxVerificationCreate(BaseModel):
     account_id: int = Field(gt=0)
     eligibility_id: int = Field(gt=0)
     checkout_request_id: int = Field(gt=0)
-    provider: str = Field(min_length=1, max_length=40)
-    provider_configuration_digest: str = Field(min_length=64, max_length=64)
-    rollout_configuration_digest: str = Field(min_length=64, max_length=64)
-    checkout_request_digest: str = Field(min_length=64, max_length=64)
-    webhook_event_digest: str = Field(min_length=64, max_length=64)
-    provider_mode: str
-    rollout_state: str
-    provider_validation_current: bool
-    preflight_allowed: bool
-    account_verified: bool
-    eligibility_reserved: bool
-    idempotency_key: str = Field(min_length=1, max_length=160)
+    idempotency_key: str = Field(min_length=1, max_length=128)
 
 
 def _require_operator(user: User) -> None:
@@ -77,25 +66,16 @@ def initiate_sandbox_verification(
             detail="Sandbox verification adapters are not configured",
         )
     now = datetime.utcnow()
-    verification_request = SandboxVerificationRequest(
-        operator_user_id=current_user.id,
-        account_id=payload.account_id,
-        eligibility_id=payload.eligibility_id,
-        provider=payload.provider,
-        provider_configuration_digest=payload.provider_configuration_digest,
-        rollout_configuration_digest=payload.rollout_configuration_digest,
-        checkout_request_digest=payload.checkout_request_digest,
-        webhook_event_digest=payload.webhook_event_digest,
-        provider_mode=payload.provider_mode,
-        rollout_state=payload.rollout_state,
-        provider_validation_current=payload.provider_validation_current,
-        preflight_allowed=payload.preflight_allowed,
-        account_verified=payload.account_verified,
-        eligibility_reserved=payload.eligibility_reserved,
-        idempotency_key=payload.idempotency_key,
-        requested_at=now,
-    )
     try:
+        verification_request = derive_sandbox_verification_request(
+            db,
+            operator_user_id=current_user.id,
+            account_id=payload.account_id,
+            eligibility_id=payload.eligibility_id,
+            checkout_request_id=payload.checkout_request_id,
+            idempotency_key=payload.idempotency_key,
+            requested_at=now,
+        )
         result = execute_sandbox_payment_verification(
             db,
             request=verification_request,

@@ -20,13 +20,8 @@ def verification_request() -> SandboxVerificationRequest:
         provider_configuration_digest="a" * 64,
         rollout_configuration_digest="b" * 64,
         checkout_request_digest="c" * 64,
-        webhook_event_digest="d" * 64,
         provider_mode="sandbox",
         rollout_state="internal",
-        provider_validation_current=True,
-        preflight_allowed=True,
-        account_verified=True,
-        eligibility_reserved=True,
         idempotency_key="sandbox-verification-1",
         requested_at=datetime(2026, 7, 28, 12, 0),
     )
@@ -45,14 +40,11 @@ def test_complete_internal_sandbox_request_is_allowed(
     ("changes", "reason"),
     [
         ({"operator_user_id": 0}, "operator_required"),
+        ({"account_id": 0}, "account_or_eligibility_invalid"),
         ({"provider_mode": "live"}, "sandbox_mode_required"),
         ({"rollout_state": "beta"}, "internal_rollout_required"),
-        ({"provider_validation_current": False}, "provider_validation_not_current"),
-        ({"preflight_allowed": False}, "promotion_preflight_denied"),
-        ({"account_verified": False}, "account_not_verified"),
-        ({"eligibility_reserved": False}, "eligibility_not_reserved"),
         ({"idempotency_key": " "}, "idempotency_key_required"),
-        ({"webhook_event_digest": "short"}, "verification_evidence_digest_invalid"),
+        ({"checkout_request_digest": "short"}, "verification_evidence_digest_invalid"),
     ],
 )
 def test_verification_fails_closed(
@@ -65,8 +57,8 @@ def test_verification_fails_closed(
     assert decision.reason_code == reason
 
 
-def test_digest_changes_when_evidence_changes(
+def test_digest_changes_when_authoritative_checkout_evidence_changes(
     verification_request: SandboxVerificationRequest,
 ) -> None:
-    changed = replace(verification_request, webhook_event_digest="e" * 64)
+    changed = replace(verification_request, checkout_request_digest="e" * 64)
     assert sandbox_verification_digest(verification_request) != sandbox_verification_digest(changed)
