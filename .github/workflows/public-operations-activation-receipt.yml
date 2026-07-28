@@ -1,0 +1,108 @@
+name: Public Operations Activation Receipt
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character protected-main release candidate SHA
+        required: true
+        type: string
+      record_path:
+        description: Repository path to the completed public-operations activation record
+        required: true
+        default: docs/public-operations-activation-record.md
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  activation-receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "${RECORD_PATH}" =~ ^[A-Za-z0-9._/-]+$ ]] || exit 1
+          [[ "${RECORD_PATH}" != /* ]] || exit 1
+          [[ "${RECORD_PATH}" != *".."* ]] || exit 1
+
+      - name: Checkout exact release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Validate source activation record
+        env:
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -euo pipefail
+          test -f "${RECORD_PATH}"
+          python scripts/validate_public_operations_activation.py "${RECORD_PATH}"
+
+      - name: Generate candidate-bound receipt
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -euo pipefail
+          generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python scripts/manage_public_operations_activation_receipt.py generate \
+            "${RECORD_PATH}" \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --generated-at "${generated_at}" \
+            --output public-operations-activation-receipt.json
+
+      - name: Reverify receipt against source and candidate
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RECORD_PATH: ${{ inputs.record_path }}
+        run: |
+          set -euo pipefail
+          python scripts/manage_public_operations_activation_receipt.py validate \
+            public-operations-activation-receipt.json \
+            --record "${RECORD_PATH}" \
+            --expected-candidate-sha "${CANDIDATE_SHA}"
+
+      - name: Upload activation receipt
+        id: upload_receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-operations-activation-receipt-${{ inputs.candidate_sha }}
+          path: public-operations-activation-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish receipt summary
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RECORD_PATH: ${{ inputs.record_path }}
+          ARTIFACT_ID: ${{ steps.upload_receipt.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_receipt.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_receipt.outputs.artifact-digest }}
+        run: |
+          {
+            echo "## Public operations activation receipt"
+            echo "- Candidate: \`${CANDIDATE_SHA}\`"
+            echo "- Source record: \`${RECORD_PATH}\`"
+            echo "- Artifact ID: \`${ARTIFACT_ID:-unavailable}\`"
+            echo "- Artifact digest: \`${ARTIFACT_DIGEST:-unavailable}\`"
+            echo "- Artifact URL: ${ARTIFACT_URL:-unavailable}"
+            echo
+            echo "Integrity verification does not authorize registration, controlled beta, payments, or launch."
+          } >> "${GITHUB_STEP_SUMMARY}"
