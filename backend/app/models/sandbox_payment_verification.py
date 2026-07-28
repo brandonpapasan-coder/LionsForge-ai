@@ -11,7 +11,11 @@ from app.db.session import Base
 class SandboxPaymentVerificationRun(Base):
     __tablename__ = "sandbox_payment_verification_runs"
     __table_args__ = (
-        UniqueConstraint("idempotency_key", name="uq_sandbox_payment_verification_idempotency"),
+        UniqueConstraint(
+            "operator_user_id",
+            "idempotency_key",
+            name="uq_sandbox_payment_verification_operator_idempotency",
+        ),
         Index("ix_sandbox_payment_verification_account", "account_id"),
         Index("ix_sandbox_payment_verification_eligibility", "eligibility_id"),
         Index("ix_sandbox_payment_verification_started", "started_at"),
