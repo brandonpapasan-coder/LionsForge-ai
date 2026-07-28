@@ -4,8 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Mapping, Protocol
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.sandbox_payment_verification import SandboxPaymentVerificationEvidence
 from app.services.promotion_entitlements import PromotionUnavailableError
 from app.services.sandbox_payment_verification import (
     SandboxVerificationRequest,
@@ -33,6 +35,30 @@ class SandboxVerificationResult:
     provider_session_id: str
     evidence_digest: str
     status: str
+
+
+def _read_completed_checkout_evidence(
+    db: Session,
+    *,
+    verification_run_id: int,
+    checkout_request_id: int,
+) -> str:
+    evidence = db.scalar(
+        select(SandboxPaymentVerificationEvidence).where(
+            SandboxPaymentVerificationEvidence.verification_run_id == verification_run_id,
+            SandboxPaymentVerificationEvidence.evidence_type == "sandbox_checkout",
+        )
+    )
+    if evidence is None:
+        raise PromotionUnavailableError("stored sandbox checkout evidence is missing")
+
+    stored_checkout_request_id = evidence.redacted_payload.get("checkout_request_id")
+    provider_session_id = evidence.redacted_payload.get("provider_session_id")
+    if stored_checkout_request_id != checkout_request_id:
+        raise PromotionUnavailableError("stored sandbox checkout evidence does not match reservation")
+    if not isinstance(provider_session_id, str) or not provider_session_id:
+        raise PromotionUnavailableError("stored sandbox checkout evidence omitted session id")
+    return provider_session_id
 
 
 def execute_sandbox_payment_verification(
@@ -72,10 +98,11 @@ def execute_sandbox_payment_verification(
         if run.status == "completed":
             if run.checkout_request_id != checkout_request_id or not run.evidence_digest:
                 raise PromotionUnavailableError("stored sandbox verification is incomplete")
-            checkout = checkout_executor.create_session(idempotency_key=request.idempotency_key)
-            provider_session_id = checkout.get("id")
-            if not isinstance(provider_session_id, str) or not provider_session_id:
-                raise PromotionUnavailableError("sandbox checkout response omitted session id")
+            provider_session_id = _read_completed_checkout_evidence(
+                db,
+                verification_run_id=run.id,
+                checkout_request_id=checkout_request_id,
+            )
             return SandboxVerificationResult(
                 verification_run_id=run.id,
                 checkout_request_id=checkout_request_id,
