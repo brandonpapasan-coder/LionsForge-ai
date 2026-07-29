@@ -89,7 +89,19 @@ def test_receipt_rejects_url_substitution_and_invalid_source(tmp_path: Path) -> 
         )
     source.write_text('{"schema":"other","schema_version":1,"result":"VALID"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match="source receipt schema"):
-        build(tmp_path)
+        MODULE.build_receipt(
+            source_receipt=source,
+            candidate_sha=CANDIDATE,
+            repository="owner/repo",
+            workflow_name="Launch Evidence Chain Receipt",
+            workflow_sha=WORKFLOW_SHA,
+            run_id=123,
+            run_attempt=2,
+            artifact_id=456,
+            artifact_name=f"launch-evidence-chain-{CANDIDATE}",
+            artifact_url="https://github.com/owner/repo/actions/runs/123/artifacts/456",
+            artifact_digest=ARTIFACT_DIGEST,
+        )
 
 
 def test_verify_detects_source_drift_and_receipt_tampering(tmp_path: Path) -> None:
