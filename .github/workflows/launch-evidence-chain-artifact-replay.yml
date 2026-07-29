@@ -1,0 +1,148 @@
+name: Launch Evidence Chain Artifact Replay
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact protected-main candidate SHA
+        required: true
+        type: string
+      source_run_id:
+        description: Successful Launch Evidence Chain Receipt workflow run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate replay inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${SOURCE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Resolve successful source run and exact artifacts
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")"
+          test "$(jq -r '.name' <<<"${run_json}")" = "Launch Evidence Chain Receipt"
+          test "$(jq -r '.status' <<<"${run_json}")" = "completed"
+          test "$(jq -r '.conclusion' <<<"${run_json}")" = "success"
+          test "$(jq -r '.repository.full_name' <<<"${run_json}")" = "${GITHUB_REPOSITORY}"
+          workflow_sha="$(jq -r '.head_sha' <<<"${run_json}")"
+          run_attempt="$(jq -r '.run_attempt' <<<"${run_json}")"
+          [[ "${workflow_sha}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${run_attempt}" =~ ^[1-9][0-9]*$ ]]
+
+          artifacts="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" --jq '.artifacts[]')"
+          primary_name="launch-evidence-chain-${CANDIDATE_SHA}"
+          provenance_name="launch-evidence-chain-upload-receipt-${CANDIDATE_SHA}"
+          primary_count="$(jq -s --arg name "${primary_name}" '[.[] | select(.name == $name and .expired == false)] | length' <<<"${artifacts}")"
+          provenance_count="$(jq -s --arg name "${provenance_name}" '[.[] | select(.name == $name and .expired == false)] | length' <<<"${artifacts}")"
+          test "${primary_count}" = "1"
+          test "${provenance_count}" = "1"
+          primary="$(jq -s --arg name "${primary_name}" '[.[] | select(.name == $name and .expired == false)][0]' <<<"${artifacts}")"
+          provenance="$(jq -s --arg name "${provenance_name}" '[.[] | select(.name == $name and .expired == false)][0]' <<<"${artifacts}")"
+          primary_id="$(jq -r '.id' <<<"${primary}")"
+          primary_digest="$(jq -r '.digest' <<<"${primary}")"
+          provenance_id="$(jq -r '.id' <<<"${provenance}")"
+          [[ "${primary_id}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${provenance_id}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${primary_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          echo "workflow_sha=${workflow_sha}" >> "${GITHUB_OUTPUT}"
+          echo "run_attempt=${run_attempt}" >> "${GITHUB_OUTPUT}"
+          echo "primary_id=${primary_id}" >> "${GITHUB_OUTPUT}"
+          echo "primary_name=${primary_name}" >> "${GITHUB_OUTPUT}"
+          echo "primary_digest=${primary_digest}" >> "${GITHUB_OUTPUT}"
+          echo "provenance_id=${provenance_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download retained artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRIMARY_ID: ${{ steps.resolve.outputs.primary_id }}
+          PROVENANCE_ID: ${{ steps.resolve.outputs.provenance_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PRIMARY_ID}/zip" > primary.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PROVENANCE_ID}/zip" > provenance.zip
+          test -s primary.zip
+          test -s provenance.zip
+
+      - name: Independently verify retained artifact replay
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          WORKFLOW_SHA: ${{ steps.resolve.outputs.workflow_sha }}
+          RUN_ATTEMPT: ${{ steps.resolve.outputs.run_attempt }}
+          PRIMARY_ID: ${{ steps.resolve.outputs.primary_id }}
+          PRIMARY_NAME: ${{ steps.resolve.outputs.primary_name }}
+          PRIMARY_DIGEST: ${{ steps.resolve.outputs.primary_digest }}
+        run: |
+          set -euo pipefail
+          python scripts/verify_launch_evidence_chain_artifact_replay.py \
+            --primary-zip primary.zip \
+            --provenance-zip provenance.zip \
+            --workdir replay-work \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-name "Launch Evidence Chain Receipt" \
+            --workflow-sha "${WORKFLOW_SHA}" \
+            --run-id "${SOURCE_RUN_ID}" \
+            --run-attempt "${RUN_ATTEMPT}" \
+            --artifact-id "${PRIMARY_ID}" \
+            --artifact-name "${PRIMARY_NAME}" \
+            --artifact-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts/${PRIMARY_ID}" \
+            --artifact-digest "${PRIMARY_DIGEST}" \
+            --output launch-evidence-chain-replay-report.json
+
+      - name: Upload replay report
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-evidence-chain-replay-${{ inputs.candidate_sha }}-${{ inputs.source_run_id }}
+          path: launch-evidence-chain-replay-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish authorization boundary
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          {
+            echo "## Launch evidence artifact replay"
+            echo "- Candidate: \`${CANDIDATE_SHA}\`"
+            echo "- Source run: \`${SOURCE_RUN_ID}\`"
+            echo "- Result: retained artifacts and provenance independently revalidated"
+            echo
+            echo "This integrity result does not authorize deployment, registration, controlled beta, payments, production billing, or general availability."
+          } >> "${GITHUB_STEP_SUMMARY}"
