@@ -1,0 +1,65 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "channels": [
+    {
+      "acknowledgment_target_minutes": 60,
+      "after_hours_coverage": "Documented on-call escalation schedule",
+      "backup_owner_role": "Backup support operations role",
+      "critical_escalation_minutes": 30,
+      "escalation_role": "Support incident manager role",
+      "id": "general-support",
+      "monitored_schedule": "Documented business-hours queue with critical on-call coverage",
+      "owner_role": "Support operations role",
+      "public_contact": "help@support.example.invalid",
+      "resolution_target_hours": 72,
+      "status": "NOT VERIFIED",
+      "test_evidence_reference": "Repository example only; no live test evidence"
+    },
+    {
+      "acknowledgment_target_minutes": 1440,
+      "after_hours_coverage": "Critical privacy incident escalation schedule",
+      "backup_owner_role": "Backup privacy operations role",
+      "critical_escalation_minutes": 60,
+      "escalation_role": "Privacy incident owner role",
+      "id": "privacy-requests",
+      "monitored_schedule": "Documented daily privacy-request review schedule",
+      "owner_role": "Privacy operations role",
+      "public_contact": "requests@privacy.example.invalid",
+      "resolution_target_hours": 720,
+      "status": "NOT VERIFIED",
+      "test_evidence_reference": "Repository example only; no live test evidence"
+    },
+    {
+      "acknowledgment_target_minutes": 60,
+      "after_hours_coverage": "Twenty-four-hour critical security escalation schedule",
+      "backup_owner_role": "Backup security operations role",
+      "critical_escalation_minutes": 15,
+      "escalation_role": "Security incident commander role",
+      "id": "security-reports",
+      "monitored_schedule": "Documented continuous critical-alert monitoring",
+      "owner_role": "Security operations role",
+      "public_contact": "reports@security.example.invalid",
+      "resolution_target_hours": 168,
+      "status": "NOT VERIFIED",
+      "test_evidence_reference": "Repository example only; no live test evidence"
+    },
+    {
+      "acknowledgment_target_minutes": 240,
+      "after_hours_coverage": "Critical abuse escalation schedule",
+      "backup_owner_role": "Backup trust and safety role",
+      "critical_escalation_minutes": 30,
+      "escalation_role": "Trust and safety incident owner role",
+      "id": "abuse-reports",
+      "monitored_schedule": "Documented daily abuse queue and critical-alert monitoring",
+      "owner_role": "Trust and safety operations role",
+      "public_contact": "reports@abuse.example.invalid",
+      "resolution_target_hours": 72,
+      "status": "NOT VERIFIED",
+      "test_evidence_reference": "Repository example only; no live test evidence"
+    }
+  ],
+  "decision": "NO-GO",
+  "owner_role": "Public operations owner role",
+  "schema": "lionsforge.support-escalation-readiness",
+  "schema_version": 1
+}
