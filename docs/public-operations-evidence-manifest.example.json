@@ -1,0 +1,33 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "evidence": [
+    {
+      "path": "docs/public-data-inventory.example.json",
+      "required_decision": "NO-GO",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "type": "public-data-inventory"
+    },
+    {
+      "path": "docs/support-escalation-readiness.example.json",
+      "required_decision": "NO-GO",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "type": "support-escalation-readiness"
+    },
+    {
+      "path": "docs/privacy-request-readiness.example.json",
+      "required_decision": "NO-GO",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "type": "privacy-request-readiness"
+    },
+    {
+      "path": "docs/incident-communication-readiness.example.json",
+      "required_decision": "NO-GO",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "type": "incident-communication-readiness"
+    }
+  ],
+  "owner_role": "Public operations launch owner role",
+  "schema": "lionsforge.public-operations-evidence-manifest",
+  "schema_version": 1
+}
