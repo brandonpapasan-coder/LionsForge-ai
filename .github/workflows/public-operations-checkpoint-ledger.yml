@@ -1,0 +1,72 @@
+name: Public Operations Checkpoint Ledger
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact protected-main candidate SHA
+        required: true
+        type: string
+      ledger_path:
+        description: Repository-relative checkpoint ledger JSON path
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          LEDGER_PATH: ${{ inputs.ledger_path }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${LEDGER_PATH}" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "${LEDGER_PATH}" != /* ]]
+          [[ "${LEDGER_PATH}" != *".."* ]]
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Validate checkpoint ledger
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          LEDGER_PATH: ${{ inputs.ledger_path }}
+        run: |
+          set -euo pipefail
+          test -f "${LEDGER_PATH}"
+          test ! -L "${LEDGER_PATH}"
+          python scripts/validate_public_operations_checkpoint_ledger.py \
+            "${LEDGER_PATH}" \
+            --repository-root . \
+            --expected-candidate "${CANDIDATE_SHA}" \
+            --output public-operations-checkpoint-ledger-report.json
+
+      - name: Upload non-secret checkpoint ledger report
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-operations-checkpoint-ledger-${{ inputs.candidate_sha }}
+          path: public-operations-checkpoint-ledger-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish authorization boundary
+        run: echo "Checkpoint ledger validation does not activate deployment, registration, beta, payments, billing, or general availability." >> "${GITHUB_STEP_SUMMARY}"
