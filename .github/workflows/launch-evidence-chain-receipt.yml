@@ -1,0 +1,133 @@
+name: Launch Evidence Chain Receipt
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character protected-main candidate SHA
+        required: true
+        type: string
+      production_record:
+        description: Repository-relative production release record path
+        required: true
+        type: string
+      public_operations_record:
+        description: Repository-relative public-operations record path
+        required: true
+        type: string
+      controlled_beta_record:
+        description: Repository-relative controlled-beta record path
+        required: true
+        type: string
+      ga_record:
+        description: Repository-relative GA decision record path
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          PRODUCTION_RECORD: ${{ inputs.production_record }}
+          PUBLIC_OPERATIONS_RECORD: ${{ inputs.public_operations_record }}
+          CONTROLLED_BETA_RECORD: ${{ inputs.controlled_beta_record }}
+          GA_RECORD: ${{ inputs.ga_record }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          for path in "${PRODUCTION_RECORD}" "${PUBLIC_OPERATIONS_RECORD}" "${CONTROLLED_BETA_RECORD}" "${GA_RECORD}"; do
+            [[ "${path}" =~ ^[A-Za-z0-9._/-]+$ ]]
+            [[ "${path}" != /* ]]
+            [[ "${path}" != *".."* ]]
+          done
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Validate complete launch evidence chain
+        env:
+          PRODUCTION_RECORD: ${{ inputs.production_record }}
+          PUBLIC_OPERATIONS_RECORD: ${{ inputs.public_operations_record }}
+          CONTROLLED_BETA_RECORD: ${{ inputs.controlled_beta_record }}
+          GA_RECORD: ${{ inputs.ga_record }}
+        run: |
+          set -euo pipefail
+          for path in "${PRODUCTION_RECORD}" "${PUBLIC_OPERATIONS_RECORD}" "${CONTROLLED_BETA_RECORD}" "${GA_RECORD}"; do
+            test -f "${path}"
+          done
+          python scripts/validate_launch_evidence_chain.py \
+            "${PRODUCTION_RECORD}" \
+            "${PUBLIC_OPERATIONS_RECORD}" \
+            "${CONTROLLED_BETA_RECORD}" \
+            "${GA_RECORD}" | tee launch-evidence-chain-validation.txt
+
+      - name: Generate deterministic chain receipt
+        env:
+          PRODUCTION_RECORD: ${{ inputs.production_record }}
+          PUBLIC_OPERATIONS_RECORD: ${{ inputs.public_operations_record }}
+          CONTROLLED_BETA_RECORD: ${{ inputs.controlled_beta_record }}
+          GA_RECORD: ${{ inputs.ga_record }}
+        run: |
+          set -euo pipefail
+          python scripts/launch_evidence_chain_receipt.py generate \
+            "${PRODUCTION_RECORD}" \
+            "${PUBLIC_OPERATIONS_RECORD}" \
+            "${CONTROLLED_BETA_RECORD}" \
+            "${GA_RECORD}" \
+            --output launch-evidence-chain-receipt.json
+
+      - name: Revalidate receipt against source records
+        env:
+          PRODUCTION_RECORD: ${{ inputs.production_record }}
+          PUBLIC_OPERATIONS_RECORD: ${{ inputs.public_operations_record }}
+          CONTROLLED_BETA_RECORD: ${{ inputs.controlled_beta_record }}
+          GA_RECORD: ${{ inputs.ga_record }}
+        run: |
+          set -euo pipefail
+          python scripts/launch_evidence_chain_receipt.py validate \
+            "${PRODUCTION_RECORD}" \
+            "${PUBLIC_OPERATIONS_RECORD}" \
+            "${CONTROLLED_BETA_RECORD}" \
+            "${GA_RECORD}" \
+            launch-evidence-chain-receipt.json
+
+      - name: Upload chain receipt and summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-evidence-chain-${{ inputs.candidate_sha }}
+          path: |
+            launch-evidence-chain-receipt.json
+            launch-evidence-chain-validation.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish authorization boundary
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          {
+            echo "## Launch evidence chain validation"
+            echo "- Candidate: \`${CANDIDATE_SHA}\`"
+            echo "- Result: source chain and receipt revalidated"
+            echo
+            echo "This integrity result does not authorize deployment, registration, controlled beta, payments, production billing, or general availability."
+          } >> "${GITHUB_STEP_SUMMARY}"
