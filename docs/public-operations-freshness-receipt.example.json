@@ -1,0 +1,13 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "freshness_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "freshness_report_path": "docs/public-operations-evidence-freshness.example.json",
+  "freshness_report_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "freshness_state": "VALID-NO-GO",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "nonce_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "receipt_id": "structural-example",
+  "schema": "lionsforge.public-operations-freshness-receipt",
+  "schema_version": 1
+}
