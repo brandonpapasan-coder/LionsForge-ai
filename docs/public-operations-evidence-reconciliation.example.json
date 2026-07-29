@@ -1,0 +1,18 @@
+{
+  "activation_mode": "NONE",
+  "aggregate_evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "authorization_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "binding_path": "docs/public-operations-activation-binding.example.json",
+  "binding_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "ledger_path": "docs/public-operations-activation-receipt-ledger.example.json",
+  "ledger_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_path": "docs/public-operations-evidence-manifest.example.json",
+  "manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "receipt_id": "example-no-go-receipt",
+  "receipt_path": "docs/public-operations-activation-receipt.example.json",
+  "receipt_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "schema": "lionsforge.public-operations-evidence-reconciliation",
+  "schema_version": 1
+}
