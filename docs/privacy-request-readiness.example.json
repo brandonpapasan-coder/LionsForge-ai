@@ -1,0 +1,93 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "owner_role": "Privacy operations owner role",
+  "schema": "lionsforge.privacy-request-readiness",
+  "schema_version": 1,
+  "workflows": [
+    {
+      "acknowledgment_target_days": 3,
+      "appeal_route": "Documented privacy appeal review path",
+      "backup_owner_role": "Backup privacy operations role",
+      "completion_target_days": 30,
+      "denial_criteria": "Documented legal and identity-based denial criteria",
+      "evidence_reference": "Repository example only; no live execution evidence",
+      "fulfillment_path": "Documented export review and secure delivery process",
+      "id": "access",
+      "identity_verification": "Documented risk-based identity verification process",
+      "intake_contact": "requests@privacy.example.invalid",
+      "owner_role": "Privacy request operations role",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "acknowledgment_target_days": 3,
+      "appeal_route": "Documented privacy appeal review path",
+      "backup_owner_role": "Backup privacy operations role",
+      "completion_target_days": 30,
+      "denial_criteria": "Documented retention, legal-hold, and identity-based denial criteria",
+      "evidence_reference": "Repository example only; no live execution evidence",
+      "fulfillment_path": "Documented deletion orchestration and backup-expiry process",
+      "id": "deletion",
+      "identity_verification": "Documented risk-based identity verification process",
+      "intake_contact": "requests@privacy.example.invalid",
+      "owner_role": "Privacy request operations role",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "acknowledgment_target_days": 3,
+      "appeal_route": "Documented privacy appeal review path",
+      "backup_owner_role": "Backup privacy operations role",
+      "completion_target_days": 30,
+      "denial_criteria": "Documented integrity and identity-based denial criteria",
+      "evidence_reference": "Repository example only; no live execution evidence",
+      "fulfillment_path": "Documented correction validation and propagation process",
+      "id": "correction",
+      "identity_verification": "Documented risk-based identity verification process",
+      "intake_contact": "requests@privacy.example.invalid",
+      "owner_role": "Privacy request operations role",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "acknowledgment_target_days": 3,
+      "appeal_route": "Documented privacy appeal review path",
+      "backup_owner_role": "Backup privacy operations role",
+      "completion_target_days": 30,
+      "denial_criteria": "Documented scope and identity-based denial criteria",
+      "evidence_reference": "Repository example only; no live execution evidence",
+      "fulfillment_path": "Documented machine-readable export and secure delivery process",
+      "id": "portability",
+      "identity_verification": "Documented risk-based identity verification process",
+      "intake_contact": "requests@privacy.example.invalid",
+      "owner_role": "Privacy request operations role",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "acknowledgment_target_days": 3,
+      "appeal_route": "Documented privacy appeal review path",
+      "backup_owner_role": "Backup privacy operations role",
+      "completion_target_days": 30,
+      "denial_criteria": "Documented overriding-ground and identity-based denial criteria",
+      "evidence_reference": "Repository example only; no live execution evidence",
+      "fulfillment_path": "Documented processing restriction and objection review process",
+      "id": "objection-restriction",
+      "identity_verification": "Documented risk-based identity verification process",
+      "intake_contact": "requests@privacy.example.invalid",
+      "owner_role": "Privacy request operations role",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "acknowledgment_target_days": 3,
+      "appeal_route": "Independent documented appeal adjudication path",
+      "backup_owner_role": "Backup privacy appeal owner role",
+      "completion_target_days": 30,
+      "denial_criteria": "Documented duplicate, abusive, and identity-based denial criteria",
+      "evidence_reference": "Repository example only; no live execution evidence",
+      "fulfillment_path": "Documented independent review and outcome-notification process",
+      "id": "appeal",
+      "identity_verification": "Documented risk-based identity verification process",
+      "intake_contact": "appeals@privacy.example.invalid",
+      "owner_role": "Privacy appeal owner role",
+      "status": "NOT VERIFIED"
+    }
+  ]
+}
