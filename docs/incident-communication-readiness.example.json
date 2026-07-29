@@ -1,0 +1,74 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "owner_role": "Incident communications owner role",
+  "schema": "lionsforge.incident-communication-readiness",
+  "schema_version": 1,
+  "incident_classes": [
+    {
+      "id": "availability",
+      "incident_commander_role": "Availability incident commander role",
+      "backup_commander_role": "Backup availability commander role",
+      "severity_threshold": "Documented customer-impact severity threshold",
+      "initial_update_target_minutes": 30,
+      "recurring_update_minutes": 60,
+      "user_notice_criteria": "Documented material availability impact criteria",
+      "restoration_message_process": "Documented recovery confirmation and monitoring message process",
+      "post_incident_review_target_days": 7,
+      "evidence_reference": "Repository example only; no live exercise evidence",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "id": "security",
+      "incident_commander_role": "Security incident commander role",
+      "backup_commander_role": "Backup security commander role",
+      "severity_threshold": "Documented confirmed or suspected material security threshold",
+      "initial_update_target_minutes": 15,
+      "recurring_update_minutes": 30,
+      "user_notice_criteria": "Documented risk and legally reviewed notification criteria",
+      "restoration_message_process": "Documented containment, recovery, and residual-risk message process",
+      "post_incident_review_target_days": 7,
+      "evidence_reference": "Repository example only; no live exercise evidence",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "id": "privacy",
+      "incident_commander_role": "Privacy incident commander role",
+      "backup_commander_role": "Backup privacy commander role",
+      "severity_threshold": "Documented personal-data risk assessment threshold",
+      "initial_update_target_minutes": 30,
+      "recurring_update_minutes": 60,
+      "user_notice_criteria": "Documented legally reviewed privacy-notice criteria",
+      "restoration_message_process": "Documented containment and affected-processing message process",
+      "post_incident_review_target_days": 10,
+      "evidence_reference": "Repository example only; no live exercise evidence",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "id": "data-integrity",
+      "incident_commander_role": "Data integrity incident commander role",
+      "backup_commander_role": "Backup data integrity commander role",
+      "severity_threshold": "Documented incorrect, lost, or corrupted user-data threshold",
+      "initial_update_target_minutes": 30,
+      "recurring_update_minutes": 60,
+      "user_notice_criteria": "Documented material user-output or stored-data impact criteria",
+      "restoration_message_process": "Documented validation, correction, and restoration message process",
+      "post_incident_review_target_days": 7,
+      "evidence_reference": "Repository example only; no live exercise evidence",
+      "status": "NOT VERIFIED"
+    },
+    {
+      "id": "provider-dependency",
+      "incident_commander_role": "Provider dependency incident commander role",
+      "backup_commander_role": "Backup provider dependency commander role",
+      "severity_threshold": "Documented upstream outage or degradation threshold",
+      "initial_update_target_minutes": 30,
+      "recurring_update_minutes": 60,
+      "user_notice_criteria": "Documented user-impact and degraded-mode criteria",
+      "restoration_message_process": "Documented upstream recovery and service verification message process",
+      "post_incident_review_target_days": 10,
+      "evidence_reference": "Repository example only; no live exercise evidence",
+      "status": "NOT VERIFIED"
+    }
+  ]
+}
