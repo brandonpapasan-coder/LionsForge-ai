@@ -1,0 +1,80 @@
+name: Public Operations Activation Binding Receipt
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact protected-main candidate SHA
+        required: true
+        type: string
+      receipt_path:
+        description: Repository-relative activation receipt JSON path
+        required: true
+        type: string
+      ledger_path:
+        description: Optional prior receipt ledger JSON path
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RECEIPT_PATH: ${{ inputs.receipt_path }}
+          LEDGER_PATH: ${{ inputs.ledger_path }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${RECEIPT_PATH}" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "${RECEIPT_PATH}" != /* ]]
+          [[ "${RECEIPT_PATH}" != *".."* ]]
+          if [[ -n "${LEDGER_PATH}" ]]; then
+            [[ "${LEDGER_PATH}" =~ ^[A-Za-z0-9._/-]+$ ]]
+            [[ "${LEDGER_PATH}" != /* ]]
+            [[ "${LEDGER_PATH}" != *".."* ]]
+          fi
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+      - name: Validate activation binding receipt
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          RECEIPT_PATH: ${{ inputs.receipt_path }}
+          LEDGER_PATH: ${{ inputs.ledger_path }}
+        run: |
+          set -euo pipefail
+          test -f "${RECEIPT_PATH}"
+          test ! -L "${RECEIPT_PATH}"
+          ARGS=("${RECEIPT_PATH}" --repository-root . --expected-candidate "${CANDIDATE_SHA}" --output public-operations-activation-binding-receipt-report.json)
+          if [[ -n "${LEDGER_PATH}" ]]; then
+            test -f "${LEDGER_PATH}"
+            test ! -L "${LEDGER_PATH}"
+            ARGS+=(--ledger "${LEDGER_PATH}")
+          fi
+          python scripts/validate_public_operations_activation_receipt.py "${ARGS[@]}"
+      - name: Upload non-secret validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-operations-activation-binding-receipt-${{ inputs.candidate_sha }}
+          path: public-operations-activation-binding-receipt-report.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish authorization boundary
+        run: echo "This validates repository receipt binding only and does not activate deployment, registration, controlled beta, payments, billing, or general availability." >> "${GITHUB_STEP_SUMMARY}"

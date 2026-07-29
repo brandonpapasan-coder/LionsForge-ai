@@ -1,0 +1,15 @@
+{
+  "activation_mode": "NONE",
+  "aggregate_evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "authorization_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "binding_path": "docs/public-operations-activation-binding.example.json",
+  "binding_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "expires_at": "2026-07-30T00:00:00Z",
+  "issued_at": "2026-07-29T00:00:00Z",
+  "issuer_role": "Public operations receipt issuer role",
+  "receipt_id": "example-no-go-receipt",
+  "schema": "lionsforge.public-operations-activation-receipt",
+  "schema_version": 1
+}
