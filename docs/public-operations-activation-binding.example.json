@@ -1,0 +1,13 @@
+{
+  "activation_mode": "NONE",
+  "aggregate_evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "authorization_owner_role": "Public operations launch owner role",
+  "authorized_at": "2026-07-29T00:00:00Z",
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "independent_approver_role": "Independent release approval role",
+  "manifest_path": "docs/public-operations-evidence-manifest.example.json",
+  "manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "schema": "lionsforge.public-operations-activation-binding",
+  "schema_version": 1
+}
