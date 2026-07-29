@@ -1,0 +1,80 @@
+name: Public Data Inventory
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact 40-character protected-main candidate SHA
+        required: true
+        type: string
+      inventory_path:
+        description: Repository-relative public data inventory JSON path
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          INVENTORY_PATH: ${{ inputs.inventory_path }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${INVENTORY_PATH}" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "${INVENTORY_PATH}" != /* ]]
+          [[ "${INVENTORY_PATH}" != *".."* ]]
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Validate public data inventory
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          INVENTORY_PATH: ${{ inputs.inventory_path }}
+        run: |
+          set -euo pipefail
+          test -f "${INVENTORY_PATH}"
+          test ! -L "${INVENTORY_PATH}"
+          python scripts/validate_public_data_inventory.py \
+            "${INVENTORY_PATH}" \
+            --expected-candidate "${CANDIDATE_SHA}" \
+            --output public-data-inventory-report.json
+
+      - name: Upload non-secret validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-data-inventory-${{ inputs.candidate_sha }}
+          path: public-data-inventory-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish authorization boundary
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          {
+            echo "## Public data inventory validation"
+            echo "- Candidate: \`${CANDIDATE_SHA}\`"
+            echo "- Result: inventory structure and candidate binding validated"
+            echo
+            echo "This repository validation does not provide legal approval, verify live systems, authorize deployment, registration, controlled beta, payments, production billing, or general availability."
+          } >> "${GITHUB_STEP_SUMMARY}"
