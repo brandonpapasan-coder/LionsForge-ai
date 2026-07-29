@@ -1,0 +1,13 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "maximum_validity_hours": 24,
+  "owner_role": "evidence-owner",
+  "reconciliation_path": "docs/public-operations-evidence-reconciliation.example.json",
+  "reconciliation_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "reviewer_role": "independent-reviewer",
+  "schema": "lionsforge.public-operations-evidence-freshness",
+  "schema_version": 1,
+  "valid_until": "2026-01-02T00:00:00Z"
+}
