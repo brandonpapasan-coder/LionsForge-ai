@@ -36,11 +36,30 @@ def test_workflow_validates_chain_before_receipt_and_revalidates_before_upload()
     assert "launch_evidence_chain_receipt.py validate" in text
 
 
+def test_workflow_binds_and_revalidates_upload_provenance() -> None:
+    text = workflow_text()
+    upload = text.index("Upload chain receipt and summary")
+    generate = text.index("Generate artifact upload receipt")
+    verify = text.index("Revalidate artifact upload receipt")
+    receipt_upload = text.index("Upload provenance receipt")
+
+    assert upload < generate < verify < receipt_upload
+    assert "id: upload_chain" in text
+    assert "steps.upload_chain.outputs.artifact-id" in text
+    assert "steps.upload_chain.outputs.artifact-url" in text
+    assert "steps.upload_chain.outputs.artifact-digest" in text
+    assert "manage_launch_evidence_chain_upload_receipt.py write" in text
+    assert "manage_launch_evidence_chain_upload_receipt.py verify" in text
+    assert 'run-id "${GITHUB_RUN_ID}"' in text
+    assert 'run-attempt "${GITHUB_RUN_ATTEMPT}"' in text
+
+
 def test_workflow_retains_non_secret_artifacts_and_preserves_authorization_boundary() -> None:
     text = workflow_text()
-    assert "actions/upload-artifact@v4" in text
-    assert "retention-days: 90" in text
+    assert text.count("actions/upload-artifact@v4") == 2
+    assert text.count("retention-days: 90") == 2
     assert "launch-evidence-chain-receipt.json" in text
     assert "launch-evidence-chain-validation.txt" in text
+    assert "launch-evidence-chain-upload-receipt.json" in text
     assert "does not authorize deployment, registration, controlled beta, payments, production billing, or general availability" in text
     assert "permissions:\n  contents: read" in text

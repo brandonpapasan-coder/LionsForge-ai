@@ -111,6 +111,7 @@ jobs:
             launch-evidence-chain-receipt.json
 
       - name: Upload chain receipt and summary
+        id: upload_chain
         uses: actions/upload-artifact@v4
         with:
           name: launch-evidence-chain-${{ inputs.candidate_sha }}
@@ -120,14 +121,72 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Generate artifact upload receipt
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          ARTIFACT_ID: ${{ steps.upload_chain.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_chain.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_chain.outputs.artifact-digest }}
+          ARTIFACT_NAME: launch-evidence-chain-${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          python scripts/manage_launch_evidence_chain_upload_receipt.py write \
+            --source-receipt launch-evidence-chain-receipt.json \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-name "${GITHUB_WORKFLOW}" \
+            --workflow-sha "${GITHUB_SHA}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --artifact-id "${ARTIFACT_ID}" \
+            --artifact-name "${ARTIFACT_NAME}" \
+            --artifact-url "${ARTIFACT_URL}" \
+            --artifact-digest "${ARTIFACT_DIGEST}" \
+            --output launch-evidence-chain-upload-receipt.json
+
+      - name: Revalidate artifact upload receipt
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          ARTIFACT_ID: ${{ steps.upload_chain.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.upload_chain.outputs.artifact-url }}
+          ARTIFACT_DIGEST: ${{ steps.upload_chain.outputs.artifact-digest }}
+          ARTIFACT_NAME: launch-evidence-chain-${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          python scripts/manage_launch_evidence_chain_upload_receipt.py verify \
+            --source-receipt launch-evidence-chain-receipt.json \
+            --candidate-sha "${CANDIDATE_SHA}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-name "${GITHUB_WORKFLOW}" \
+            --workflow-sha "${GITHUB_SHA}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --artifact-id "${ARTIFACT_ID}" \
+            --artifact-name "${ARTIFACT_NAME}" \
+            --artifact-url "${ARTIFACT_URL}" \
+            --artifact-digest "${ARTIFACT_DIGEST}" \
+            --output launch-evidence-chain-upload-receipt.json
+
+      - name: Upload provenance receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-evidence-chain-upload-receipt-${{ inputs.candidate_sha }}
+          path: launch-evidence-chain-upload-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Publish authorization boundary
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          ARTIFACT_ID: ${{ steps.upload_chain.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload_chain.outputs.artifact-digest }}
         run: |
           {
             echo "## Launch evidence chain validation"
             echo "- Candidate: \`${CANDIDATE_SHA}\`"
-            echo "- Result: source chain and receipt revalidated"
+            echo "- Artifact ID: \`${ARTIFACT_ID}\`"
+            echo "- Artifact digest: \`${ARTIFACT_DIGEST}\`"
+            echo "- Result: source chain, receipt, and upload provenance revalidated"
             echo
             echo "This integrity result does not authorize deployment, registration, controlled beta, payments, production billing, or general availability."
           } >> "${GITHUB_STEP_SUMMARY}"
