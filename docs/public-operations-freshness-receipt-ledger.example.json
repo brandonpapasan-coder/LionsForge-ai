@@ -1,0 +1,20 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "entries": [
+    {
+      "entry_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "issued_at": "2026-01-01T00:00:00Z",
+      "nonce_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "previous_entry_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "receipt_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "receipt_id": "structural-example",
+      "receipt_path": "docs/public-operations-freshness-receipt.example.json",
+      "receipt_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sequence": 1
+    }
+  ],
+  "ledger_state": "VALID-NO-GO",
+  "schema": "lionsforge.public-operations-freshness-receipt-ledger",
+  "schema_version": 1
+}
