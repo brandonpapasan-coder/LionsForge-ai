@@ -1,0 +1,20 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "checkpoint_ledger_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "checkpoint_ledger_path": "docs/public-operations-checkpoint-ledger.example.json",
+  "checkpoint_ledger_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "entry_count": 1,
+  "expires_at": "2026-01-02T00:00:00Z",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "nonce_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "schema": "lionsforge.public-operations-checkpoint-ledger-witness",
+  "schema_version": 1,
+  "signature_algorithm": "ed25519-sha256",
+  "signature_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "terminal_entry_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "witness_key_id": "structural-witness-key",
+  "witness_receipt_id": "structural-witness-receipt",
+  "witness_role": "independent-checkpoint-ledger-witness",
+  "witness_state": "VALID-NO-GO"
+}
