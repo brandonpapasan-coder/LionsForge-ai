@@ -1,0 +1,17 @@
+{
+  "authorization": "INTERNAL-ALPHA-ONLY",
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "environment": "isolated-internal-alpha",
+  "schema": "lionsforge.internal-alpha.tester-access",
+  "schema_version": 1,
+  "testers": [
+    {
+      "approver_ref": "operator_001",
+      "expires_at": "2026-01-08T00:00:00Z",
+      "issued_at": "2026-01-01T00:00:00Z",
+      "role": "validator",
+      "status": "approved",
+      "tester_id": "tester_0001"
+    }
+  ]
+}
