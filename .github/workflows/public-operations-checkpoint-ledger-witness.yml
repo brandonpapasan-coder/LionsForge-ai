@@ -1,0 +1,72 @@
+name: Public Operations Checkpoint Ledger Witness
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact protected-main candidate SHA
+        required: true
+        type: string
+      witness_path:
+        description: Repository-relative witness receipt JSON path
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate dispatch inputs
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          WITNESS_PATH: ${{ inputs.witness_path }}
+        run: |
+          set -euo pipefail
+          [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${WITNESS_PATH}" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "${WITNESS_PATH}" != /* ]]
+          [[ "${WITNESS_PATH}" != *".."* ]]
+
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate identity and protected-main ancestry
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${CANDIDATE_SHA}" origin/main
+
+      - name: Validate checkpoint ledger witness
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          WITNESS_PATH: ${{ inputs.witness_path }}
+        run: |
+          set -euo pipefail
+          test -f "${WITNESS_PATH}"
+          test ! -L "${WITNESS_PATH}"
+          python scripts/validate_public_operations_checkpoint_ledger_witness.py \
+            "${WITNESS_PATH}" \
+            --repository-root . \
+            --expected-candidate "${CANDIDATE_SHA}" \
+            --output public-operations-checkpoint-ledger-witness-report.json
+
+      - name: Upload non-secret witness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-operations-checkpoint-ledger-witness-${{ inputs.candidate_sha }}
+          path: public-operations-checkpoint-ledger-witness-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish authorization boundary
+        run: echo "Witness validation does not activate deployment, registration, beta, payments, billing, or general availability." >> "${GITHUB_STEP_SUMMARY}"
