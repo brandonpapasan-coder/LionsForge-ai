@@ -7,6 +7,10 @@ from app.api.deps import get_current_user
 from app.internal_alpha.intelligence.dashboard_metrics import build_metrics
 from app.internal_alpha.intelligence.feedback_analyzer import VALID_CATEGORIES
 from app.internal_alpha.intelligence.readiness_score import calculate_readiness_score
+from app.internal_alpha.intelligence.receipt import (
+    build_intelligence_receipt,
+    validate_intelligence_receipt,
+)
 from app.internal_alpha.intelligence.report import build_intelligence_report
 from app.models.user import User
 
@@ -51,13 +55,14 @@ class IntelligenceReportInput(BaseModel):
         return value
 
 
-@router.post("/report")
-def create_internal_alpha_intelligence_report(
-    payload: IntelligenceReportInput,
-    current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Return a privacy-safe deterministic report for one exact candidate."""
-    del current_user
+class IntelligenceReceiptValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    report: dict[str, Any]
+    receipt: dict[str, Any]
+
+
+def _serialize_report(payload: IntelligenceReportInput) -> dict[str, Any]:
     metrics = build_metrics(**payload.metrics.model_dump())
     readiness = calculate_readiness_score(**payload.readiness.model_dump())
     report = build_intelligence_report(
@@ -92,5 +97,34 @@ def create_internal_alpha_intelligence_report(
         "interpretation_notice": (
             "This report summarizes bounded internal-alpha evidence and does not authorize "
             "public beta, production deployment, or general availability."
+        ),
+    }
+
+
+@router.post("/report")
+def create_internal_alpha_intelligence_report(
+    payload: IntelligenceReportInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return one candidate-bound report with a deterministic integrity receipt."""
+    del current_user
+    report = _serialize_report(payload)
+    return {"report": report, "receipt": build_intelligence_receipt(report)}
+
+
+@router.post("/report/validate")
+def validate_internal_alpha_intelligence_report(
+    payload: IntelligenceReceiptValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate report integrity without authorizing any release transition."""
+    del current_user
+    findings = validate_intelligence_receipt(payload.receipt, payload.report)
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Receipt validity proves payload integrity only and does not authorize public beta, "
+            "production deployment, or general availability."
         ),
     }
