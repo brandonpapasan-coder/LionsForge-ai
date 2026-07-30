@@ -1,10 +1,16 @@
+import copy
+
 import pytest
 from pydantic import ValidationError
 
 from app.api.routes.internal_alpha_intelligence import (
+    IntelligenceBundleInput,
+    IntelligenceBundleValidationInput,
     IntelligenceReceiptValidationInput,
     IntelligenceReportInput,
+    create_internal_alpha_intelligence_bundle,
     create_internal_alpha_intelligence_report,
+    validate_internal_alpha_intelligence_bundle,
     validate_internal_alpha_intelligence_report,
 )
 
@@ -66,6 +72,41 @@ def test_validates_receipt_and_rejects_report_drift() -> None:
     assert invalid["findings"] == ["report digest mismatch"]
 
 
+def test_builds_and_validates_authenticated_bundle() -> None:
+    first = create_internal_alpha_intelligence_report(_payload(candidate_sha="b" * 40), current_user=object())  # type: ignore[arg-type]
+    second = create_internal_alpha_intelligence_report(_payload(candidate_sha="a" * 40), current_user=object())  # type: ignore[arg-type]
+    bundle = create_internal_alpha_intelligence_bundle(
+        IntelligenceBundleInput.model_validate({"entries": [first, second]}),
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert bundle["entry_count"] == 2
+    assert bundle["entries"][0]["report"]["candidate_sha"] == "a" * 40
+
+    result = validate_internal_alpha_intelligence_bundle(
+        IntelligenceBundleValidationInput.model_validate({"bundle": bundle}),
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert result["valid"] is True
+    assert result["findings"] == []
+    assert "does not authorize" in result["interpretation_notice"]
+
+
+def test_bundle_validation_rejects_drift() -> None:
+    created = create_internal_alpha_intelligence_report(_payload(), current_user=object())  # type: ignore[arg-type]
+    bundle = create_internal_alpha_intelligence_bundle(
+        IntelligenceBundleInput.model_validate({"entries": [created]}),
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    drifted = copy.deepcopy(bundle)
+    drifted["bundle_sha256"] = "0" * 64
+    result = validate_internal_alpha_intelligence_bundle(
+        IntelligenceBundleValidationInput.model_validate({"bundle": drifted}),
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert result["valid"] is False
+    assert result["findings"] == ["bundle digest mismatch"]
+
+
 def test_emits_fail_closed_blockers() -> None:
     payload = _payload(
         metrics={
@@ -110,6 +151,8 @@ def test_rejects_extra_fields_boolean_counts_and_invalid_sha() -> None:
         IntelligenceReportInput.model_validate(
             {**_payload().model_dump(), "unexpected": "private-free-form-data"}
         )
+    with pytest.raises(ValidationError):
+        IntelligenceBundleInput.model_validate({"entries": []})
 
 
 @pytest.mark.parametrize(
