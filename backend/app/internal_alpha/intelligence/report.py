@@ -3,14 +3,14 @@
 from dataclasses import dataclass
 
 from .dashboard_metrics import AlphaMetrics
-from .readiness_score import ReadinessResult
+from .readiness_score import ReadinessScore
 
 
 @dataclass(frozen=True)
 class AlphaIntelligenceReport:
     candidate_sha: str
     metrics: AlphaMetrics
-    readiness: ReadinessResult
+    readiness: ReadinessScore
     repeated_categories: tuple[tuple[str, int], ...]
     blocking_reasons: tuple[str, ...]
 
@@ -19,7 +19,7 @@ def build_intelligence_report(
     *,
     candidate_sha: str,
     metrics: AlphaMetrics,
-    readiness: ReadinessResult,
+    readiness: ReadinessScore,
     repeated_categories: dict[str, int],
 ) -> AlphaIntelligenceReport:
     """Build a deterministic report without tester identity or free-form feedback."""
