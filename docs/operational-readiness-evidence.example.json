@@ -1,0 +1,17 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "evidence": [
+    {
+      "evidence_type": "witness-checkpoint-ledger",
+      "expires_at": "2026-01-08T00:00:00Z",
+      "issued_at": "2026-01-01T00:00:00Z",
+      "report_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "report_path": "docs/public-operations-witness-checkpoint-ledger-report.example.json",
+      "report_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "readiness_state": "VALID-NO-GO",
+  "schema": "lionsforge.operational-readiness.evidence-manifest",
+  "schema_version": 1
+}
