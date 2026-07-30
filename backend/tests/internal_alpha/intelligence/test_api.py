@@ -2,8 +2,10 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.routes.internal_alpha_intelligence import (
+    IntelligenceReceiptValidationInput,
     IntelligenceReportInput,
     create_internal_alpha_intelligence_report,
+    validate_internal_alpha_intelligence_report,
 )
 
 
@@ -31,18 +33,37 @@ def _payload(**changes: object) -> IntelligenceReportInput:
     return IntelligenceReportInput.model_validate(values)
 
 
-def test_builds_authenticated_candidate_bound_report() -> None:
+def test_builds_authenticated_candidate_bound_report_and_receipt() -> None:
     result = create_internal_alpha_intelligence_report(_payload(), current_user=object())  # type: ignore[arg-type]
-    assert result["schema"] == "lionsforge.internal-alpha-intelligence-report"
-    assert result["schema_version"] == 1
-    assert result["candidate_sha"] == CANDIDATE
-    assert result["readiness"]["state"] == "READY"
-    assert result["blocking_reasons"] == []
-    assert result["repeated_categories"] == [
-        {"category": "USABILITY", "count": 3},
-        {"category": "PERFORMANCE", "count": 2},
-    ]
-    assert "does not authorize" in result["interpretation_notice"]
+    report = result["report"]
+    receipt = result["receipt"]
+    assert report["schema"] == "lionsforge.internal-alpha-intelligence-report"
+    assert report["candidate_sha"] == CANDIDATE
+    assert report["readiness"]["state"] == "READY"
+    assert report["blocking_reasons"] == []
+    assert receipt["schema"] == "lionsforge.internal-alpha-intelligence-receipt"
+    assert receipt["candidate_sha"] == CANDIDATE
+    assert len(receipt["report_sha256"]) == 64
+
+
+def test_validates_receipt_and_rejects_report_drift() -> None:
+    created = create_internal_alpha_intelligence_report(_payload(), current_user=object())  # type: ignore[arg-type]
+    valid = validate_internal_alpha_intelligence_report(
+        IntelligenceReceiptValidationInput.model_validate(created),
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert valid["valid"] is True
+    assert valid["findings"] == []
+
+    drifted = {**created["report"], "blocking_reasons": ["SUBSTITUTED"]}
+    invalid = validate_internal_alpha_intelligence_report(
+        IntelligenceReceiptValidationInput.model_validate(
+            {"report": drifted, "receipt": created["receipt"]}
+        ),
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert invalid["valid"] is False
+    assert invalid["findings"] == ["report digest mismatch"]
 
 
 def test_emits_fail_closed_blockers() -> None:
@@ -62,7 +83,7 @@ def test_emits_fail_closed_blockers() -> None:
         repeated_categories={"DEFECT": 2},
     )
     result = create_internal_alpha_intelligence_report(payload, current_user=object())  # type: ignore[arg-type]
-    assert result["blocking_reasons"] == [
+    assert result["report"]["blocking_reasons"] == [
         "NO_ACTIVE_EXPERIMENTS",
         "NO_FEEDBACK_EVIDENCE",
         "READINESS_GUARDRAIL_NOT_MET",
