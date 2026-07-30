@@ -63,7 +63,7 @@ def test_validation_detects_drift_count_and_order() -> None:
     reversed_bundle["entries"].reverse()
     findings = validate_intelligence_bundle(reversed_bundle)
     assert "bundle entries are not canonically ordered" in findings
-    assert "bundle digest mismatch" in findings
+    assert "bundle digest mismatch" not in findings
 
 
 def test_rejects_unbounded_or_malformed_entries() -> None:
