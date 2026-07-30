@@ -1,10 +1,11 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.deps import get_current_user
 from app.internal_alpha.intelligence.dashboard_metrics import build_metrics
+from app.internal_alpha.intelligence.feedback_analyzer import VALID_CATEGORIES
 from app.internal_alpha.intelligence.readiness_score import calculate_readiness_score
 from app.internal_alpha.intelligence.report import build_intelligence_report
 from app.models.user import User
@@ -37,6 +38,17 @@ class IntelligenceReportInput(BaseModel):
     metrics: MetricsInput
     readiness: ReadinessInput
     repeated_categories: dict[str, int] = Field(default_factory=dict, max_length=5)
+
+    @field_validator("repeated_categories")
+    @classmethod
+    def validate_repeated_categories(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(category not in VALID_CATEGORIES for category in value):
+            raise ValueError("repeated_categories contains an invalid category")
+        if any(isinstance(count, bool) or not isinstance(count, int) for count in value.values()):
+            raise TypeError("repeated category counts must be integers")
+        if any(not 2 <= count <= 10_000 for count in value.values()):
+            raise ValueError("repeated category counts must be between 2 and 10000")
+        return value
 
 
 @router.post("/report")
