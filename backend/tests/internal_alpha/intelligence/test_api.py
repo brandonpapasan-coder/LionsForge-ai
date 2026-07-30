@@ -73,10 +73,7 @@ def test_emits_fail_closed_blockers() -> None:
 def test_rejects_extra_fields_boolean_counts_and_invalid_sha() -> None:
     with pytest.raises(ValidationError):
         IntelligenceReportInput.model_validate(
-            {
-                **_payload().model_dump(),
-                "candidate_sha": "not-a-sha",
-            }
+            {**_payload().model_dump(), "candidate_sha": "not-a-sha"}
         )
     with pytest.raises(ValidationError):
         IntelligenceReportInput.model_validate(
@@ -90,14 +87,21 @@ def test_rejects_extra_fields_boolean_counts_and_invalid_sha() -> None:
         )
     with pytest.raises(ValidationError):
         IntelligenceReportInput.model_validate(
-            {
-                **_payload().model_dump(),
-                "unexpected": "private-free-form-data",
-            }
+            {**_payload().model_dump(), "unexpected": "private-free-form-data"}
         )
 
 
-def test_rejects_nonrepeated_signal_counts() -> None:
-    payload = _payload(repeated_categories={"DEFECT": 1})
-    with pytest.raises(ValueError, match="at least two"):
-        create_internal_alpha_intelligence_report(payload, current_user=object())  # type: ignore[arg-type]
+@pytest.mark.parametrize(
+    "repeated_categories",
+    [
+        {"OTHER": 2},
+        {"DEFECT": 1},
+        {"DEFECT": True},
+        {"DEFECT": 10_001},
+    ],
+)
+def test_rejects_invalid_repeated_categories(repeated_categories: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        IntelligenceReportInput.model_validate(
+            {**_payload().model_dump(), "repeated_categories": repeated_categories}
+        )
