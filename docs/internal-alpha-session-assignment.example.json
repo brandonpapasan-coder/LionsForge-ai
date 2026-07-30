@@ -1,0 +1,19 @@
+{
+  "authorization": "INTERNAL-ALPHA-ONLY",
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "environment": "isolated-internal-alpha",
+  "schema": "lionsforge.internal-alpha.session-assignment",
+  "schema_version": 1,
+  "sessions": [
+    {
+      "approver_ref": "operator_001",
+      "ends_at": "2026-01-01T12:00:00Z",
+      "issued_at": "2026-01-01T08:00:00Z",
+      "purpose": "validation",
+      "release_candidate": "rc_build-0001",
+      "session_id": "session_0001",
+      "starts_at": "2026-01-01T09:00:00Z",
+      "tester_id": "tester_0001"
+    }
+  ]
+}
