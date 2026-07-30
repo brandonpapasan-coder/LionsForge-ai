@@ -1,0 +1,21 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "checkpoint_sequence": 1,
+  "checkpoint_state": "VALID-NO-GO",
+  "decision": "NO-GO",
+  "entry_count": 1,
+  "expires_at": "2026-01-02T00:00:00Z",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "nonce_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "previous_checkpoint_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "schema": "lionsforge.public-operations.witness-ledger-checkpoint",
+  "schema_version": 1,
+  "signature_algorithm": "ed25519-sha256",
+  "signature_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "signer_key_id": "structural-signer-key",
+  "signer_role": "independent-witness-ledger-checkpoint-signer",
+  "terminal_entry_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "witness_ledger_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "witness_ledger_path": "docs/public-operations-checkpoint-ledger-witness-ledger.example.json",
+  "witness_ledger_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+}
