@@ -1,0 +1,18 @@
+{
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "decision": "NO-GO",
+  "entries": [
+    {
+      "checkpoint_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "checkpoint_path": "docs/public-operations-witness-ledger-checkpoint.example.json",
+      "checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "issued_at": "2026-01-01T00:00:00Z",
+      "previous_entry_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sequence": 1
+    }
+  ],
+  "ledger_state": "VALID-NO-GO",
+  "schema": "lionsforge.public-operations.witness-checkpoint-ledger",
+  "schema_version": 1
+}
