@@ -146,9 +146,10 @@ def validate(
         raise ValueError("unsupported signature algorithm")
     signature = require_digest(checkpoint["signature_sha256"], "signature_sha256")
     nonce = require_digest(checkpoint["nonce_sha256"], "nonce_sha256")
-    identities = {ledger_digest, terminal, previous, signature, nonce}
-    expected_identity_count = 4 if previous == ZERO else 5
-    if len(identities) != expected_identity_count:
+    identities = [ledger_digest, terminal, signature, nonce]
+    if previous != ZERO:
+        identities.append(previous)
+    if len(set(identities)) != len(identities):
         raise ValueError("duplicate identity material")
 
     issued = parse_time(checkpoint["issued_at"], "issued_at")
