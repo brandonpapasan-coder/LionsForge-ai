@@ -1,0 +1,23 @@
+{
+  "authorization": "INTERNAL-ALPHA-ONLY",
+  "candidate_sha": "0000000000000000000000000000000000000000",
+  "environment": "isolated-internal-alpha",
+  "feedback": [
+    {
+      "category": "defect",
+      "component_code": "research.workspace",
+      "feedback_id": "feedback_0001",
+      "observed_at": "2026-01-01T10:00:00Z",
+      "reason_codes": ["incorrect-output"],
+      "release_candidate": "rc_build-0001",
+      "reproducibility": "always",
+      "session_ends_at": "2026-01-01T11:00:00Z",
+      "session_id": "session_0001",
+      "session_starts_at": "2026-01-01T09:00:00Z",
+      "severity": "high",
+      "tester_id": "tester_0001"
+    }
+  ],
+  "schema": "lionsforge.internal-alpha.feedback",
+  "schema_version": 1
+}
