@@ -83,4 +83,6 @@ def test_router_registers_expected_paths() -> None:
     assert paths == {
         "/comparison/archive/receipt",
         "/comparison/archive/receipt/validate",
+        "/comparison/archive/receipt/manifest",
+        "/comparison/archive/receipt/manifest/validate",
     }
