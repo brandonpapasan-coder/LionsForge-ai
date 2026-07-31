@@ -12,6 +12,10 @@ from app.internal_alpha.intelligence.comparison import (
     compare_intelligence_bundles,
     validate_intelligence_comparison,
 )
+from app.internal_alpha.intelligence.comparison_archive import (
+    build_intelligence_comparison_archive,
+    validate_intelligence_comparison_archive,
+)
 from app.internal_alpha.intelligence.comparison_receipt import (
     build_intelligence_comparison_receipt,
     validate_intelligence_comparison_receipt,
@@ -118,6 +122,21 @@ class IntelligenceComparisonReceiptValidationInput(BaseModel):
     candidate: dict[str, Any]
 
 
+class IntelligenceComparisonArchiveInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    baseline: dict[str, Any]
+    candidate: dict[str, Any]
+    comparison: dict[str, Any]
+    receipt: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    archive: dict[str, Any]
+
+
 def _serialize_report(payload: IntelligenceReportInput) -> dict[str, Any]:
     metrics = build_metrics(**payload.metrics.model_dump())
     readiness = calculate_readiness_score(**payload.readiness.model_dump())
@@ -162,7 +181,6 @@ def create_internal_alpha_intelligence_report(
     payload: IntelligenceReportInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Return one candidate-bound report with a deterministic integrity receipt."""
     del current_user
     report = _serialize_report(payload)
     return {"report": report, "receipt": build_intelligence_receipt(report)}
@@ -173,7 +191,6 @@ def validate_internal_alpha_intelligence_report(
     payload: IntelligenceReceiptValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate report integrity without authorizing any release transition."""
     del current_user
     findings = validate_intelligence_receipt(payload.receipt, payload.report)
     return {
@@ -191,7 +208,6 @@ def create_internal_alpha_intelligence_bundle(
     payload: IntelligenceBundleInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a bounded deterministic bundle from validated report receipts."""
     del current_user
     return build_intelligence_bundle(payload.entries)
 
@@ -201,7 +217,6 @@ def validate_internal_alpha_intelligence_bundle(
     payload: IntelligenceBundleValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate bundle integrity and canonical ordering without authorizing release."""
     del current_user
     findings = validate_intelligence_bundle(payload.bundle)
     return {
@@ -219,7 +234,6 @@ def create_internal_alpha_intelligence_comparison(
     payload: IntelligenceComparisonInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Compare two validated bundles without inferring causality or release readiness."""
     del current_user
     return compare_intelligence_bundles(payload.baseline, payload.candidate)
 
@@ -229,7 +243,6 @@ def validate_internal_alpha_intelligence_comparison(
     payload: IntelligenceComparisonValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate exact comparison and bundle bindings without authorizing release."""
     del current_user
     findings = validate_intelligence_comparison(
         payload.comparison,
@@ -251,7 +264,6 @@ def create_internal_alpha_intelligence_comparison_receipt(
     payload: IntelligenceComparisonReceiptInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Issue a receipt for one exactly validated comparison and bundle pair."""
     del current_user
     return build_intelligence_comparison_receipt(
         payload.comparison,
@@ -265,7 +277,6 @@ def validate_internal_alpha_intelligence_comparison_receipt(
     payload: IntelligenceComparisonReceiptValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate a comparison receipt and all underlying digest bindings."""
     del current_user
     findings = validate_intelligence_comparison_receipt(
         payload.receipt,
@@ -279,5 +290,38 @@ def validate_internal_alpha_intelligence_comparison_receipt(
         "interpretation_notice": (
             "Receipt validity proves deterministic comparison verification only and does not "
             "infer causality or authorize any release transition."
+        ),
+    }
+
+
+@router.post("/comparison/archive")
+def create_internal_alpha_intelligence_comparison_archive(
+    payload: IntelligenceComparisonArchiveInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Package one fully validated comparison receipt chain."""
+    del current_user
+    return build_intelligence_comparison_archive(
+        payload.baseline,
+        payload.candidate,
+        payload.comparison,
+        payload.receipt,
+    )
+
+
+@router.post("/comparison/archive/validate")
+def validate_internal_alpha_intelligence_comparison_archive(
+    payload: IntelligenceComparisonArchiveValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate a self-contained comparison archive fail closed."""
+    del current_user
+    findings = validate_intelligence_comparison_archive(payload.archive)
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Archive validity proves deterministic evidence preservation only and does not infer "
+            "causality or authorize any release transition."
         ),
     }
