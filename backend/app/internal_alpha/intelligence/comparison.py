@@ -62,3 +62,32 @@ def compare_intelligence_bundles(
         **body,
         "comparison_sha256": hashlib.sha256(_canonical_bytes(body)).hexdigest(),
     }
+
+
+def validate_intelligence_comparison(
+    comparison: dict[str, Any],
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[str]:
+    """Return deterministic findings for drifted or substituted comparisons."""
+    findings: list[str] = []
+    if comparison.get("schema") != _COMPARISON_SCHEMA:
+        findings.append("unsupported comparison schema")
+    if comparison.get("schema_version") != 1:
+        findings.append("unsupported comparison schema version")
+
+    try:
+        expected = compare_intelligence_bundles(baseline, candidate)
+    except ValueError as exc:
+        findings.append(str(exc))
+        return sorted(set(findings))
+
+    if comparison.get("baseline_bundle_sha256") != baseline.get("bundle_sha256"):
+        findings.append("baseline bundle digest binding mismatch")
+    if comparison.get("candidate_bundle_sha256") != candidate.get("bundle_sha256"):
+        findings.append("candidate bundle digest binding mismatch")
+    if comparison.get("comparison_sha256") != expected["comparison_sha256"]:
+        findings.append("comparison digest mismatch")
+    if comparison != expected:
+        findings.append("comparison payload mismatch")
+    return sorted(set(findings))
