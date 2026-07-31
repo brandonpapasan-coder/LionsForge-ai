@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.router import api_router
+from app.api.routes.internal_alpha_comparison_archive_receipts import (
+    router as internal_alpha_comparison_archive_receipts_router,
+)
 from app.api.routes.internal_alpha_intelligence import router as internal_alpha_intelligence_router
 from app.api.routes.learner_competency_gap_plan import router as learner_competency_gap_plan_router
 from app.api.routes.learner_competency_portfolio import router as learner_competency_portfolio_router
@@ -61,6 +64,11 @@ configure_request_observability(app)
 app.include_router(api_router, prefix=settings.api_prefix)
 app.include_router(
     internal_alpha_intelligence_router,
+    prefix=f"{settings.api_prefix}/internal-alpha/intelligence",
+    tags=["internal-alpha-intelligence"],
+)
+app.include_router(
+    internal_alpha_comparison_archive_receipts_router,
     prefix=f"{settings.api_prefix}/internal-alpha/intelligence",
     tags=["internal-alpha-intelligence"],
 )
