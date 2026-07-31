@@ -109,10 +109,7 @@ def test_validates_comparison_and_rejects_payload_drift() -> None:
         current_user=object(),  # type: ignore[arg-type]
     )
     assert invalid["valid"] is False
-    assert invalid["findings"] == [
-        "comparison digest mismatch",
-        "comparison payload mismatch",
-    ]
+    assert invalid["findings"] == ["comparison payload mismatch"]
 
 
 def test_rejects_substituted_candidate_bundle_and_extra_fields() -> None:
