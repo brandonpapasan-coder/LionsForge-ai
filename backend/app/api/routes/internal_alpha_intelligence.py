@@ -4,6 +4,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.deps import get_current_user
+from app.internal_alpha.intelligence.bundle import (
+    build_intelligence_bundle,
+    validate_intelligence_bundle,
+)
 from app.internal_alpha.intelligence.dashboard_metrics import build_metrics
 from app.internal_alpha.intelligence.feedback_analyzer import VALID_CATEGORIES
 from app.internal_alpha.intelligence.readiness_score import calculate_readiness_score
@@ -60,6 +64,18 @@ class IntelligenceReceiptValidationInput(BaseModel):
 
     report: dict[str, Any]
     receipt: dict[str, Any]
+
+
+class IntelligenceBundleInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    entries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+
+
+class IntelligenceBundleValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    bundle: dict[str, Any]
 
 
 def _serialize_report(payload: IntelligenceReportInput) -> dict[str, Any]:
@@ -125,6 +141,34 @@ def validate_internal_alpha_intelligence_report(
         "findings": findings,
         "interpretation_notice": (
             "Receipt validity proves payload integrity only and does not authorize public beta, "
+            "production deployment, or general availability."
+        ),
+    }
+
+
+@router.post("/bundle")
+def create_internal_alpha_intelligence_bundle(
+    payload: IntelligenceBundleInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Create a bounded deterministic bundle from validated report receipts."""
+    del current_user
+    return build_intelligence_bundle(payload.entries)
+
+
+@router.post("/bundle/validate")
+def validate_internal_alpha_intelligence_bundle(
+    payload: IntelligenceBundleValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate bundle integrity and canonical ordering without authorizing release."""
+    del current_user
+    findings = validate_intelligence_bundle(payload.bundle)
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Bundle validity proves bounded payload integrity only and does not authorize public beta, "
             "production deployment, or general availability."
         ),
     }
