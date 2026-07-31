@@ -8,6 +8,10 @@ from app.internal_alpha.intelligence.bundle import (
     build_intelligence_bundle,
     validate_intelligence_bundle,
 )
+from app.internal_alpha.intelligence.comparison import (
+    compare_intelligence_bundles,
+    validate_intelligence_comparison,
+)
 from app.internal_alpha.intelligence.dashboard_metrics import build_metrics
 from app.internal_alpha.intelligence.feedback_analyzer import VALID_CATEGORIES
 from app.internal_alpha.intelligence.readiness_score import calculate_readiness_score
@@ -76,6 +80,21 @@ class IntelligenceBundleValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     bundle: dict[str, Any]
+
+
+class IntelligenceComparisonInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    baseline: dict[str, Any]
+    candidate: dict[str, Any]
+
+
+class IntelligenceComparisonValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    comparison: dict[str, Any]
+    baseline: dict[str, Any]
+    candidate: dict[str, Any]
 
 
 def _serialize_report(payload: IntelligenceReportInput) -> dict[str, Any]:
@@ -170,5 +189,37 @@ def validate_internal_alpha_intelligence_bundle(
         "interpretation_notice": (
             "Bundle validity proves bounded payload integrity only and does not authorize public beta, "
             "production deployment, or general availability."
+        ),
+    }
+
+
+@router.post("/comparison")
+def create_internal_alpha_intelligence_comparison(
+    payload: IntelligenceComparisonInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Compare two validated bundles without inferring causality or release readiness."""
+    del current_user
+    return compare_intelligence_bundles(payload.baseline, payload.candidate)
+
+
+@router.post("/comparison/validate")
+def validate_internal_alpha_intelligence_comparison(
+    payload: IntelligenceComparisonValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate exact comparison and bundle bindings without authorizing release."""
+    del current_user
+    findings = validate_intelligence_comparison(
+        payload.comparison,
+        payload.baseline,
+        payload.candidate,
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Comparison validity proves deterministic payload binding only and does not infer "
+            "causality or authorize any release transition."
         ),
     }
