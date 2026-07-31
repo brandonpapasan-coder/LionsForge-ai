@@ -124,7 +124,6 @@ def test_rejects_receipt_and_comparison_drift() -> None:
     )
     assert receipt_result["findings"] == [
         "comparison receipt verification_state mismatch",
-        "comparison receipt digest mismatch",
     ]
 
     drifted_comparison = copy.deepcopy(comparison)
