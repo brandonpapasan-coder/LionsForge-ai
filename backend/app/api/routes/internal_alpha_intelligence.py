@@ -12,6 +12,10 @@ from app.internal_alpha.intelligence.comparison import (
     compare_intelligence_bundles,
     validate_intelligence_comparison,
 )
+from app.internal_alpha.intelligence.comparison_receipt import (
+    build_intelligence_comparison_receipt,
+    validate_intelligence_comparison_receipt,
+)
 from app.internal_alpha.intelligence.dashboard_metrics import build_metrics
 from app.internal_alpha.intelligence.feedback_analyzer import VALID_CATEGORIES
 from app.internal_alpha.intelligence.readiness_score import calculate_readiness_score
@@ -92,6 +96,23 @@ class IntelligenceComparisonInput(BaseModel):
 class IntelligenceComparisonValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    comparison: dict[str, Any]
+    baseline: dict[str, Any]
+    candidate: dict[str, Any]
+
+
+class IntelligenceComparisonReceiptInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    comparison: dict[str, Any]
+    baseline: dict[str, Any]
+    candidate: dict[str, Any]
+
+
+class IntelligenceComparisonReceiptValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    receipt: dict[str, Any]
     comparison: dict[str, Any]
     baseline: dict[str, Any]
     candidate: dict[str, Any]
@@ -221,5 +242,42 @@ def validate_internal_alpha_intelligence_comparison(
         "interpretation_notice": (
             "Comparison validity proves deterministic payload binding only and does not infer "
             "causality or authorize any release transition."
+        ),
+    }
+
+
+@router.post("/comparison/receipt")
+def create_internal_alpha_intelligence_comparison_receipt(
+    payload: IntelligenceComparisonReceiptInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Issue a receipt for one exactly validated comparison and bundle pair."""
+    del current_user
+    return build_intelligence_comparison_receipt(
+        payload.comparison,
+        payload.baseline,
+        payload.candidate,
+    )
+
+
+@router.post("/comparison/receipt/validate")
+def validate_internal_alpha_intelligence_comparison_receipt(
+    payload: IntelligenceComparisonReceiptValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate a comparison receipt and all underlying digest bindings."""
+    del current_user
+    findings = validate_intelligence_comparison_receipt(
+        payload.receipt,
+        payload.comparison,
+        payload.baseline,
+        payload.candidate,
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Receipt validity proves deterministic comparison verification only and does not "
+            "infer causality or authorize any release transition."
         ),
     }
