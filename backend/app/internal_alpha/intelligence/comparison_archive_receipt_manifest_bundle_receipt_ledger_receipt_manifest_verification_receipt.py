@@ -27,6 +27,15 @@ _NOTICE = (
     "This receipt proves deterministic bounded ledger-receipt manifest verification only and "
     "does not infer causality or authorize any release transition."
 )
+_BODY_FIELDS = (
+    "schema",
+    "schema_version",
+    "manifest_sha256",
+    "entry_count",
+    "verification_state",
+    "interpretation_notice",
+)
+_DIGEST_FINDING = "ledger receipt manifest verification receipt digest mismatch"
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -104,11 +113,17 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
                 f"ledger receipt manifest verification receipt {field} mismatch"
             )
 
+    submitted_body = {field: receipt.get(field) for field in _BODY_FIELDS}
+    stored_digest = receipt.get("manifest_verification_receipt_sha256")
     try:
+        submitted_digest = hashlib.sha256(_canonical_bytes(submitted_body)).hexdigest()
         expected_digest = hashlib.sha256(_canonical_bytes(expected_body)).hexdigest()
     except (TypeError, ValueError):
         findings.append("ledger receipt manifest verification receipt payload invalid")
         return findings
-    if receipt.get("manifest_verification_receipt_sha256") != expected_digest:
-        findings.append("ledger receipt manifest verification receipt digest mismatch")
+
+    if stored_digest != submitted_digest:
+        findings.append(_DIGEST_FINDING)
+    if stored_digest != expected_digest and _DIGEST_FINDING not in findings:
+        findings.append(_DIGEST_FINDING)
     return findings
