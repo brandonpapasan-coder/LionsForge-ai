@@ -85,4 +85,6 @@ def test_router_registers_expected_paths() -> None:
         "/comparison/archive/receipt/validate",
         "/comparison/archive/receipt/manifest",
         "/comparison/archive/receipt/manifest/validate",
+        "/comparison/archive/receipt/manifest/receipt",
+        "/comparison/archive/receipt/manifest/receipt/validate",
     }
