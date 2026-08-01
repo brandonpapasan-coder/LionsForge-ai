@@ -12,6 +12,10 @@ from app.internal_alpha.intelligence.comparison_archive_receipt_manifest import 
     build_intelligence_comparison_archive_receipt_manifest,
     validate_intelligence_comparison_archive_receipt_manifest,
 )
+from app.internal_alpha.intelligence.comparison_archive_receipt_manifest_receipt import (
+    build_intelligence_comparison_archive_receipt_manifest_receipt,
+    validate_intelligence_comparison_archive_receipt_manifest_receipt,
+)
 from app.models.user import User
 
 router = APIRouter()
@@ -39,6 +43,19 @@ class IntelligenceComparisonArchiveReceiptManifestInput(BaseModel):
 class IntelligenceComparisonArchiveReceiptManifestValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    manifest: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveReceiptManifestReceiptInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    manifest: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveReceiptManifestReceiptValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    receipt: dict[str, Any]
     manifest: dict[str, Any]
 
 
@@ -96,6 +113,37 @@ def validate_internal_alpha_intelligence_comparison_archive_receipt_manifest(
         "findings": findings,
         "interpretation_notice": (
             "Manifest validity proves bounded evidence packaging and transfer integrity only. "
+            "It does not infer causality or authorize any release transition."
+        ),
+    }
+
+
+@router.post("/comparison/archive/receipt/manifest/receipt")
+def create_internal_alpha_intelligence_comparison_archive_receipt_manifest_receipt(
+    payload: IntelligenceComparisonArchiveReceiptManifestReceiptInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Issue a compact receipt for one fully validated archive-receipt manifest."""
+    del current_user
+    return build_intelligence_comparison_archive_receipt_manifest_receipt(payload.manifest)
+
+
+@router.post("/comparison/archive/receipt/manifest/receipt/validate")
+def validate_internal_alpha_intelligence_comparison_archive_receipt_manifest_receipt(
+    payload: IntelligenceComparisonArchiveReceiptManifestReceiptValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate a manifest receipt and its exact manifest binding fail closed."""
+    del current_user
+    findings = validate_intelligence_comparison_archive_receipt_manifest_receipt(
+        payload.receipt,
+        payload.manifest,
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Manifest receipt validity proves deterministic batch evidence verification only. "
             "It does not infer causality or authorize any release transition."
         ),
     }
