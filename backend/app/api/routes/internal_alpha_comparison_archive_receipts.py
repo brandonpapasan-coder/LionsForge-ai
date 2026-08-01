@@ -12,6 +12,10 @@ from app.internal_alpha.intelligence.comparison_archive_receipt_manifest import 
     build_intelligence_comparison_archive_receipt_manifest,
     validate_intelligence_comparison_archive_receipt_manifest,
 )
+from app.internal_alpha.intelligence.comparison_archive_receipt_manifest_bundle import (
+    build_intelligence_comparison_archive_receipt_manifest_bundle,
+    validate_intelligence_comparison_archive_receipt_manifest_bundle,
+)
 from app.internal_alpha.intelligence.comparison_archive_receipt_manifest_receipt import (
     build_intelligence_comparison_archive_receipt_manifest_receipt,
     validate_intelligence_comparison_archive_receipt_manifest_receipt,
@@ -57,6 +61,19 @@ class IntelligenceComparisonArchiveReceiptManifestReceiptValidationInput(BaseMod
 
     receipt: dict[str, Any]
     manifest: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveReceiptManifestBundleInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    manifest: dict[str, Any]
+    receipt: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveReceiptManifestBundleValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    bundle: dict[str, Any]
 
 
 @router.post("/comparison/archive/receipt")
@@ -145,5 +162,36 @@ def validate_internal_alpha_intelligence_comparison_archive_receipt_manifest_rec
         "interpretation_notice": (
             "Manifest receipt validity proves deterministic batch evidence verification only. "
             "It does not infer causality or authorize any release transition."
+        ),
+    }
+
+
+@router.post("/comparison/archive/receipt/manifest/bundle")
+def create_internal_alpha_intelligence_comparison_archive_receipt_manifest_bundle(
+    payload: IntelligenceComparisonArchiveReceiptManifestBundleInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Build one deterministic transport bundle from an exact manifest-receipt chain."""
+    del current_user
+    return build_intelligence_comparison_archive_receipt_manifest_bundle(
+        payload.manifest,
+        payload.receipt,
+    )
+
+
+@router.post("/comparison/archive/receipt/manifest/bundle/validate")
+def validate_internal_alpha_intelligence_comparison_archive_receipt_manifest_bundle(
+    payload: IntelligenceComparisonArchiveReceiptManifestBundleValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate a manifest transport bundle and its complete chain fail closed."""
+    del current_user
+    findings = validate_intelligence_comparison_archive_receipt_manifest_bundle(payload.bundle)
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Bundle validity proves deterministic evidence transfer integrity only. It does not "
+            "infer causality or authorize any release transition."
         ),
     }
