@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.router import api_router
+from app.api.routes.internal_alpha_comparison_archive_receipt_ledger_receipt_manifests import (
+    router as internal_alpha_comparison_archive_receipt_ledger_receipt_manifests_router,
+)
 from app.api.routes.internal_alpha_comparison_archive_receipt_ledger_receipts import (
     router as internal_alpha_comparison_archive_receipt_ledger_receipts_router,
 )
@@ -77,6 +80,11 @@ app.include_router(
 )
 app.include_router(
     internal_alpha_comparison_archive_receipt_ledger_receipts_router,
+    prefix=f"{settings.api_prefix}/internal-alpha/intelligence",
+    tags=["internal-alpha-intelligence"],
+)
+app.include_router(
+    internal_alpha_comparison_archive_receipt_ledger_receipt_manifests_router,
     prefix=f"{settings.api_prefix}/internal-alpha/intelligence",
     tags=["internal-alpha-intelligence"],
 )
