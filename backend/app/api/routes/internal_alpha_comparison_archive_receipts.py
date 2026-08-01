@@ -20,6 +20,10 @@ from app.internal_alpha.intelligence.comparison_archive_receipt_manifest_bundle_
     build_intelligence_comparison_archive_receipt_manifest_bundle_receipt,
     validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt,
 )
+from app.internal_alpha.intelligence.comparison_archive_receipt_manifest_bundle_receipt_ledger import (
+    build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger,
+    validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger,
+)
 from app.internal_alpha.intelligence.comparison_archive_receipt_manifest_receipt import (
     build_intelligence_comparison_archive_receipt_manifest_receipt,
     validate_intelligence_comparison_archive_receipt_manifest_receipt,
@@ -91,6 +95,18 @@ class IntelligenceComparisonArchiveReceiptManifestBundleReceiptValidationInput(B
 
     receipt: dict[str, Any]
     bundle: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveReceiptManifestBundleReceiptLedgerInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    items: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+
+
+class IntelligenceComparisonArchiveReceiptManifestBundleReceiptLedgerValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    ledger: dict[str, Any]
 
 
 @router.post("/comparison/archive/receipt")
@@ -241,5 +257,37 @@ def validate_internal_alpha_intelligence_comparison_archive_receipt_manifest_bun
         "interpretation_notice": (
             "Bundle receipt validity proves deterministic evidence transfer verification only. "
             "It does not infer causality or authorize any release transition."
+        ),
+    }
+
+
+@router.post("/comparison/archive/receipt/manifest/bundle/receipt/ledger")
+def create_internal_alpha_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+    payload: IntelligenceComparisonArchiveReceiptManifestBundleReceiptLedgerInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Build one bounded deterministic ledger from validated bundle-receipt pairs."""
+    del current_user
+    return build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        payload.items
+    )
+
+
+@router.post("/comparison/archive/receipt/manifest/bundle/receipt/ledger/validate")
+def validate_internal_alpha_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+    payload: IntelligenceComparisonArchiveReceiptManifestBundleReceiptLedgerValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate one bounded deterministic bundle-receipt ledger fail closed."""
+    del current_user
+    findings = validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        payload.ledger
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Ledger validity proves deterministic bounded evidence-receipt collation only. It "
+            "does not infer causality or authorize any release transition."
         ),
     }
