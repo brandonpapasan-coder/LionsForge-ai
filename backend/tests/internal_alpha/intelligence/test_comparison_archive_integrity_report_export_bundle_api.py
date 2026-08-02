@@ -99,5 +99,8 @@ def test_routes_require_authentication_dependency() -> None:
 def test_application_registers_exact_export_bundle_paths() -> None:
     paths = app.openapi()["paths"]
 
-    assert "/api/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle" in paths
-    assert "/api/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle/validate" in paths
+    assert "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle" in paths
+    assert (
+        "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle/validate"
+        in paths
+    )
