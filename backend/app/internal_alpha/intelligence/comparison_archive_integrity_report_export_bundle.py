@@ -179,3 +179,20 @@ def deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
     if payload != _canonical_bytes(candidate):
         raise ValueError("comparison archive integrity export payload is not canonical JSON")
     return candidate
+
+
+def summarize_intelligence_comparison_archive_integrity_report_export_import(
+    payload: bytes,
+) -> dict[str, Any]:
+    """Return deterministic transport metadata only after exact canonical validation."""
+    bundle = deserialize_intelligence_comparison_archive_integrity_report_export_bundle(payload)
+    return {
+        "bundle": bundle,
+        "canonical_byte_count": len(payload),
+        "canonical_payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "export_bundle_sha256": bundle["export_bundle_sha256"],
+        "interpretation_notice": (
+            "Import metadata identifies exact canonical bytes and embedded bundle integrity only. "
+            "It does not authorize any release transition."
+        ),
+    }

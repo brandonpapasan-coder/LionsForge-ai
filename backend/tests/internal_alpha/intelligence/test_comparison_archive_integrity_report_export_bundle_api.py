@@ -95,18 +95,24 @@ def test_download_route_returns_canonical_attachment(monkeypatch) -> None:
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
-def test_import_route_forwards_exact_utf8_bytes(monkeypatch) -> None:
-    expected = {"bundle": True}
+def test_import_route_forwards_exact_utf8_bytes_and_returns_summary(monkeypatch) -> None:
+    expected = {
+        "bundle": {"bundle": True},
+        "canonical_byte_count": 15,
+        "canonical_payload_sha256": "a" * 64,
+        "export_bundle_sha256": "b" * 64,
+        "interpretation_notice": "notice",
+    }
     captured: dict[str, object] = {}
 
-    def fake_deserializer(candidate_content):
+    def fake_summarizer(candidate_content):
         captured["content"] = candidate_content
         return expected
 
     monkeypatch.setattr(
         routes,
-        "deserialize_intelligence_comparison_archive_integrity_report_export_bundle",
-        fake_deserializer,
+        "summarize_intelligence_comparison_archive_integrity_report_export_import",
+        fake_summarizer,
     )
     payload = routes.IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(
         content='{"bundle":true}',
@@ -122,7 +128,7 @@ def test_import_route_forwards_exact_utf8_bytes(monkeypatch) -> None:
 def test_import_route_maps_invalid_content_to_controlled_422(monkeypatch) -> None:
     monkeypatch.setattr(
         routes,
-        "deserialize_intelligence_comparison_archive_integrity_report_export_bundle",
+        "summarize_intelligence_comparison_archive_integrity_report_export_import",
         lambda candidate_content: (_ for _ in ()).throw(ValueError("bundle digest mismatch")),
     )
     payload = routes.IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(
