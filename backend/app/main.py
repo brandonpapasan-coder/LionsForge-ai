@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.router import api_router
+from app.api.routes.internal_alpha_comparison_archive_integrity_report_export_bundles import (
+    router as internal_alpha_comparison_archive_integrity_report_export_bundles_router,
+)
 from app.api.routes.internal_alpha_comparison_archive_integrity_reports import (
     router as internal_alpha_comparison_archive_integrity_reports_router,
 )
@@ -117,6 +120,11 @@ app.include_router(
 )
 app.include_router(
     internal_alpha_comparison_archive_integrity_reports_router,
+    prefix=f"{settings.api_prefix}/internal-alpha/intelligence",
+    tags=["internal-alpha-intelligence"],
+)
+app.include_router(
+    internal_alpha_comparison_archive_integrity_report_export_bundles_router,
     prefix=f"{settings.api_prefix}/internal-alpha/intelligence",
     tags=["internal-alpha-intelligence"],
 )
