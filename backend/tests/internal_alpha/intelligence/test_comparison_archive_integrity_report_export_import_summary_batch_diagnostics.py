@@ -40,7 +40,7 @@ def test_batch_diagnostics_are_stable_and_sorted(monkeypatch):
         {"finding": "a", "count": 2},
         {"finding": "z", "count": 1},
     ]
-    assert "does not authorize" in diagnostics["interpretation_notice"]
+    assert "do not authorize" in diagnostics["interpretation_notice"]
 
 
 def test_batch_diagnostics_reject_invalid_batch_result(monkeypatch):
