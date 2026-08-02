@@ -13,6 +13,9 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary import (
     validate_intelligence_comparison_archive_integrity_report_export_import_summary,
 )
+from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch import (
+    validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch,
+)
 from app.models.user import User
 
 router = APIRouter()
@@ -42,6 +45,12 @@ class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryValidationI
     model_config = ConfigDict(extra="forbid", strict=True)
 
     summary: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -133,3 +142,15 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
             "It does not infer causality or authorize any release transition."
         ),
     }
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import-summary/validate-batch")
+def validate_internal_alpha_intelligence_comparison_archive_integrity_report_export_import_summary_batch(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate a bounded ordered batch of deterministic import summaries."""
+    del current_user
+    return validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch(
+        payload.summaries,
+    )
