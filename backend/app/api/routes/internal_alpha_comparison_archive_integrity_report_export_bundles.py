@@ -16,6 +16,9 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch import (
     validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch,
 )
+from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_validation import (
+    validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_result,
+)
 from app.models.user import User
 
 router = APIRouter()
@@ -23,7 +26,6 @@ router = APIRouter()
 
 class IntelligenceComparisonArchiveIntegrityReportExportBundleInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-
     report: dict[str, Any]
     receipt: dict[str, Any]
     manifest: dict[str, Any]
@@ -31,26 +33,28 @@ class IntelligenceComparisonArchiveIntegrityReportExportBundleInput(BaseModel):
 
 class IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-
     bundle: dict[str, Any]
 
 
 class IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-
     content: str = Field(min_length=1, max_length=1_000_000)
 
 
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-
     summary: dict[str, Any]
 
 
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-
     summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResultValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+    batch_result: dict[str, Any]
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -58,12 +62,9 @@ def create_internal_alpha_intelligence_comparison_archive_integrity_report_expor
     payload: IntelligenceComparisonArchiveIntegrityReportExportBundleInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create one deterministic portable bundle for an exact valid report chain."""
     del current_user
     return build_intelligence_comparison_archive_integrity_report_export_bundle(
-        payload.report,
-        payload.receipt,
-        payload.manifest,
+        payload.report, payload.receipt, payload.manifest
     )
 
 
@@ -72,19 +73,9 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     payload: IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate one portable bundle and all embedded integrity evidence fail closed."""
     del current_user
-    findings = validate_intelligence_comparison_archive_integrity_report_export_bundle(
-        payload.bundle,
-    )
-    return {
-        "valid": not findings,
-        "findings": findings,
-        "interpretation_notice": (
-            "Bundle validity proves deterministic packaging and receipt-chain integrity only. "
-            "It does not infer causality or authorize any release transition."
-        ),
-    }
+    findings = validate_intelligence_comparison_archive_integrity_report_export_bundle(payload.bundle)
+    return {"valid": not findings, "findings": findings, "interpretation_notice": "Bundle validity proves deterministic packaging and receipt-chain integrity only. It does not infer causality or authorize any release transition."}
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle/download")
@@ -92,21 +83,9 @@ def download_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     payload: IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> Response:
-    """Return canonical UTF-8 JSON bytes for one fully valid bounded bundle."""
     del current_user
-    content = serialize_intelligence_comparison_archive_integrity_report_export_bundle(
-        payload.bundle,
-    )
-    return Response(
-        content=content,
-        media_type="application/json",
-        headers={
-            "Content-Disposition": (
-                'attachment; filename="comparison-archive-integrity-report-export-bundle.json"'
-            ),
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
+    content = serialize_intelligence_comparison_archive_integrity_report_export_bundle(payload.bundle)
+    return Response(content=content, media_type="application/json", headers={"Content-Disposition": 'attachment; filename="comparison-archive-integrity-report-export-bundle.json"', "X-Content-Type-Options": "nosniff"})
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle/import")
@@ -114,12 +93,9 @@ def import_internal_alpha_intelligence_comparison_archive_integrity_report_expor
     payload: IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Import canonical JSON and return exact deterministic transport metadata."""
     del current_user
     try:
-        return summarize_intelligence_comparison_archive_integrity_report_export_import(
-            payload.content.encode("utf-8"),
-        )
+        return summarize_intelligence_comparison_archive_integrity_report_export_import(payload.content.encode("utf-8"))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -129,19 +105,9 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate one deterministic import summary and its embedded bundle fail closed."""
     del current_user
-    findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary(
-        payload.summary,
-    )
-    return {
-        "valid": not findings,
-        "findings": findings,
-        "interpretation_notice": (
-            "Summary validity proves reconstructed canonical transport metadata only. "
-            "It does not infer causality or authorize any release transition."
-        ),
-    }
+    findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary(payload.summary)
+    return {"valid": not findings, "findings": findings, "interpretation_notice": "Summary validity proves reconstructed canonical transport metadata only. It does not infer causality or authorize any release transition."}
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle/import-summary/validate-batch")
@@ -149,8 +115,17 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchValidationInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Validate a bounded ordered batch of deterministic import summaries."""
     del current_user
-    return validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch(
-        payload.summaries,
+    return validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch(payload.summaries)
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import-summary/validate-batch-result")
+def validate_internal_alpha_intelligence_comparison_archive_integrity_report_export_import_summary_batch_result(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResultValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    del current_user
+    findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_result(
+        payload.summaries, payload.batch_result
     )
+    return {"valid": not findings, "findings": findings, "interpretation_notice": "Batch-result validity proves deterministic recomputation of bounded transport-integrity findings only. It does not authorize any release transition."}
