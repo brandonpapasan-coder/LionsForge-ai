@@ -10,6 +10,9 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
     summarize_intelligence_comparison_archive_integrity_report_export_import,
     validate_intelligence_comparison_archive_integrity_report_export_bundle,
 )
+from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary import (
+    validate_intelligence_comparison_archive_integrity_report_export_import_summary,
+)
 from app.models.user import User
 
 router = APIRouter()
@@ -33,6 +36,12 @@ class IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(BaseMo
     model_config = ConfigDict(extra="forbid", strict=True)
 
     content: str = Field(min_length=1, max_length=1_000_000)
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    summary: dict[str, Any]
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -104,3 +113,23 @@ def import_internal_alpha_intelligence_comparison_archive_integrity_report_expor
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import-summary/validate")
+def validate_internal_alpha_intelligence_comparison_archive_integrity_report_export_import_summary(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Validate one deterministic import summary and its embedded bundle fail closed."""
+    del current_user
+    findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary(
+        payload.summary,
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Summary validity proves reconstructed canonical transport metadata only. "
+            "It does not infer causality or authorize any release transition."
+        ),
+    }
