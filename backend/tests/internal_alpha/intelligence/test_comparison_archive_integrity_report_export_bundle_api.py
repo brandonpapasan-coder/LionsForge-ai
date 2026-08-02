@@ -31,18 +31,12 @@ def test_create_route_forwards_exact_payload(monkeypatch) -> None:
         receipt=receipt,
         manifest=manifest,
     )
-
     result = routes.create_internal_alpha_intelligence_comparison_archive_integrity_report_export_bundle(
         payload,
         current_user=object(),  # type: ignore[arg-type]
     )
-
     assert result is expected
-    assert captured == {
-        "report": report,
-        "receipt": receipt,
-        "manifest": manifest,
-    }
+    assert captured == {"report": report, "receipt": receipt, "manifest": manifest}
 
 
 def test_validation_route_forwards_bundle_and_returns_fail_closed_findings(monkeypatch) -> None:
@@ -61,29 +55,50 @@ def test_validation_route_forwards_bundle_and_returns_fail_closed_findings(monke
     payload = routes.IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput(
         bundle=bundle,
     )
-
     result = routes.validate_internal_alpha_intelligence_comparison_archive_integrity_report_export_bundle(
         payload,
         current_user=object(),  # type: ignore[arg-type]
     )
-
     assert captured["bundle"] == bundle
     assert result["valid"] is False
     assert result["findings"] == ["bundle digest mismatch"]
     assert "does not infer causality" in result["interpretation_notice"]
 
 
+def test_download_route_returns_canonical_attachment(monkeypatch) -> None:
+    bundle = {"bundle": True}
+    captured: dict[str, object] = {}
+
+    def fake_serializer(candidate_bundle):
+        captured["bundle"] = candidate_bundle
+        return b'{"bundle":true}'
+
+    monkeypatch.setattr(
+        routes,
+        "serialize_intelligence_comparison_archive_integrity_report_export_bundle",
+        fake_serializer,
+    )
+    payload = routes.IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput(
+        bundle=bundle,
+    )
+    response = routes.download_internal_alpha_intelligence_comparison_archive_integrity_report_export_bundle(
+        payload,
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert captured["bundle"] == bundle
+    assert response.body == b'{"bundle":true}'
+    assert response.media_type == "application/json"
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="comparison-archive-integrity-report-export-bundle.json"'
+    )
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
 def test_request_models_reject_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveIntegrityReportExportBundleInput.model_validate(
-            {
-                "report": {},
-                "receipt": {},
-                "manifest": {},
-                "extra": True,
-            }
+            {"report": {}, "receipt": {}, "manifest": {}, "extra": True}
         )
-
     with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput.model_validate(
             {"bundle": {}, "extra": True}
@@ -98,9 +113,7 @@ def test_routes_require_authentication_dependency() -> None:
 
 def test_application_registers_exact_export_bundle_paths() -> None:
     paths = app.openapi()["paths"]
-
-    assert "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle" in paths
-    assert (
-        "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle/validate"
-        in paths
-    )
+    base = "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle"
+    assert base in paths
+    assert f"{base}/validate" in paths
+    assert f"{base}/download" in paths
