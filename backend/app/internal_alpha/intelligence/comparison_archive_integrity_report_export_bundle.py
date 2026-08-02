@@ -46,6 +46,15 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"comparison archive integrity export payload contains duplicate key: {key}")
+        result[key] = value
+    return result
+
+
 def _bundle_body(
     report: dict[str, Any],
     receipt: dict[str, Any],
@@ -148,7 +157,7 @@ def serialize_intelligence_comparison_archive_integrity_report_export_bundle(
 def deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
     payload: bytes,
 ) -> dict[str, Any]:
-    """Parse bounded UTF-8 JSON bytes and return only a fully valid bundle."""
+    """Parse exact canonical UTF-8 JSON bytes and return only a fully valid bundle."""
     if not isinstance(payload, bytes):
         raise TypeError("comparison archive integrity export payload must be bytes")
     if not payload:
@@ -156,7 +165,10 @@ def deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
     if len(payload) > _MAX_EXPORT_BYTES:
         raise ValueError("comparison archive integrity export payload exceeds byte limit")
     try:
-        candidate = json.loads(payload.decode("utf-8"))
+        candidate = json.loads(
+            payload.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("comparison archive integrity export payload is not valid UTF-8 JSON") from exc
     if not isinstance(candidate, dict):
@@ -164,4 +176,6 @@ def deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
     findings = validate_intelligence_comparison_archive_integrity_report_export_bundle(candidate)
     if findings:
         raise ValueError("invalid comparison archive integrity export bundle: " + "; ".join(findings))
+    if payload != _canonical_bytes(candidate):
+        raise ValueError("comparison archive integrity export payload is not canonical JSON")
     return candidate
