@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.deps import get_current_user
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_bundle import (
     build_intelligence_comparison_archive_integrity_report_export_bundle,
-    deserialize_intelligence_comparison_archive_integrity_report_export_bundle,
     serialize_intelligence_comparison_archive_integrity_report_export_bundle,
+    summarize_intelligence_comparison_archive_integrity_report_export_import,
     validate_intelligence_comparison_archive_integrity_report_export_bundle,
 )
 from app.models.user import User
@@ -96,10 +96,10 @@ def import_internal_alpha_intelligence_comparison_archive_integrity_report_expor
     payload: IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Import canonical JSON content only after bounded full-chain validation."""
+    """Import canonical JSON and return exact deterministic transport metadata."""
     del current_user
     try:
-        return deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
+        return summarize_intelligence_comparison_archive_integrity_report_export_import(
             payload.content.encode("utf-8"),
         )
     except ValueError as exc:
