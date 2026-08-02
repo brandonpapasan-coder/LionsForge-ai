@@ -33,6 +33,7 @@ _BODY_FIELDS = (
     "interpretation_notice",
 )
 _DIGEST_FINDING = "integrity report export bundle digest mismatch"
+_MAX_EXPORT_BYTES = 1_000_000
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -129,3 +130,38 @@ def validate_intelligence_comparison_archive_integrity_report_export_bundle(
     if stored_digest != expected_digest and _DIGEST_FINDING not in findings:
         findings.append(_DIGEST_FINDING)
     return findings
+
+
+def serialize_intelligence_comparison_archive_integrity_report_export_bundle(
+    bundle: dict[str, Any],
+) -> bytes:
+    """Serialize one valid bundle to deterministic UTF-8 JSON bytes."""
+    findings = validate_intelligence_comparison_archive_integrity_report_export_bundle(bundle)
+    if findings:
+        raise ValueError("invalid comparison archive integrity export bundle: " + "; ".join(findings))
+    payload = _canonical_bytes(bundle)
+    if len(payload) > _MAX_EXPORT_BYTES:
+        raise ValueError("comparison archive integrity export bundle exceeds byte limit")
+    return payload
+
+
+def deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
+    payload: bytes,
+) -> dict[str, Any]:
+    """Parse bounded UTF-8 JSON bytes and return only a fully valid bundle."""
+    if not isinstance(payload, bytes):
+        raise TypeError("comparison archive integrity export payload must be bytes")
+    if not payload:
+        raise ValueError("comparison archive integrity export payload must not be empty")
+    if len(payload) > _MAX_EXPORT_BYTES:
+        raise ValueError("comparison archive integrity export payload exceeds byte limit")
+    try:
+        candidate = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("comparison archive integrity export payload is not valid UTF-8 JSON") from exc
+    if not isinstance(candidate, dict):
+        raise ValueError("comparison archive integrity export payload must contain an object")
+    findings = validate_intelligence_comparison_archive_integrity_report_export_bundle(candidate)
+    if findings:
+        raise ValueError("invalid comparison archive integrity export bundle: " + "; ".join(findings))
+    return candidate
