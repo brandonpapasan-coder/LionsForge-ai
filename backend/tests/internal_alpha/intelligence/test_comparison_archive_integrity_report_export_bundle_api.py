@@ -1,4 +1,5 @@
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.api.deps import get_current_user
@@ -94,7 +95,49 @@ def test_download_route_returns_canonical_attachment(monkeypatch) -> None:
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
-def test_request_models_reject_unknown_fields() -> None:
+def test_import_route_forwards_exact_utf8_bytes(monkeypatch) -> None:
+    expected = {"bundle": True}
+    captured: dict[str, object] = {}
+
+    def fake_deserializer(candidate_content):
+        captured["content"] = candidate_content
+        return expected
+
+    monkeypatch.setattr(
+        routes,
+        "deserialize_intelligence_comparison_archive_integrity_report_export_bundle",
+        fake_deserializer,
+    )
+    payload = routes.IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(
+        content='{"bundle":true}',
+    )
+    result = routes.import_internal_alpha_intelligence_comparison_archive_integrity_report_export_bundle(
+        payload,
+        current_user=object(),  # type: ignore[arg-type]
+    )
+    assert result is expected
+    assert captured["content"] == b'{"bundle":true}'
+
+
+def test_import_route_maps_invalid_content_to_controlled_422(monkeypatch) -> None:
+    monkeypatch.setattr(
+        routes,
+        "deserialize_intelligence_comparison_archive_integrity_report_export_bundle",
+        lambda candidate_content: (_ for _ in ()).throw(ValueError("bundle digest mismatch")),
+    )
+    payload = routes.IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(
+        content='{"bundle":false}',
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        routes.import_internal_alpha_intelligence_comparison_archive_integrity_report_export_bundle(
+            payload,
+            current_user=object(),  # type: ignore[arg-type]
+        )
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "bundle digest mismatch"
+
+
+def test_request_models_reject_unknown_fields_and_invalid_import_sizes() -> None:
     with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveIntegrityReportExportBundleInput.model_validate(
             {"report": {}, "receipt": {}, "manifest": {}, "extra": True}
@@ -102,6 +145,14 @@ def test_request_models_reject_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput.model_validate(
             {"bundle": {}, "extra": True}
+        )
+    with pytest.raises(ValidationError):
+        routes.IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput.model_validate(
+            {"content": "", "extra": True}
+        )
+    with pytest.raises(ValidationError):
+        routes.IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(
+            content="x" * 1_000_001,
         )
 
 
@@ -117,3 +168,4 @@ def test_application_registers_exact_export_bundle_paths() -> None:
     assert base in paths
     assert f"{base}/validate" in paths
     assert f"{base}/download" in paths
+    assert f"{base}/import" in paths
