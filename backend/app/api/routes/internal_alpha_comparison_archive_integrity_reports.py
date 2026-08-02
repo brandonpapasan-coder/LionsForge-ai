@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import get_current_user
+from app.api.routes.internal_alpha_comparison_archive_integrity_report_export_bundles import (
+    router as integrity_report_export_bundles_router,
+)
 from app.internal_alpha.intelligence.comparison_archive_integrity_report import (
     build_intelligence_comparison_archive_integrity_report,
     validate_intelligence_comparison_archive_integrity_report,
@@ -11,6 +14,7 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report import 
 from app.models.user import User
 
 router = APIRouter()
+router.include_router(integrity_report_export_bundles_router)
 
 
 class IntelligenceComparisonArchiveIntegrityReportInput(BaseModel):
