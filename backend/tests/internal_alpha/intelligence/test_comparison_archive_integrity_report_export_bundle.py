@@ -1,4 +1,5 @@
 from copy import deepcopy
+import json
 
 import pytest
 
@@ -116,7 +117,11 @@ def test_serialization_is_canonical_and_round_trips(monkeypatch) -> None:
 def test_deserialization_rejects_noncanonical_json_encodings(monkeypatch) -> None:
     bundle = _valid_bundle(monkeypatch)
     canonical = bundles.serialize_intelligence_comparison_archive_integrity_report_export_bundle(bundle)
-    reordered = b"{" + b",".join(reversed(canonical[1:-1].split(b","))) + b"}"
+    reordered = json.dumps(
+        dict(reversed(list(bundle.items()))),
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
     variants = (
         b" " + canonical,
         canonical + b"\n",
@@ -145,10 +150,7 @@ def test_deserialization_rejects_duplicate_keys_at_any_depth(monkeypatch) -> Non
 def test_deserialization_rejects_direct_unicode_encoding(monkeypatch) -> None:
     bundle = _valid_bundle(monkeypatch)
     bundle["report"]["label"] = "caf\u00e9"  # type: ignore[index]
-    body = {
-        field: bundle[field]
-        for field in bundles._BODY_FIELDS
-    }
+    body = {field: bundle[field] for field in bundles._BODY_FIELDS}
     bundle["export_bundle_sha256"] = bundles.hashlib.sha256(
         bundles._canonical_bytes(body)
     ).hexdigest()
