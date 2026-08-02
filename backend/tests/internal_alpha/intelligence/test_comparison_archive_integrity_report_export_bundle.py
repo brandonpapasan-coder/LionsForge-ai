@@ -113,6 +113,51 @@ def test_serialization_is_canonical_and_round_trips(monkeypatch) -> None:
     ) == bundle
 
 
+def test_deserialization_rejects_noncanonical_json_encodings(monkeypatch) -> None:
+    bundle = _valid_bundle(monkeypatch)
+    canonical = bundles.serialize_intelligence_comparison_archive_integrity_report_export_bundle(bundle)
+    reordered = b"{" + b",".join(reversed(canonical[1:-1].split(b","))) + b"}"
+    variants = (
+        b" " + canonical,
+        canonical + b"\n",
+        canonical.replace(b":", b": ", 1),
+        reordered,
+    )
+    for payload in variants:
+        with pytest.raises(ValueError, match="not canonical JSON"):
+            bundles.deserialize_intelligence_comparison_archive_integrity_report_export_bundle(payload)
+
+
+def test_deserialization_rejects_duplicate_keys_at_any_depth(monkeypatch) -> None:
+    bundle = _valid_bundle(monkeypatch)
+    canonical = bundles.serialize_intelligence_comparison_archive_integrity_report_export_bundle(bundle)
+    top_level = canonical[:-1] + b',"schema":"replacement"}'
+    nested = canonical.replace(
+        b'"report":{',
+        b'"report":{"schema":"duplicate",',
+        1,
+    )
+    for payload in (top_level, nested):
+        with pytest.raises(ValueError, match="contains duplicate key"):
+            bundles.deserialize_intelligence_comparison_archive_integrity_report_export_bundle(payload)
+
+
+def test_deserialization_rejects_direct_unicode_encoding(monkeypatch) -> None:
+    bundle = _valid_bundle(monkeypatch)
+    bundle["report"]["label"] = "caf\u00e9"  # type: ignore[index]
+    body = {
+        field: bundle[field]
+        for field in bundles._BODY_FIELDS
+    }
+    bundle["export_bundle_sha256"] = bundles.hashlib.sha256(
+        bundles._canonical_bytes(body)
+    ).hexdigest()
+    canonical = bundles.serialize_intelligence_comparison_archive_integrity_report_export_bundle(bundle)
+    direct_unicode = canonical.replace(b"caf\\u00e9", "caf\u00e9".encode("utf-8"))
+    with pytest.raises(ValueError, match="not canonical JSON"):
+        bundles.deserialize_intelligence_comparison_archive_integrity_report_export_bundle(direct_unicode)
+
+
 def test_serialization_rejects_tampering_and_deserialization_rejects_bad_bytes(monkeypatch) -> None:
     bundle = _valid_bundle(monkeypatch)
     bundle["schema_version"] = 2
