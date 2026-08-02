@@ -1,11 +1,12 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, Response
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_current_user
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_bundle import (
     build_intelligence_comparison_archive_integrity_report_export_bundle,
+    deserialize_intelligence_comparison_archive_integrity_report_export_bundle,
     serialize_intelligence_comparison_archive_integrity_report_export_bundle,
     validate_intelligence_comparison_archive_integrity_report_export_bundle,
 )
@@ -26,6 +27,12 @@ class IntelligenceComparisonArchiveIntegrityReportExportBundleValidationInput(Ba
     model_config = ConfigDict(extra="forbid", strict=True)
 
     bundle: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    content: str = Field(min_length=1, max_length=1_000_000)
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -82,3 +89,18 @@ def download_internal_alpha_intelligence_comparison_archive_integrity_report_exp
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import")
+def import_internal_alpha_intelligence_comparison_archive_integrity_report_export_bundle(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportBundleImportInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Import canonical JSON content only after bounded full-chain validation."""
+    del current_user
+    try:
+        return deserialize_intelligence_comparison_archive_integrity_report_export_bundle(
+            payload.content.encode("utf-8"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
