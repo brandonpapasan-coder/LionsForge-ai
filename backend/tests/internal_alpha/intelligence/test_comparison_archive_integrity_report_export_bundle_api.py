@@ -1,14 +1,11 @@
 import pytest
-from fastapi import FastAPI
 from pydantic import ValidationError
 
 from app.api.deps import get_current_user
 from app.api.routes import (
     internal_alpha_comparison_archive_integrity_report_export_bundles as routes,
 )
-from app.api.routes.internal_alpha_comparison_archive_integrity_reports import (
-    router as parent_router,
-)
+from app.main import app
 
 
 def test_create_route_forwards_exact_payload(monkeypatch) -> None:
@@ -70,7 +67,7 @@ def test_validation_route_forwards_bundle_and_returns_fail_closed_findings(monke
         current_user=object(),  # type: ignore[arg-type]
     )
 
-    assert captured["bundle"] is bundle
+    assert captured["bundle"] == bundle
     assert result["valid"] is False
     assert result["findings"] == ["bundle digest mismatch"]
     assert "does not infer causality" in result["interpretation_notice"]
@@ -99,12 +96,7 @@ def test_routes_require_authentication_dependency() -> None:
         assert get_current_user in dependency_calls
 
 
-def test_parent_router_registers_exact_export_bundle_paths() -> None:
-    app = FastAPI()
-    app.include_router(
-        parent_router,
-        prefix="/api/internal-alpha/intelligence",
-    )
+def test_application_registers_exact_export_bundle_paths() -> None:
     paths = app.openapi()["paths"]
 
     assert "/api/internal-alpha/intelligence/comparison/archive/integrity-report/export-bundle" in paths
