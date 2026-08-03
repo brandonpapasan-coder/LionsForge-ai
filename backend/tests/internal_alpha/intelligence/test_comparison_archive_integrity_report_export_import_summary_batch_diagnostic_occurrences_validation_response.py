@@ -96,8 +96,7 @@ def test_validation_response_rejects_non_boolean_valid(monkeypatch):
         "interpretation_notice": _NOTICE,
     }
     findings = _validate(monkeypatch, [], response)
-    assert "valid must be a boolean" in findings
-    assert "valid does not match deterministic recomputation" in findings
+    assert findings == ["valid must be a boolean"]
 
 
 def test_validation_response_rejects_non_list_findings(monkeypatch):
