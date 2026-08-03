@@ -4,7 +4,7 @@ from app.main import app
 
 
 _PATH = (
-    "/api/internal-alpha/intelligence/comparison/archive/integrity-report/"
+    "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/"
     "export-bundle/import-summary/batch-pipeline"
 )
 
