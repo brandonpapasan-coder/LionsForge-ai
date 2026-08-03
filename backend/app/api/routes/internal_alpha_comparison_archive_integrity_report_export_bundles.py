@@ -16,6 +16,9 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch import (
     validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch,
 )
+from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences import (
+    build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences,
+)
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostics import (
     build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostics,
 )
@@ -168,3 +171,17 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
         payload.summaries, payload.batch_result, payload.diagnostics
     )
     return {"valid": not findings, "findings": findings, "interpretation_notice": "Diagnostics validity proves deterministic recomputation of bounded transport-integrity diagnostics only. It does not authorize any release transition."}
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences")
+def build_internal_alpha_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticsValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    del current_user
+    try:
+        return build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences(
+            payload.summaries, payload.batch_result, payload.diagnostics
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
