@@ -19,6 +19,9 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences import (
     build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences,
 )
+from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation import (
+    validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences,
+)
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostics import (
     build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostics,
 )
@@ -71,6 +74,14 @@ class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagno
     summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
     batch_result: dict[str, Any]
     diagnostics: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrencesValidationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+    batch_result: dict[str, Any]
+    diagnostics: dict[str, Any]
+    occurrence_projection: dict[str, Any]
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -185,3 +196,26 @@ def build_internal_alpha_intelligence_comparison_archive_integrity_report_export
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences/validate")
+def validate_internal_alpha_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrencesValidationInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    del current_user
+    findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences(
+        payload.summaries,
+        payload.batch_result,
+        payload.diagnostics,
+        payload.occurrence_projection,
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Occurrence validity proves deterministic recomputation of bounded "
+            "transport-integrity location data only. It does not authorize any "
+            "release transition."
+        ),
+    }
