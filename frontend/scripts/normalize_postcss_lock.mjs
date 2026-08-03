@@ -12,7 +12,7 @@ const exactPins = {
   postcss: "8.5.18",
   vitest: "3.2.7",
   coverage: "3.2.7",
-  braceExpansion: "5.0.8",
+  braceExpansion: "5.0.9",
 };
 
 if (packageJson.overrides?.postcss !== exactPins.postcss) {
