@@ -22,6 +22,9 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation import (
     validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences,
 )
+from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation_response import (
+    validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation_response,
+)
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostics import (
     build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostics,
 )
@@ -82,6 +85,15 @@ class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagno
     batch_result: dict[str, Any]
     diagnostics: dict[str, Any]
     occurrence_projection: dict[str, Any]
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrencesValidationResponseInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+    batch_result: dict[str, Any]
+    diagnostics: dict[str, Any]
+    occurrence_projection: dict[str, Any]
+    validation_response: dict[str, Any]
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -217,5 +229,29 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
             "Occurrence validity proves deterministic recomputation of bounded "
             "transport-integrity location data only. It does not authorize any "
             "release transition."
+        ),
+    }
+
+
+@router.post("/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences/validate-response")
+def validate_internal_alpha_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation_response(
+    payload: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrencesValidationResponseInput,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    del current_user
+    findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation_response(
+        payload.summaries,
+        payload.batch_result,
+        payload.diagnostics,
+        payload.occurrence_projection,
+        payload.validation_response,
+    )
+    return {
+        "valid": not findings,
+        "findings": findings,
+        "interpretation_notice": (
+            "Validation-response validity proves deterministic recomputation of "
+            "bounded transport-integrity validation data only. It does not "
+            "authorize any release transition."
         ),
     }
