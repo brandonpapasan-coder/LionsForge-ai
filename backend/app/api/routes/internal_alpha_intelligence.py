@@ -325,3 +325,10 @@ def validate_internal_alpha_intelligence_comparison_archive(
             "causality or authorize any release transition."
         ),
     }
+
+
+from app.api.routes.internal_alpha_comparison_archive_integrity_report_export_import_summary_batch_pipeline import (
+    router as import_summary_batch_pipeline_router,
+)
+
+router.include_router(import_summary_batch_pipeline_router)
