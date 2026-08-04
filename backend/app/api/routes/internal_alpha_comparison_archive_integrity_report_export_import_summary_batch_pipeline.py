@@ -27,30 +27,6 @@ _VALIDATION_RESPONSE_NOTICE = (
 )
 
 
-class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineInput(
-    BaseModel
-):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-
-
-class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineValidationInput(
-    BaseModel
-):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-    pipeline: dict[str, Any]
-
-
-class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineValidationResponseInput(
-    BaseModel
-):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-    pipeline: dict[str, Any]
-    response: dict[str, Any]
-
-
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResultItem(
     BaseModel
 ):
@@ -139,6 +115,30 @@ class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipeli
     interpretation_notice: str
 
 
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineInput(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineValidationInput(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+    pipeline: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineValidationResponseInput(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
+    pipeline: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse
+    response: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse
+
+
 @router.post(
     "/comparison/archive/integrity-report/export-bundle/import-summary/batch-pipeline",
     response_model=IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse,
@@ -167,7 +167,7 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     del current_user
     findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_pipeline(
         payload.summaries,
-        payload.pipeline,
+        payload.pipeline.model_dump(),
     )
     return IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse(
         valid=not findings,
@@ -187,8 +187,8 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     del current_user
     findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_pipeline_validation_response(
         payload.summaries,
-        payload.pipeline,
-        payload.response,
+        payload.pipeline.model_dump(),
+        payload.response.model_dump(),
     )
     return IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse(
         valid=not findings,
