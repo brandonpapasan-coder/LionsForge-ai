@@ -17,6 +17,39 @@ def _payload() -> dict:
     return {"summaries": [{"summary": 1}]}
 
 
+def _canonical_pipeline(summary_count: int = 1) -> dict:
+    return {
+        "batch_result": {
+            "summary_count": summary_count,
+            "valid_count": summary_count,
+            "invalid_count": 0,
+            "finding_count": 0,
+            "results": [
+                {"index": index, "valid": True, "findings": []}
+                for index in range(summary_count)
+            ],
+            "interpretation_notice": "batch bounded",
+        },
+        "diagnostics": {
+            "summary_count": summary_count,
+            "invalid_summary_count": 0,
+            "invalid_indexes": [],
+            "distinct_finding_count": 0,
+            "finding_count": 0,
+            "finding_frequencies": [],
+            "interpretation_notice": "diagnostics bounded",
+        },
+        "occurrence_projection": {
+            "summary_count": summary_count,
+            "finding_count": 0,
+            "distinct_finding_count": 0,
+            "occurrences": [],
+            "interpretation_notice": "occurrences bounded",
+        },
+        "interpretation_notice": "bounded",
+    }
+
+
 def test_batch_pipeline_api_requires_authentication():
     app = FastAPI()
     app.include_router(router)
@@ -26,12 +59,7 @@ def test_batch_pipeline_api_requires_authentication():
 
 def test_batch_pipeline_api_forwards_exact_summaries(monkeypatch):
     captured = {}
-    expected = {
-        "batch_result": {"batch": True},
-        "diagnostics": {"diagnostics": True},
-        "occurrence_projection": {"occurrences": True},
-        "interpretation_notice": "bounded",
-    }
+    expected = _canonical_pipeline()
 
     def fake_build(summaries):
         captured["summaries"] = summaries
@@ -77,12 +105,7 @@ def test_batch_pipeline_request_accepts_100_summaries(monkeypatch):
         "app.api.routes."
         "internal_alpha_comparison_archive_integrity_report_export_import_summary_batch_pipeline."
         "build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_pipeline",
-        lambda summaries: {
-            "batch_result": {"summary_count": len(summaries)},
-            "diagnostics": {},
-            "occurrence_projection": {},
-            "interpretation_notice": "bounded",
-        },
+        lambda summaries: _canonical_pipeline(len(summaries)),
     )
     app = FastAPI()
     app.include_router(router)
