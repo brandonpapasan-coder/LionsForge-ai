@@ -43,3 +43,59 @@ def test_validation_detects_candidate_and_digest_substitution() -> None:
 def test_rejects_unsupported_report_schema() -> None:
     with pytest.raises(ValueError, match="unsupported intelligence report schema"):
         build_intelligence_receipt({**_report(), "schema_version": 2})
+
+
+def test_build_rejects_extra_report_fields() -> None:
+    with pytest.raises(ValueError, match="invalid intelligence report shape"):
+        build_intelligence_receipt({**_report(), "unexpected": True})
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"candidate_sha": "A" * 40},
+        {"candidate_sha": True},
+        {"metrics": []},
+        {"readiness": []},
+        {"repeated_categories": {}},
+        {"blocking_reasons": {}},
+        {"interpretation_notice": 1},
+    ],
+)
+def test_build_rejects_noncanonical_report_types(changes: dict[str, object]) -> None:
+    with pytest.raises(ValueError, match="invalid intelligence report shape"):
+        build_intelligence_receipt({**_report(), **changes})
+
+
+def test_validation_rejects_extra_receipt_fields() -> None:
+    report = _report()
+    receipt = {**build_intelligence_receipt(report), "unexpected": True}
+    assert validate_intelligence_receipt(receipt, report) == [
+        "invalid intelligence receipt"
+    ]
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"candidate_sha": "A" * 40},
+        {"candidate_sha": True},
+        {"report_sha256": "A" * 64},
+        {"report_sha256": True},
+    ],
+)
+def test_validation_rejects_noncanonical_receipt_types(
+    changes: dict[str, object],
+) -> None:
+    report = _report()
+    receipt = {**build_intelligence_receipt(report), **changes}
+    findings = validate_intelligence_receipt(receipt, report)
+    assert "invalid intelligence receipt" in findings
+
+
+def test_validation_rejects_extra_report_fields_fail_closed() -> None:
+    report = {**_report(), "unexpected": True}
+    receipt = build_intelligence_receipt(_report())
+    assert validate_intelligence_receipt(receipt, report) == [
+        "invalid intelligence report"
+    ]
