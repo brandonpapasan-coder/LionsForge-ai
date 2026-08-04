@@ -10,6 +10,17 @@ from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_
 )
 
 
+def _batch_result() -> dict:
+    return {
+        "summary_count": 1,
+        "valid_count": 1,
+        "invalid_count": 0,
+        "finding_count": 0,
+        "results": [{"index": 0, "valid": True, "findings": []}],
+        "interpretation_notice": "batch",
+    }
+
+
 def _diagnostics() -> dict:
     return {
         "summary_count": 2,
@@ -19,6 +30,18 @@ def _diagnostics() -> dict:
         "finding_count": 2,
         "finding_frequencies": [{"finding": "x", "count": 2}],
         "interpretation_notice": "notice",
+    }
+
+
+def _api_diagnostics() -> dict:
+    return {
+        "summary_count": 1,
+        "invalid_summary_count": 0,
+        "invalid_indexes": [],
+        "distinct_finding_count": 0,
+        "finding_count": 0,
+        "finding_frequencies": [],
+        "interpretation_notice": "diagnostics",
     }
 
 
@@ -68,7 +91,11 @@ def test_diagnostics_validation_api_requires_authentication():
     app.include_router(router)
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/validate",
-        json={"summaries": [{}], "batch_result": {}, "diagnostics": {}},
+        json={
+            "summaries": [{}],
+            "batch_result": _batch_result(),
+            "diagnostics": _api_diagnostics(),
+        },
     )
     assert response.status_code in {401, 403}
 
@@ -89,7 +116,11 @@ def test_diagnostics_validation_api_forwards_exact_payload(monkeypatch):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: object()
-    payload = {"summaries": [{"a": 1}], "batch_result": {"b": 2}, "diagnostics": {"c": 3}}
+    payload = {
+        "summaries": [{"a": 1}],
+        "batch_result": _batch_result(),
+        "diagnostics": _api_diagnostics(),
+    }
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/validate",
         json=payload,
@@ -112,6 +143,10 @@ def test_diagnostics_validation_request_rejects_more_than_100_summaries():
     app.dependency_overrides[get_current_user] = lambda: object()
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/validate",
-        json={"summaries": [{}] * 101, "batch_result": {}, "diagnostics": {}},
+        json={
+            "summaries": [{}] * 101,
+            "batch_result": _batch_result(),
+            "diagnostics": _api_diagnostics(),
+        },
     )
     assert response.status_code == 422
