@@ -17,15 +17,40 @@ _NOTICE = (
 )
 
 
+def _pipeline() -> dict:
+    return {
+        "batch_result": {
+            "summary_count": 1,
+            "valid_count": 1,
+            "invalid_count": 0,
+            "finding_count": 0,
+            "results": [{"index": 0, "valid": True, "findings": []}],
+            "interpretation_notice": "bounded batch",
+        },
+        "diagnostics": {
+            "summary_count": 1,
+            "invalid_summary_count": 0,
+            "invalid_indexes": [],
+            "distinct_finding_count": 0,
+            "finding_count": 0,
+            "finding_frequencies": [],
+            "interpretation_notice": "bounded diagnostics",
+        },
+        "occurrence_projection": {
+            "summary_count": 1,
+            "finding_count": 0,
+            "distinct_finding_count": 0,
+            "occurrences": [],
+            "interpretation_notice": "bounded occurrences",
+        },
+        "interpretation_notice": "bounded pipeline",
+    }
+
+
 def _payload() -> dict:
     return {
         "summaries": [{"summary": 1}],
-        "pipeline": {
-            "batch_result": {},
-            "diagnostics": {},
-            "occurrence_projection": {},
-            "interpretation_notice": "bounded",
-        },
+        "pipeline": _pipeline(),
         "response": {
             "valid": True,
             "findings": [],
@@ -97,6 +122,20 @@ def test_batch_pipeline_validation_response_api_returns_invalid_findings(monkeyp
 def test_batch_pipeline_validation_response_request_rejects_extra_fields():
     payload = _payload()
     payload["unexpected"] = True
+    response = TestClient(_authenticated_app()).post(_PATH, json=payload)
+    assert response.status_code == 422
+
+
+def test_batch_pipeline_validation_response_request_rejects_nested_pipeline_extra_fields():
+    payload = _payload()
+    payload["pipeline"]["batch_result"]["unexpected"] = True
+    response = TestClient(_authenticated_app()).post(_PATH, json=payload)
+    assert response.status_code == 422
+
+
+def test_batch_pipeline_validation_response_request_rejects_nested_response_wrong_types():
+    payload = _payload()
+    payload["response"]["valid"] = 1
     response = TestClient(_authenticated_app()).post(_PATH, json=payload)
     assert response.status_code == 422
 
