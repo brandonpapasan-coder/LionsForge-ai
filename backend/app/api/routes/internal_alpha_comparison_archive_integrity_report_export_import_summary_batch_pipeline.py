@@ -79,8 +79,11 @@ def build_internal_alpha_intelligence_comparison_archive_integrity_report_export
     current_user: User = Depends(get_current_user),
 ) -> IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse:
     del current_user
-    return build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_pipeline(
+    pipeline = build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_pipeline(
         payload.summaries
+    )
+    return IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse.model_validate(
+        pipeline
     )
 
 
@@ -97,11 +100,11 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
         payload.summaries,
         payload.pipeline,
     )
-    return {
-        "valid": not findings,
-        "findings": findings,
-        "interpretation_notice": _VALIDATION_NOTICE,
-    }
+    return IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse(
+        valid=not findings,
+        findings=findings,
+        interpretation_notice=_VALIDATION_NOTICE,
+    )
 
 
 @router.post(
@@ -118,8 +121,8 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
         payload.pipeline,
         payload.response,
     )
-    return {
-        "valid": not findings,
-        "findings": findings,
-        "interpretation_notice": _VALIDATION_RESPONSE_NOTICE,
-    }
+    return IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse(
+        valid=not findings,
+        findings=findings,
+        interpretation_notice=_VALIDATION_RESPONSE_NOTICE,
+    )
