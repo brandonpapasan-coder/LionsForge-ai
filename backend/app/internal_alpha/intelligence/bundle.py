@@ -9,6 +9,13 @@ from typing import Any
 from .receipt import validate_intelligence_receipt
 
 _BUNDLE_SCHEMA = "lionsforge.internal-alpha-intelligence-bundle"
+_BUNDLE_KEYS = {
+    "schema",
+    "schema_version",
+    "entry_count",
+    "entries",
+    "bundle_sha256",
+}
 _MAX_ENTRIES = 100
 
 
@@ -20,6 +27,14 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_lower_hex(value: object, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(character in "0123456789abcdef" for character in value)
+    )
 
 
 def build_intelligence_bundle(entries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -58,16 +73,29 @@ def build_intelligence_bundle(entries: list[dict[str, Any]]) -> dict[str, Any]:
 def validate_intelligence_bundle(bundle: dict[str, Any]) -> list[str]:
     """Return deterministic findings for malformed, substituted, or drifted bundles."""
     findings: list[str] = []
+    if set(bundle) != _BUNDLE_KEYS:
+        findings.append("bundle fields are invalid")
     if bundle.get("schema") != _BUNDLE_SCHEMA:
         findings.append("unsupported bundle schema")
-    if bundle.get("schema_version") != 1:
+    if type(bundle.get("schema_version")) is not int or bundle.get("schema_version") != 1:
         findings.append("unsupported bundle schema version")
+
+    entry_count = bundle.get("entry_count")
+    if type(entry_count) is not int or not 1 <= entry_count <= _MAX_ENTRIES:
+        findings.append("bundle entry count is invalid")
+
     entries = bundle.get("entries")
     if not isinstance(entries, list):
         findings.append("bundle entries must be a list")
         return sorted(set(findings))
-    if bundle.get("entry_count") != len(entries):
+    if not 1 <= len(entries) <= _MAX_ENTRIES:
+        findings.append("bundle entry count is invalid")
+    if entry_count != len(entries):
         findings.append("bundle entry count mismatch")
+
+    digest = bundle.get("bundle_sha256")
+    if not _is_lower_hex(digest, 64):
+        findings.append("bundle digest is invalid")
 
     try:
         expected = build_intelligence_bundle(entries)
@@ -75,7 +103,7 @@ def validate_intelligence_bundle(bundle: dict[str, Any]) -> list[str]:
         findings.append("invalid bundle entries")
         return sorted(set(findings))
 
-    if bundle.get("bundle_sha256") != expected["bundle_sha256"]:
+    if digest != expected["bundle_sha256"]:
         findings.append("bundle digest mismatch")
     if entries != expected["entries"]:
         findings.append("bundle entries are not canonically ordered")
