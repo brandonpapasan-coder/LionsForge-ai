@@ -24,6 +24,17 @@ def _batch_result() -> dict:
     }
 
 
+def _api_batch_result() -> dict:
+    return {
+        "summary_count": 1,
+        "valid_count": 1,
+        "invalid_count": 0,
+        "finding_count": 0,
+        "results": [{"index": 0, "valid": True, "findings": []}],
+        "interpretation_notice": "batch",
+    }
+
+
 def test_batch_diagnostics_are_stable_and_sorted(monkeypatch):
     monkeypatch.setattr(
         "app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostics.validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_result",
@@ -59,7 +70,7 @@ def test_batch_diagnostics_api_requires_authentication():
     app.include_router(router)
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics",
-        json={"summaries": [{}], "batch_result": {}},
+        json={"summaries": [{}], "batch_result": _api_batch_result()},
     )
     assert response.status_code in {401, 403}
 
@@ -79,7 +90,7 @@ def test_batch_diagnostics_api_forwards_exact_payload(monkeypatch):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: object()
-    payload = {"summaries": [{"a": 1}], "batch_result": {"b": 2}}
+    payload = {"summaries": [{"a": 1}], "batch_result": _api_batch_result()}
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics",
         json=payload,
@@ -99,7 +110,7 @@ def test_batch_diagnostics_api_maps_invalid_result_to_422(monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: object()
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics",
-        json={"summaries": [{}], "batch_result": {}},
+        json={"summaries": [{}], "batch_result": _api_batch_result()},
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "invalid batch"
@@ -118,6 +129,6 @@ def test_batch_diagnostics_request_rejects_more_than_100_summaries():
     app.dependency_overrides[get_current_user] = lambda: object()
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics",
-        json={"summaries": [{}] * 101, "batch_result": {}},
+        json={"summaries": [{}] * 101, "batch_result": _api_batch_result()},
     )
     assert response.status_code == 422

@@ -39,6 +39,37 @@ def _diagnostics() -> dict:
     }
 
 
+def _api_batch_result() -> dict:
+    return {
+        "summary_count": 1,
+        "valid_count": 1,
+        "invalid_count": 0,
+        "finding_count": 0,
+        "results": [{"index": 0, "valid": True, "findings": []}],
+        "interpretation_notice": "batch",
+    }
+
+
+def _api_diagnostics() -> dict:
+    return {
+        "summary_count": 1,
+        "invalid_summary_count": 0,
+        "invalid_indexes": [],
+        "distinct_finding_count": 0,
+        "finding_count": 0,
+        "finding_frequencies": [],
+        "interpretation_notice": "diagnostics",
+    }
+
+
+def _api_payload() -> dict:
+    return {
+        "summaries": [{"a": 1}],
+        "batch_result": _api_batch_result(),
+        "diagnostics": _api_diagnostics(),
+    }
+
+
 def test_batch_diagnostic_occurrences_are_stable_and_located(monkeypatch):
     monkeypatch.setattr(
         "app.internal_alpha.intelligence.comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences.validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostics",
@@ -83,7 +114,7 @@ def test_batch_diagnostic_occurrences_api_requires_authentication():
     app.include_router(router)
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences",
-        json={"summaries": [{}], "batch_result": {}, "diagnostics": {}},
+        json=_api_payload(),
     )
     assert response.status_code in {401, 403}
 
@@ -104,11 +135,7 @@ def test_batch_diagnostic_occurrences_api_forwards_exact_payload(monkeypatch):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: object()
-    payload = {
-        "summaries": [{"a": 1}],
-        "batch_result": {"b": 2},
-        "diagnostics": {"c": 3},
-    }
+    payload = _api_payload()
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences",
         json=payload,
@@ -130,7 +157,7 @@ def test_batch_diagnostic_occurrences_api_maps_invalid_input_to_422(monkeypatch)
     app.dependency_overrides[get_current_user] = lambda: object()
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences",
-        json={"summaries": [{}], "batch_result": {}, "diagnostics": {}},
+        json=_api_payload(),
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "invalid diagnostics"
@@ -147,8 +174,10 @@ def test_batch_diagnostic_occurrences_request_rejects_more_than_100_summaries():
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: object()
+    payload = _api_payload()
+    payload["summaries"] = [{}] * 101
     response = TestClient(app).post(
         "/comparison/archive/integrity-report/export-bundle/import-summary/batch-diagnostics/occurrences",
-        json={"summaries": [{}] * 101, "batch_result": {}, "diagnostics": {}},
+        json=payload,
     )
     assert response.status_code == 422

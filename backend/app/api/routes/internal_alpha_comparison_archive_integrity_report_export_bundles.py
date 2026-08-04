@@ -4,6 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import get_current_user
+from app.api.routes.internal_alpha_comparison_archive_integrity_report_export_import_summary_batch_pipeline import (
+    IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics,
+    IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection,
+    IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse,
+    IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult,
+)
 from app.internal_alpha.intelligence.comparison_archive_integrity_report_export_bundle import (
     build_intelligence_comparison_archive_integrity_report_export_bundle,
     serialize_intelligence_comparison_archive_integrity_report_export_bundle,
@@ -69,31 +75,31 @@ class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchValida
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResultValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-    batch_result: dict[str, Any]
+    batch_result: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult
 
 
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticsValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-    batch_result: dict[str, Any]
-    diagnostics: dict[str, Any]
+    batch_result: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult
+    diagnostics: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics
 
 
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrencesValidationInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-    batch_result: dict[str, Any]
-    diagnostics: dict[str, Any]
-    occurrence_projection: dict[str, Any]
+    batch_result: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult
+    diagnostics: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics
+    occurrence_projection: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection
 
 
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrencesValidationResponseInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     summaries: list[dict[str, Any]] = Field(min_length=1, max_length=100)
-    batch_result: dict[str, Any]
-    diagnostics: dict[str, Any]
-    occurrence_projection: dict[str, Any]
-    validation_response: dict[str, Any]
+    batch_result: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult
+    diagnostics: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics
+    occurrence_projection: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection
+    validation_response: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse
 
 
 @router.post("/comparison/archive/integrity-report/export-bundle")
@@ -165,7 +171,7 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
 ) -> dict[str, Any]:
     del current_user
     findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_result(
-        payload.summaries, payload.batch_result
+        payload.summaries, payload.batch_result.model_dump(mode="python")
     )
     return {"valid": not findings, "findings": findings, "interpretation_notice": "Batch-result validity proves deterministic recomputation of bounded transport-integrity findings only. It does not authorize any release transition."}
 
@@ -178,7 +184,7 @@ def build_internal_alpha_intelligence_comparison_archive_integrity_report_export
     del current_user
     try:
         return build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostics(
-            payload.summaries, payload.batch_result
+            payload.summaries, payload.batch_result.model_dump(mode="python")
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -191,7 +197,9 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
 ) -> dict[str, Any]:
     del current_user
     findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostics(
-        payload.summaries, payload.batch_result, payload.diagnostics
+        payload.summaries,
+        payload.batch_result.model_dump(mode="python"),
+        payload.diagnostics.model_dump(mode="python"),
     )
     return {"valid": not findings, "findings": findings, "interpretation_notice": "Diagnostics validity proves deterministic recomputation of bounded transport-integrity diagnostics only. It does not authorize any release transition."}
 
@@ -204,7 +212,9 @@ def build_internal_alpha_intelligence_comparison_archive_integrity_report_export
     del current_user
     try:
         return build_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences(
-            payload.summaries, payload.batch_result, payload.diagnostics
+            payload.summaries,
+            payload.batch_result.model_dump(mode="python"),
+            payload.diagnostics.model_dump(mode="python"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -218,9 +228,9 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     del current_user
     findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences(
         payload.summaries,
-        payload.batch_result,
-        payload.diagnostics,
-        payload.occurrence_projection,
+        payload.batch_result.model_dump(mode="python"),
+        payload.diagnostics.model_dump(mode="python"),
+        payload.occurrence_projection.model_dump(mode="python"),
     )
     return {
         "valid": not findings,
@@ -241,10 +251,10 @@ def validate_internal_alpha_intelligence_comparison_archive_integrity_report_exp
     del current_user
     findings = validate_intelligence_comparison_archive_integrity_report_export_import_summary_batch_diagnostic_occurrences_validation_response(
         payload.summaries,
-        payload.batch_result,
-        payload.diagnostics,
-        payload.occurrence_projection,
-        payload.validation_response,
+        payload.batch_result.model_dump(mode="python"),
+        payload.diagnostics.model_dump(mode="python"),
+        payload.occurrence_projection.model_dump(mode="python"),
+        payload.validation_response.model_dump(mode="python"),
     )
     return {
         "valid": not findings,

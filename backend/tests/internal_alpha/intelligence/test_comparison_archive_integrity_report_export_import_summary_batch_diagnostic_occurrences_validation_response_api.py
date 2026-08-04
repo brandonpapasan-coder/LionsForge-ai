@@ -14,9 +14,30 @@ _PATH = (
 def _payload() -> dict:
     return {
         "summaries": [{"summary": 1}],
-        "batch_result": {"batch": 2},
-        "diagnostics": {"diagnostics": 3},
-        "occurrence_projection": {"occurrences": 4},
+        "batch_result": {
+            "summary_count": 1,
+            "valid_count": 1,
+            "invalid_count": 0,
+            "finding_count": 0,
+            "results": [{"index": 0, "valid": True, "findings": []}],
+            "interpretation_notice": "batch",
+        },
+        "diagnostics": {
+            "summary_count": 1,
+            "invalid_summary_count": 0,
+            "invalid_indexes": [],
+            "distinct_finding_count": 0,
+            "finding_count": 0,
+            "finding_frequencies": [],
+            "interpretation_notice": "diagnostics",
+        },
+        "occurrence_projection": {
+            "summary_count": 1,
+            "finding_count": 0,
+            "distinct_finding_count": 0,
+            "occurrences": [],
+            "interpretation_notice": "occurrences",
+        },
         "validation_response": {
             "valid": True,
             "findings": [],
