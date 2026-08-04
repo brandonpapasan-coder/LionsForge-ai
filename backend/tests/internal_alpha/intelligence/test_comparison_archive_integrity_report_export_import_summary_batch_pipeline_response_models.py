@@ -14,10 +14,10 @@ _BASE_PATH = (
     "/api/v1/internal-alpha/intelligence/comparison/archive/integrity-report/"
     "export-bundle/import-summary/batch-pipeline"
 )
-_PIPELINE_SCHEMA = (
-    "#/components/schemas/"
+_PIPELINE_SCHEMA_NAME = (
     "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse"
 )
+_PIPELINE_OUTPUT_SCHEMA = f"#/components/schemas/{_PIPELINE_SCHEMA_NAME}-Output"
 _VERIFICATION_SCHEMA = (
     "#/components/schemas/"
     "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineVerificationResponse"
@@ -77,7 +77,7 @@ def test_pipeline_routes_publish_explicit_response_schemas() -> None:
 
     assert paths[_BASE_PATH]["post"]["responses"]["200"]["content"][
         "application/json"
-    ]["schema"]["$ref"] == _PIPELINE_SCHEMA
+    ]["schema"]["$ref"] == _PIPELINE_OUTPUT_SCHEMA
     for suffix in ("/validate", "/validate-response"):
         assert paths[_BASE_PATH + suffix]["post"]["responses"]["200"]["content"][
             "application/json"
@@ -86,9 +86,7 @@ def test_pipeline_routes_publish_explicit_response_schemas() -> None:
 
 def test_pipeline_openapi_publishes_nested_artifact_models() -> None:
     schemas = app.openapi()["components"]["schemas"]
-    pipeline = schemas[
-        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse"
-    ]
+    pipeline = schemas[f"{_PIPELINE_SCHEMA_NAME}-Output"]
 
     assert pipeline["properties"]["batch_result"]["$ref"].endswith(
         "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult"
