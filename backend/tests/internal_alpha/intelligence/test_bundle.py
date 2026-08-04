@@ -71,3 +71,51 @@ def test_rejects_unbounded_or_malformed_entries() -> None:
         build_intelligence_bundle([])
     with pytest.raises(ValueError, match="only report and receipt"):
         build_intelligence_bundle([{"report": {}, "receipt": {}, "extra": {}}])
+
+
+def test_validation_rejects_extra_fields_and_coercive_scalars() -> None:
+    bundle = build_intelligence_bundle([_entry("a" * 40)])
+
+    extra = {**bundle, "unexpected": "private-free-form-data"}
+    assert validate_intelligence_bundle(extra) == ["bundle fields are invalid"]
+
+    boolean_version = {**bundle, "schema_version": True}
+    assert "unsupported bundle schema version" in validate_intelligence_bundle(
+        boolean_version
+    )
+
+    boolean_count = {**bundle, "entry_count": True}
+    findings = validate_intelligence_bundle(boolean_count)
+    assert "bundle entry count is invalid" in findings
+    assert "bundle entry count mismatch" not in findings
+
+
+def test_validation_rejects_noncanonical_digest_values() -> None:
+    bundle = build_intelligence_bundle([_entry("a" * 40)])
+
+    uppercase = {**bundle, "bundle_sha256": bundle["bundle_sha256"].upper()}
+    findings = validate_intelligence_bundle(uppercase)
+    assert "bundle digest is invalid" in findings
+    assert "bundle digest mismatch" in findings
+
+    non_hex = {**bundle, "bundle_sha256": "g" * 64}
+    findings = validate_intelligence_bundle(non_hex)
+    assert "bundle digest is invalid" in findings
+    assert "bundle digest mismatch" in findings
+
+    boolean_digest = {**bundle, "bundle_sha256": True}
+    findings = validate_intelligence_bundle(boolean_digest)
+    assert "bundle digest is invalid" in findings
+    assert "bundle digest mismatch" in findings
+
+
+def test_validation_rejects_invalid_entry_collection_bounds() -> None:
+    bundle = build_intelligence_bundle([_entry("a" * 40)])
+
+    empty = {**bundle, "entry_count": 0, "entries": []}
+    findings = validate_intelligence_bundle(empty)
+    assert "bundle entry count is invalid" in findings
+    assert "invalid bundle entries" in findings
+
+    not_a_list = {**bundle, "entries": {}}
+    assert "bundle entries must be a list" in validate_intelligence_bundle(not_a_list)
