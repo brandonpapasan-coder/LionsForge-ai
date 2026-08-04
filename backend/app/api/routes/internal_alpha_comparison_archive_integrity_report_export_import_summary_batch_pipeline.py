@@ -51,13 +51,82 @@ class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipeli
     response: dict[str, Any]
 
 
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResultItem(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    index: int = Field(ge=0)
+    valid: bool
+    findings: list[str]
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summary_count: int = Field(ge=0)
+    valid_count: int = Field(ge=0)
+    invalid_count: int = Field(ge=0)
+    finding_count: int = Field(ge=0)
+    results: list[
+        IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResultItem
+    ]
+    interpretation_notice: str
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticFrequency(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    finding: str
+    count: int = Field(ge=0)
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summary_count: int = Field(ge=0)
+    invalid_summary_count: int = Field(ge=0)
+    invalid_indexes: list[int]
+    distinct_finding_count: int = Field(ge=0)
+    finding_count: int = Field(ge=0)
+    finding_frequencies: list[
+        IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticFrequency
+    ]
+    interpretation_notice: str
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrence(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    finding: str
+    occurrence_count: int = Field(ge=0)
+    affected_summary_count: int = Field(ge=0)
+    summary_indexes: list[int]
+
+
+class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection(
+    BaseModel
+):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    summary_count: int = Field(ge=0)
+    finding_count: int = Field(ge=0)
+    distinct_finding_count: int = Field(ge=0)
+    occurrences: list[
+        IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnosticOccurrence
+    ]
+    interpretation_notice: str
+
+
 class IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchPipelineResponse(
     BaseModel
 ):
     model_config = ConfigDict(extra="forbid", strict=True)
-    batch_result: dict[str, Any]
-    diagnostics: dict[str, Any]
-    occurrence_projection: dict[str, Any]
+    batch_result: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult
+    diagnostics: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics
+    occurrence_projection: IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection
     interpretation_notice: str
 
 
