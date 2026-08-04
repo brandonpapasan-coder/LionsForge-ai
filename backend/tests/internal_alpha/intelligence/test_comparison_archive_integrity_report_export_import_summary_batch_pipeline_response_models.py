@@ -89,13 +89,13 @@ def test_pipeline_openapi_publishes_nested_artifact_models() -> None:
     pipeline = schemas[f"{_PIPELINE_SCHEMA_NAME}-Output"]
 
     assert pipeline["properties"]["batch_result"]["$ref"].endswith(
-        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult-Output"
+        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchResult"
     )
     assert pipeline["properties"]["diagnostics"]["$ref"].endswith(
-        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics-Output"
+        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchDiagnostics"
     )
     assert pipeline["properties"]["occurrence_projection"]["$ref"].endswith(
-        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection-Output"
+        "IntelligenceComparisonArchiveIntegrityReportExportImportSummaryBatchOccurrenceProjection"
     )
 
 
