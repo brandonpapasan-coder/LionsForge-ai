@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest import (
@@ -36,6 +37,11 @@ _BODY_FIELDS = (
     "interpretation_notice",
 )
 _DIGEST_FINDING = "verification receipt manifest verification receipt digest mismatch"
+_CANONICAL_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _is_canonical_sha256(value: object) -> bool:
+    return isinstance(value, str) and _CANONICAL_SHA256.fullmatch(value) is not None
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -102,16 +108,30 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
 
     if receipt.get("schema") != _RECEIPT_SCHEMA:
         findings.append("verification receipt manifest verification receipt schema mismatch")
-    if receipt.get("schema_version") != 1:
+
+    schema_version = receipt.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
         findings.append(
             "verification receipt manifest verification receipt schema version mismatch"
         )
-    for field in (
-        "verification_receipt_manifest_sha256",
-        "entry_count",
-        "verification_state",
-        "interpretation_notice",
-    ):
+
+    submitted_manifest_digest = receipt.get("verification_receipt_manifest_sha256")
+    if not _is_canonical_sha256(submitted_manifest_digest):
+        findings.append(
+            "verification receipt manifest verification receipt verification_receipt_manifest_sha256 invalid"
+        )
+    elif submitted_manifest_digest != expected_body["verification_receipt_manifest_sha256"]:
+        findings.append(
+            "verification receipt manifest verification receipt verification_receipt_manifest_sha256 mismatch"
+        )
+
+    entry_count = receipt.get("entry_count")
+    if type(entry_count) is not int or entry_count < 0:
+        findings.append("verification receipt manifest verification receipt entry_count invalid")
+    elif entry_count != expected_body["entry_count"]:
+        findings.append("verification receipt manifest verification receipt entry_count mismatch")
+
+    for field in ("verification_state", "interpretation_notice"):
         if receipt.get(field) != expected_body[field]:
             findings.append(
                 f"verification receipt manifest verification receipt {field} mismatch"
@@ -128,8 +148,8 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
         findings.append("verification receipt manifest verification receipt payload invalid")
         return findings
 
-    if stored_digest != submitted_digest:
-        findings.append(_DIGEST_FINDING)
-    if stored_digest != expected_digest and _DIGEST_FINDING not in findings:
+    if not _is_canonical_sha256(stored_digest):
+        findings.append("verification receipt manifest verification receipt digest invalid")
+    elif stored_digest != submitted_digest or stored_digest != expected_digest:
         findings.append(_DIGEST_FINDING)
     return findings
