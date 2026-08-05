@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import string
 from typing import Any
 
 from .comparison_archive import validate_intelligence_comparison_archive
@@ -31,6 +32,15 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in string.hexdigits for character in value)
+        and value == value.lower()
+    )
 
 
 def _receipt_body(archive: dict[str, Any]) -> dict[str, Any]:
@@ -78,8 +88,19 @@ def validate_intelligence_comparison_archive_receipt(
 
     if receipt.get("schema") != _RECEIPT_SCHEMA:
         findings.append("comparison archive receipt schema mismatch")
-    if receipt.get("schema_version") != 1:
+
+    schema_version = receipt.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
         findings.append("comparison archive receipt schema version mismatch")
+
+    archive_digest = receipt.get("archive_sha256")
+    if not _is_canonical_sha256(archive_digest):
+        findings.append("comparison archive receipt archive_sha256 invalid")
+
+    receipt_digest = receipt.get("receipt_sha256")
+    if not _is_canonical_sha256(receipt_digest):
+        findings.append("comparison archive receipt digest invalid")
+
     for field in (
         "archive_sha256",
         "verification_state",
@@ -89,6 +110,6 @@ def validate_intelligence_comparison_archive_receipt(
             findings.append(f"comparison archive receipt {field} mismatch")
 
     expected_digest = hashlib.sha256(_canonical_bytes(expected_body)).hexdigest()
-    if receipt.get("receipt_sha256") != expected_digest:
+    if receipt_digest != expected_digest:
         findings.append("comparison archive receipt digest mismatch")
     return findings
