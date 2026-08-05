@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt import (
@@ -29,6 +30,7 @@ _NOTICE = (
     "infer causality or authorize any release transition."
 )
 _MAX_ENTRIES = 100
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -39,6 +41,10 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _SHA256_PATTERN.fullmatch(value) is not None
 
 
 def _validated_entry(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -55,7 +61,7 @@ def _validated_entry(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if findings:
         raise ValueError("invalid verification receipt manifest entry: " + "; ".join(findings))
     digest = receipt.get("manifest_verification_receipt_sha256")
-    if not isinstance(digest, str) or len(digest) != 64:
+    if not _is_canonical_sha256(digest):
         raise ValueError("verification receipt manifest entry digest invalid")
     return digest, {"receipt": receipt, "manifest": manifest}
 
@@ -105,7 +111,7 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
         findings.append("verification receipt manifest keys invalid")
     if manifest.get("schema") != _MANIFEST_SCHEMA:
         findings.append("verification receipt manifest schema mismatch")
-    if manifest.get("schema_version") != 1:
+    if type(manifest.get("schema_version")) is not int or manifest.get("schema_version") != 1:
         findings.append("verification receipt manifest schema version mismatch")
     if manifest.get("verification_state") != "VERIFIED":
         findings.append("verification receipt manifest verification state mismatch")
@@ -116,7 +122,7 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
     if not isinstance(entries, list) or not 1 <= len(entries) <= _MAX_ENTRIES:
         findings.append("verification receipt manifest entries invalid")
         return findings
-    if manifest.get("entry_count") != len(entries):
+    if type(manifest.get("entry_count")) is not int or manifest.get("entry_count") != len(entries):
         findings.append("verification receipt manifest entry count mismatch")
 
     validated: list[tuple[str, dict[str, Any]]] = []
@@ -139,6 +145,10 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
     except (TypeError, ValueError):
         findings.append("verification receipt manifest payload invalid")
         return findings
-    if manifest.get("verification_receipt_manifest_sha256") != expected_digest:
+
+    stored_digest = manifest.get("verification_receipt_manifest_sha256")
+    if not _is_canonical_sha256(stored_digest):
+        findings.append("verification receipt manifest digest invalid")
+    elif stored_digest != expected_digest:
         findings.append("verification receipt manifest digest mismatch")
     return findings
