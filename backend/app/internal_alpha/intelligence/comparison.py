@@ -4,11 +4,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .bundle import validate_intelligence_bundle
 
 _COMPARISON_SCHEMA = "lionsforge.internal-alpha-intelligence-comparison"
+_COMPARISON_FIELDS = {
+    "schema",
+    "schema_version",
+    "baseline_bundle_sha256",
+    "candidate_bundle_sha256",
+    "added_candidates",
+    "removed_candidates",
+    "changed_candidates",
+    "unchanged_candidate_count",
+    "interpretation_notice",
+    "comparison_sha256",
+}
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_CANDIDATE_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -19,6 +34,22 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and _SHA256_PATTERN.fullmatch(value) is not None
+
+
+def _is_candidate_list(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and all(
+            isinstance(candidate, str)
+            and _CANDIDATE_PATTERN.fullmatch(candidate) is not None
+            for candidate in value
+        )
+        and value == sorted(set(value))
+    )
 
 
 def compare_intelligence_bundles(
@@ -71,10 +102,34 @@ def validate_intelligence_comparison(
 ) -> list[str]:
     """Return deterministic findings for drifted or substituted comparisons."""
     findings: list[str] = []
+    if set(comparison) != _COMPARISON_FIELDS:
+        findings.append("comparison fields mismatch")
     if comparison.get("schema") != _COMPARISON_SCHEMA:
         findings.append("unsupported comparison schema")
-    if comparison.get("schema_version") != 1:
+    schema_version = comparison.get("schema_version")
+    if isinstance(schema_version, bool) or schema_version != 1:
         findings.append("unsupported comparison schema version")
+    if not _is_sha256(comparison.get("baseline_bundle_sha256")):
+        findings.append("invalid baseline bundle digest")
+    if not _is_sha256(comparison.get("candidate_bundle_sha256")):
+        findings.append("invalid candidate bundle digest")
+    if not _is_sha256(comparison.get("comparison_sha256")):
+        findings.append("invalid comparison digest")
+    if not _is_candidate_list(comparison.get("added_candidates")):
+        findings.append("invalid added candidate list")
+    if not _is_candidate_list(comparison.get("removed_candidates")):
+        findings.append("invalid removed candidate list")
+    if not _is_candidate_list(comparison.get("changed_candidates")):
+        findings.append("invalid changed candidate list")
+    unchanged_count = comparison.get("unchanged_candidate_count")
+    if (
+        isinstance(unchanged_count, bool)
+        or not isinstance(unchanged_count, int)
+        or unchanged_count < 0
+    ):
+        findings.append("invalid unchanged candidate count")
+    if not isinstance(comparison.get("interpretation_notice"), str):
+        findings.append("invalid comparison interpretation notice")
 
     try:
         expected = compare_intelligence_bundles(baseline, candidate)
