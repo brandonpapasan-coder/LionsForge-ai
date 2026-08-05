@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle import (
@@ -28,6 +29,7 @@ _NOTICE = (
     "This receipt proves deterministic archive receipt manifest bundle verification only and "
     "does not infer causality or authorize any release transition."
 )
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -38,6 +40,10 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _SHA256_PATTERN.fullmatch(value) is not None
 
 
 def _receipt_body(bundle: dict[str, Any]) -> dict[str, Any]:
@@ -88,20 +94,26 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt(
 
     if receipt.get("schema") != _RECEIPT_SCHEMA:
         findings.append("comparison archive receipt manifest bundle receipt schema mismatch")
-    if receipt.get("schema_version") != 1:
+    if type(receipt.get("schema_version")) is not int or receipt.get("schema_version") != 1:
         findings.append("comparison archive receipt manifest bundle receipt schema version mismatch")
-    for field in (
-        "bundle_sha256",
-        "manifest_sha256",
-        "receipt_sha256",
-        "entry_count",
-        "verification_state",
-        "interpretation_notice",
-    ):
+    if type(receipt.get("entry_count")) is not int or receipt.get("entry_count") != expected_body["entry_count"]:
+        findings.append("comparison archive receipt manifest bundle receipt entry_count mismatch")
+
+    for field in ("bundle_sha256", "manifest_sha256", "receipt_sha256"):
+        value = receipt.get(field)
+        if not _is_canonical_sha256(value):
+            findings.append(f"comparison archive receipt manifest bundle receipt {field} invalid")
+        elif value != expected_body[field]:
+            findings.append(f"comparison archive receipt manifest bundle receipt {field} mismatch")
+
+    for field in ("verification_state", "interpretation_notice"):
         if receipt.get(field) != expected_body[field]:
             findings.append(f"comparison archive receipt manifest bundle receipt {field} mismatch")
 
     expected_digest = hashlib.sha256(_canonical_bytes(expected_body)).hexdigest()
-    if receipt.get("bundle_receipt_sha256") != expected_digest:
+    digest = receipt.get("bundle_receipt_sha256")
+    if not _is_canonical_sha256(digest):
+        findings.append("comparison archive receipt manifest bundle receipt digest invalid")
+    elif digest != expected_digest:
         findings.append("comparison archive receipt manifest bundle receipt digest mismatch")
     return findings
