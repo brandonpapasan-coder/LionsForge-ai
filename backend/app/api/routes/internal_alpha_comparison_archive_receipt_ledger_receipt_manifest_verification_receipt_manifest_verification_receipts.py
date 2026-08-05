@@ -35,9 +35,14 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
 
 
 def _bounded_findings(findings: list[str]) -> list[str]:
-    bounded = [finding[:_MAX_FINDING_LENGTH] for finding in findings[:_MAX_FINDINGS]]
-    if len(findings) > _MAX_FINDINGS:
-        bounded.append(_TRUNCATED_FINDINGS_NOTICE)
+    if len(findings) <= _MAX_FINDINGS:
+        return [finding[:_MAX_FINDING_LENGTH] for finding in findings]
+
+    bounded = [
+        finding[:_MAX_FINDING_LENGTH]
+        for finding in findings[: _MAX_FINDINGS - 1]
+    ]
+    bounded.append(_TRUNCATED_FINDINGS_NOTICE)
     return bounded
 
 
