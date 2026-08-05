@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest import (
@@ -35,7 +36,9 @@ _BODY_FIELDS = (
     "verification_state",
     "interpretation_notice",
 )
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _DIGEST_FINDING = "ledger receipt manifest verification receipt digest mismatch"
+_DIGEST_INVALID_FINDING = "ledger receipt manifest verification receipt digest invalid"
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -46,6 +49,10 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _SHA256_PATTERN.fullmatch(value) is not None
 
 
 def _receipt_body(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -100,14 +107,22 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
 
     if receipt.get("schema") != _RECEIPT_SCHEMA:
         findings.append("ledger receipt manifest verification receipt schema mismatch")
-    if receipt.get("schema_version") != 1:
+    if type(receipt.get("schema_version")) is not int or receipt.get("schema_version") != 1:
         findings.append("ledger receipt manifest verification receipt schema version mismatch")
-    for field in (
-        "manifest_sha256",
-        "entry_count",
-        "verification_state",
-        "interpretation_notice",
-    ):
+
+    submitted_manifest_sha256 = receipt.get("manifest_sha256")
+    if not _is_canonical_sha256(submitted_manifest_sha256):
+        findings.append("ledger receipt manifest verification receipt manifest_sha256 invalid")
+    elif submitted_manifest_sha256 != expected_body["manifest_sha256"]:
+        findings.append("ledger receipt manifest verification receipt manifest_sha256 mismatch")
+
+    submitted_entry_count = receipt.get("entry_count")
+    if type(submitted_entry_count) is not int:
+        findings.append("ledger receipt manifest verification receipt entry_count invalid")
+    elif submitted_entry_count != expected_body["entry_count"]:
+        findings.append("ledger receipt manifest verification receipt entry_count mismatch")
+
+    for field in ("verification_state", "interpretation_notice"):
         if receipt.get(field) != expected_body[field]:
             findings.append(
                 f"ledger receipt manifest verification receipt {field} mismatch"
@@ -115,6 +130,10 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
 
     submitted_body = {field: receipt.get(field) for field in _BODY_FIELDS}
     stored_digest = receipt.get("manifest_verification_receipt_sha256")
+    if not _is_canonical_sha256(stored_digest):
+        findings.append(_DIGEST_INVALID_FINDING)
+        return findings
+
     try:
         submitted_digest = hashlib.sha256(_canonical_bytes(submitted_body)).hexdigest()
         expected_digest = hashlib.sha256(_canonical_bytes(expected_body)).hexdigest()
@@ -122,8 +141,6 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
         findings.append("ledger receipt manifest verification receipt payload invalid")
         return findings
 
-    if stored_digest != submitted_digest:
-        findings.append(_DIGEST_FINDING)
-    if stored_digest != expected_digest and _DIGEST_FINDING not in findings:
+    if stored_digest != submitted_digest or stored_digest != expected_digest:
         findings.append(_DIGEST_FINDING)
     return findings
