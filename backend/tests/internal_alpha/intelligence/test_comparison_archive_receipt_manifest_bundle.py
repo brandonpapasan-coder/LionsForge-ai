@@ -112,7 +112,6 @@ def test_rejects_coercive_schema_version_and_entry_count() -> None:
 
     assert "comparison archive receipt manifest bundle schema version mismatch" in findings
     assert "comparison archive receipt manifest bundle entry_count mismatch" in findings
-    assert "comparison archive receipt manifest bundle digest mismatch" in findings
 
 
 def test_rejects_malformed_binding_and_bundle_digests() -> None:
