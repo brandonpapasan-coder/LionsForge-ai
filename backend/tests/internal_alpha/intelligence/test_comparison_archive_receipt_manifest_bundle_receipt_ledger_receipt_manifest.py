@@ -159,3 +159,55 @@ def test_validator_fails_closed_on_malformed_payload(monkeypatch) -> None:
     assert "ledger receipt manifest verification state mismatch" in findings
     assert "ledger receipt manifest interpretation notice mismatch" in findings
     assert "ledger receipt manifest entries invalid" in findings
+
+
+def test_validator_rejects_coercive_schema_and_entry_count(monkeypatch) -> None:
+    monkeypatch.setattr(
+        manifest_module,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt",
+        _accept_valid_pair,
+    )
+    manifest = manifest_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest(
+        [_pair("1" * 64)]
+    )
+    manifest["schema_version"] = True
+    manifest["entry_count"] = True
+
+    findings = manifest_module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest(
+        manifest
+    )
+
+    assert "ledger receipt manifest schema version mismatch" in findings
+    assert "ledger receipt manifest entry count invalid" in findings
+
+
+def test_manifest_rejects_noncanonical_receipt_digest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        manifest_module,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt",
+        _accept_valid_pair,
+    )
+
+    with pytest.raises(ValueError, match="entry digest invalid"):
+        manifest_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest(
+            [_pair("A" * 64)]
+        )
+
+
+def test_validator_distinguishes_malformed_manifest_digest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        manifest_module,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt",
+        _accept_valid_pair,
+    )
+    manifest = manifest_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest(
+        [_pair("1" * 64)]
+    )
+    manifest["manifest_sha256"] = "A" * 64
+
+    findings = manifest_module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest(
+        manifest
+    )
+
+    assert "ledger receipt manifest digest invalid" in findings
+    assert "ledger receipt manifest digest mismatch" not in findings
