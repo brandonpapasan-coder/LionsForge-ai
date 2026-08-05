@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt import (
@@ -29,6 +30,7 @@ _NOTICE = (
     "causality or authorize any release transition."
 )
 _MAX_ENTRIES = 100
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -39,6 +41,10 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: object) -> bool:
+    return isinstance(value, str) and _SHA256_PATTERN.fullmatch(value) is not None
 
 
 def _validated_entry(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -57,7 +63,7 @@ def _validated_entry(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if findings:
         raise ValueError("invalid ledger receipt manifest entry: " + "; ".join(findings))
     digest = receipt.get("ledger_receipt_sha256")
-    if not isinstance(digest, str) or len(digest) != 64:
+    if not _is_canonical_sha256(digest):
         raise ValueError("ledger receipt manifest entry digest invalid")
     return digest, {"receipt": receipt, "ledger": ledger}
 
@@ -105,7 +111,8 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
         findings.append("ledger receipt manifest keys invalid")
     if manifest.get("schema") != _MANIFEST_SCHEMA:
         findings.append("ledger receipt manifest schema mismatch")
-    if manifest.get("schema_version") != 1:
+    schema_version = manifest.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
         findings.append("ledger receipt manifest schema version mismatch")
     if manifest.get("verification_state") != "VERIFIED":
         findings.append("ledger receipt manifest verification state mismatch")
@@ -116,7 +123,10 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
     if not isinstance(entries, list) or not 1 <= len(entries) <= _MAX_ENTRIES:
         findings.append("ledger receipt manifest entries invalid")
         return findings
-    if manifest.get("entry_count") != len(entries):
+    entry_count = manifest.get("entry_count")
+    if type(entry_count) is not int:
+        findings.append("ledger receipt manifest entry count invalid")
+    elif entry_count != len(entries):
         findings.append("ledger receipt manifest entry count mismatch")
 
     validated: list[tuple[str, dict[str, Any]]] = []
@@ -139,6 +149,9 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
     except (TypeError, ValueError):
         findings.append("ledger receipt manifest payload invalid")
         return findings
-    if manifest.get("manifest_sha256") != expected_digest:
+    manifest_digest = manifest.get("manifest_sha256")
+    if not _is_canonical_sha256(manifest_digest):
+        findings.append("ledger receipt manifest digest invalid")
+    elif manifest_digest != expected_digest:
         findings.append("ledger receipt manifest digest mismatch")
     return findings
