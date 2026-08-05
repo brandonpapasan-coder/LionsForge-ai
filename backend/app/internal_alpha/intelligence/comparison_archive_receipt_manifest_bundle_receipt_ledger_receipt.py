@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle_receipt_ledger import (
@@ -27,6 +28,7 @@ _NOTICE = (
     "This receipt proves deterministic archive bundle-receipt ledger verification only and "
     "does not infer causality or authorize any release transition."
 )
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -37,6 +39,10 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _SHA256_PATTERN.fullmatch(value) is not None
 
 
 def _receipt_body(ledger: dict[str, Any]) -> dict[str, Any]:
@@ -89,18 +95,35 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
 
     if receipt.get("schema") != _RECEIPT_SCHEMA:
         findings.append("comparison archive bundle receipt ledger receipt schema mismatch")
-    if receipt.get("schema_version") != 1:
+    schema_version = receipt.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
         findings.append("comparison archive bundle receipt ledger receipt schema version mismatch")
-    for field in (
-        "ledger_sha256",
-        "entry_count",
-        "verification_state",
-        "interpretation_notice",
-    ):
+
+    ledger_digest = receipt.get("ledger_sha256")
+    if not _is_canonical_sha256(ledger_digest):
+        findings.append("comparison archive bundle receipt ledger receipt ledger_sha256 invalid")
+    elif ledger_digest != expected_body["ledger_sha256"]:
+        findings.append("comparison archive bundle receipt ledger receipt ledger_sha256 mismatch")
+
+    entry_count = receipt.get("entry_count")
+    if type(entry_count) is not int or entry_count < 1:
+        findings.append("comparison archive bundle receipt ledger receipt entry_count invalid")
+    elif entry_count != expected_body["entry_count"]:
+        findings.append("comparison archive bundle receipt ledger receipt entry_count mismatch")
+
+    for field in ("verification_state", "interpretation_notice"):
         if receipt.get(field) != expected_body[field]:
             findings.append(f"comparison archive bundle receipt ledger receipt {field} mismatch")
 
-    expected_digest = hashlib.sha256(_canonical_bytes(expected_body)).hexdigest()
-    if receipt.get("ledger_receipt_sha256") != expected_digest:
+    try:
+        expected_digest = hashlib.sha256(_canonical_bytes(expected_body)).hexdigest()
+    except (TypeError, ValueError):
+        findings.append("comparison archive bundle receipt ledger receipt canonicalization invalid")
+        return findings
+
+    receipt_digest = receipt.get("ledger_receipt_sha256")
+    if not _is_canonical_sha256(receipt_digest):
+        findings.append("comparison archive bundle receipt ledger receipt digest invalid")
+    elif receipt_digest != expected_digest:
         findings.append("comparison archive bundle receipt ledger receipt digest mismatch")
     return findings
