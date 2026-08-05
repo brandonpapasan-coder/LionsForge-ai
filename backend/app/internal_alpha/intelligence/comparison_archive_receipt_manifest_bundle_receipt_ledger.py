@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt_manifest_bundle_receipt import (
@@ -35,6 +36,7 @@ _NOTICE = (
     "causality or authorize any release transition."
 )
 _MAX_ENTRIES = 100
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -45,6 +47,14 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_canonical_sha256(value: Any) -> bool:
+    return isinstance(value, str) and _SHA256_RE.fullmatch(value) is not None
+
+
+def _is_strict_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _entry(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -106,7 +116,7 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
         findings.append("bundle receipt ledger keys invalid")
     if ledger.get("schema") != _LEDGER_SCHEMA:
         findings.append("bundle receipt ledger schema mismatch")
-    if ledger.get("schema_version") != 1:
+    if not _is_strict_int(ledger.get("schema_version")) or ledger.get("schema_version") != 1:
         findings.append("bundle receipt ledger schema version mismatch")
     if ledger.get("verification_state") != "VERIFIED":
         findings.append("bundle receipt ledger verification state mismatch")
@@ -117,7 +127,7 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
     if not isinstance(entries, list) or not 1 <= len(entries) <= _MAX_ENTRIES:
         findings.append("bundle receipt ledger entries invalid")
         return findings
-    if ledger.get("entry_count") != len(entries):
+    if not _is_strict_int(ledger.get("entry_count")) or ledger.get("entry_count") != len(entries):
         findings.append("bundle receipt ledger entry count mismatch")
 
     digests: list[str] = []
@@ -125,10 +135,19 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
         if not isinstance(entry, dict) or set(entry) != _ENTRY_KEYS:
             findings.append("bundle receipt ledger entry keys invalid")
             continue
+        for field in (
+            "bundle_receipt_sha256",
+            "bundle_sha256",
+            "manifest_sha256",
+            "receipt_sha256",
+        ):
+            if not _is_canonical_sha256(entry.get(field)):
+                findings.append(f"bundle receipt ledger entry {field} invalid")
+        entry_count = entry.get("entry_count")
+        if not _is_strict_int(entry_count) or entry_count < 0:
+            findings.append("bundle receipt ledger entry entry_count invalid")
         digest = entry.get("bundle_receipt_sha256")
-        if not isinstance(digest, str) or len(digest) != 64:
-            findings.append("bundle receipt ledger entry digest invalid")
-        else:
+        if _is_canonical_sha256(digest):
             digests.append(digest)
     if len(digests) != len(set(digests)):
         findings.append("bundle receipt ledger duplicate entry")
@@ -141,6 +160,9 @@ def validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_led
     except (TypeError, ValueError):
         findings.append("bundle receipt ledger canonicalization invalid")
         return findings
-    if ledger.get("ledger_sha256") != expected_digest:
+    ledger_digest = ledger.get("ledger_sha256")
+    if not _is_canonical_sha256(ledger_digest):
+        findings.append("bundle receipt ledger digest invalid")
+    elif ledger_digest != expected_digest:
         findings.append("bundle receipt ledger digest mismatch")
     return findings
