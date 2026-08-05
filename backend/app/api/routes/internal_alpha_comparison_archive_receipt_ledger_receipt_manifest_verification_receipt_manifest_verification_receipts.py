@@ -12,6 +12,10 @@ from app.models.user import User
 
 router = APIRouter()
 
+_MAX_FINDINGS = 100
+_MAX_FINDING_LENGTH = 256
+_TRUNCATED_FINDINGS_NOTICE = "additional validation findings omitted"
+
 
 class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput(
     BaseModel
@@ -28,6 +32,13 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
 
     receipt: dict[str, Any]
     manifest: dict[str, Any]
+
+
+def _bounded_findings(findings: list[str]) -> list[str]:
+    bounded = [finding[:_MAX_FINDING_LENGTH] for finding in findings[:_MAX_FINDINGS]]
+    if len(findings) > _MAX_FINDINGS:
+        bounded.append(_TRUNCATED_FINDINGS_NOTICE)
+    return bounded
 
 
 @router.post(
@@ -65,7 +76,7 @@ def validate_internal_alpha_intelligence_comparison_archive_verification_receipt
     )
     return {
         "valid": not findings,
-        "findings": findings,
+        "findings": _bounded_findings(findings),
         "interpretation_notice": (
             "Receipt validity proves deterministic bounded verification-receipt manifest "
             "verification only. It does not infer causality or authorize any release transition."
