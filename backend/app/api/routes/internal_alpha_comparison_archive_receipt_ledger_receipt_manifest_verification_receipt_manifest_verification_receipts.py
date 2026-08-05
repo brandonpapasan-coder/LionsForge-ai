@@ -15,6 +15,7 @@ router = APIRouter()
 _MAX_FINDINGS = 100
 _MAX_FINDING_LENGTH = 256
 _TRUNCATED_FINDINGS_NOTICE = "additional validation findings omitted"
+_VALIDATION_FAILURE_FINDING = "verification receipt manifest validation failed"
 
 
 class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput(
@@ -75,10 +76,13 @@ def validate_internal_alpha_intelligence_comparison_archive_verification_receipt
 ) -> dict[str, Any]:
     """Validate one receipt and its exact source-manifest binding fail closed."""
     del current_user
-    findings = validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
-        payload.receipt,
-        payload.manifest,
-    )
+    try:
+        findings = validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
+            payload.receipt,
+            payload.manifest,
+        )
+    except (TypeError, ValueError):
+        findings = [_VALIDATION_FAILURE_FINDING]
     return {
         "valid": not findings,
         "findings": _bounded_findings(findings),
