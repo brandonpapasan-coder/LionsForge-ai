@@ -73,6 +73,13 @@ def test_rejects_invalid_embedded_receipt_chain(monkeypatch: pytest.MonkeyPatch)
         )
 
 
+def test_rejects_noncanonical_archive_digest() -> None:
+    with pytest.raises(ValueError, match="archive digest invalid"):
+        manifest_module.build_intelligence_comparison_archive_receipt_manifest(
+            [_entry("A" * 64)]
+        )
+
+
 def test_detects_entry_drift_and_manifest_digest_drift() -> None:
     manifest = manifest_module.build_intelligence_comparison_archive_receipt_manifest(
         [_entry("1" * 64), _entry("2" * 64)]
@@ -102,6 +109,49 @@ def test_detects_noncanonical_order_and_count_drift() -> None:
     assert "comparison archive receipt manifest entry_count mismatch" in findings
     assert "comparison archive receipt manifest entries not canonically ordered" in findings
     assert "comparison archive receipt manifest digest mismatch" in findings
+
+
+def test_rejects_coercive_version_and_count_values() -> None:
+    manifest = manifest_module.build_intelligence_comparison_archive_receipt_manifest(
+        [_entry("1" * 64)]
+    )
+    manifest["schema_version"] = True
+    manifest["entry_count"] = True
+
+    findings = manifest_module.validate_intelligence_comparison_archive_receipt_manifest(
+        manifest
+    )
+
+    assert "comparison archive receipt manifest schema version mismatch" in findings
+    assert "comparison archive receipt manifest entry_count mismatch" in findings
+
+
+def test_rejects_malformed_and_noncanonical_manifest_digests() -> None:
+    manifest = manifest_module.build_intelligence_comparison_archive_receipt_manifest(
+        [_entry("1" * 64)]
+    )
+
+    uppercase = deepcopy(manifest)
+    uppercase["manifest_sha256"] = "A" * 64
+    findings = manifest_module.validate_intelligence_comparison_archive_receipt_manifest(
+        uppercase
+    )
+    assert "comparison archive receipt manifest digest invalid" in findings
+    assert "comparison archive receipt manifest digest mismatch" in findings
+
+    malformed = deepcopy(manifest)
+    malformed["manifest_sha256"] = 7
+    findings = manifest_module.validate_intelligence_comparison_archive_receipt_manifest(
+        malformed
+    )
+    assert "comparison archive receipt manifest digest invalid" in findings
+    assert "comparison archive receipt manifest digest mismatch" in findings
+
+    substituted = deepcopy(manifest)
+    substituted["manifest_sha256"] = "0" * 64
+    assert manifest_module.validate_intelligence_comparison_archive_receipt_manifest(
+        substituted
+    ) == ["comparison archive receipt manifest digest mismatch"]
 
 
 def test_fails_closed_for_malformed_manifest_and_entry() -> None:
