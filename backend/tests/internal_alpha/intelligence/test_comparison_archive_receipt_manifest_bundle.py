@@ -97,6 +97,46 @@ def test_detects_receipt_substitution_and_count_drift() -> None:
     assert "comparison archive receipt manifest bundle digest mismatch" in findings
 
 
+def test_rejects_coercive_schema_version_and_entry_count() -> None:
+    bundle = bundle_module.build_intelligence_comparison_archive_receipt_manifest_bundle(
+        _manifest(),
+        _receipt(),
+    )
+    drifted = deepcopy(bundle)
+    drifted["schema_version"] = True
+    drifted["entry_count"] = True
+
+    findings = bundle_module.validate_intelligence_comparison_archive_receipt_manifest_bundle(
+        drifted
+    )
+
+    assert "comparison archive receipt manifest bundle schema version mismatch" in findings
+    assert "comparison archive receipt manifest bundle entry_count mismatch" in findings
+    assert "comparison archive receipt manifest bundle digest mismatch" in findings
+
+
+def test_rejects_malformed_binding_and_bundle_digests() -> None:
+    bundle = bundle_module.build_intelligence_comparison_archive_receipt_manifest_bundle(
+        _manifest(),
+        _receipt(),
+    )
+    drifted = deepcopy(bundle)
+    drifted["manifest_sha256"] = "A" * 64
+    drifted["receipt_sha256"] = "not-a-digest"
+    drifted["bundle_sha256"] = "B" * 64
+
+    findings = bundle_module.validate_intelligence_comparison_archive_receipt_manifest_bundle(
+        drifted
+    )
+
+    assert "comparison archive receipt manifest bundle manifest_sha256 invalid" in findings
+    assert "comparison archive receipt manifest bundle receipt_sha256 invalid" in findings
+    assert "comparison archive receipt manifest bundle digest invalid" in findings
+    assert "comparison archive receipt manifest bundle manifest_sha256 mismatch" not in findings
+    assert "comparison archive receipt manifest bundle receipt_sha256 mismatch" not in findings
+    assert "comparison archive receipt manifest bundle digest mismatch" not in findings
+
+
 def test_fails_closed_for_malformed_bundle_and_chain() -> None:
     assert bundle_module.validate_intelligence_comparison_archive_receipt_manifest_bundle([]) == [
         "comparison archive receipt manifest bundle must be an object"
