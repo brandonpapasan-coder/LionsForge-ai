@@ -95,6 +95,47 @@ def test_validate_route_forwards_receipt_and_manifest(monkeypatch) -> None:
     assert seen == [(receipt, manifest)]
 
 
+def test_validate_route_bounds_finding_count_and_length(monkeypatch) -> None:
+    findings = [f"finding-{index}-" + ("x" * 300) for index in range(101)]
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, manifest: findings,
+    )
+    payload = routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptValidationInput.model_validate(
+        {"receipt": {}, "manifest": {}}
+    )
+
+    result = routes.validate_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+        payload,
+        current_user=object(),  # type: ignore[arg-type]
+    )
+
+    assert result["valid"] is False
+    assert len(result["findings"]) == 101
+    assert all(len(finding) <= 256 for finding in result["findings"][:-1])
+    assert result["findings"][-1] == "additional validation findings omitted"
+
+
+def test_validate_route_preserves_empty_findings(monkeypatch) -> None:
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, manifest: [],
+    )
+    payload = routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptValidationInput.model_validate(
+        {"receipt": {}, "manifest": {}}
+    )
+
+    result = routes.validate_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+        payload,
+        current_user=object(),  # type: ignore[arg-type]
+    )
+
+    assert result["valid"] is True
+    assert result["findings"] == []
+
+
 def test_request_models_reject_extra_fields_and_non_objects() -> None:
     with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput.model_validate(
