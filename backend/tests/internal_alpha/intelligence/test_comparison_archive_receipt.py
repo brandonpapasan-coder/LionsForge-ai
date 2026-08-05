@@ -79,6 +79,28 @@ def test_issues_deterministic_archive_receipt() -> None:
     assert validate_intelligence_comparison_archive_receipt(first, archive) == []
 
 
+def test_rejects_non_object_extra_keys_and_coercive_schema_version() -> None:
+    archive = _archive()
+
+    malformed_findings = validate_intelligence_comparison_archive_receipt(
+        [],  # type: ignore[arg-type]
+        archive,
+    )
+    assert malformed_findings == ["comparison archive receipt must be an object"]
+
+    receipt = build_intelligence_comparison_archive_receipt(archive)
+    receipt["extra"] = "field"
+    assert "comparison archive receipt keys invalid" in (
+        validate_intelligence_comparison_archive_receipt(receipt, archive)
+    )
+
+    coercive = build_intelligence_comparison_archive_receipt(archive)
+    coercive["schema_version"] = True
+    assert validate_intelligence_comparison_archive_receipt(coercive, archive) == [
+        "comparison archive receipt schema version mismatch"
+    ]
+
+
 def test_rejects_receipt_drift_and_digest_substitution() -> None:
     archive = _archive()
     receipt = build_intelligence_comparison_archive_receipt(archive)
@@ -96,7 +118,52 @@ def test_rejects_receipt_drift_and_digest_substitution() -> None:
     ]
 
 
-def test_rejects_archive_drift_and_malformed_receipt() -> None:
+def test_rejects_noncanonical_archive_and_receipt_digests() -> None:
+    archive = _archive()
+    receipt = build_intelligence_comparison_archive_receipt(archive)
+
+    uppercase_archive = copy.deepcopy(receipt)
+    uppercase_archive["archive_sha256"] = "A" * 64
+    findings = validate_intelligence_comparison_archive_receipt(
+        uppercase_archive,
+        archive,
+    )
+    assert "comparison archive receipt archive_sha256 invalid" in findings
+    assert "comparison archive receipt archive_sha256 mismatch" in findings
+
+    malformed_archive = copy.deepcopy(receipt)
+    malformed_archive["archive_sha256"] = 7
+    findings = validate_intelligence_comparison_archive_receipt(
+        malformed_archive,
+        archive,
+    )
+    assert "comparison archive receipt archive_sha256 invalid" in findings
+    assert "comparison archive receipt archive_sha256 mismatch" in findings
+
+    uppercase_receipt = copy.deepcopy(receipt)
+    uppercase_receipt["receipt_sha256"] = "A" * 64
+    findings = validate_intelligence_comparison_archive_receipt(
+        uppercase_receipt,
+        archive,
+    )
+    assert findings == [
+        "comparison archive receipt digest invalid",
+        "comparison archive receipt digest mismatch",
+    ]
+
+    malformed_receipt = copy.deepcopy(receipt)
+    malformed_receipt["receipt_sha256"] = 7
+    findings = validate_intelligence_comparison_archive_receipt(
+        malformed_receipt,
+        archive,
+    )
+    assert findings == [
+        "comparison archive receipt digest invalid",
+        "comparison archive receipt digest mismatch",
+    ]
+
+
+def test_rejects_archive_drift() -> None:
     archive = _archive()
     receipt = build_intelligence_comparison_archive_receipt(archive)
 
@@ -109,12 +176,6 @@ def test_rejects_archive_drift_and_malformed_receipt() -> None:
     assert "comparison archive digest mismatch" in findings
     assert "comparison archive receipt archive_sha256 mismatch" in findings
     assert "comparison archive receipt digest mismatch" in findings
-
-    malformed_findings = validate_intelligence_comparison_archive_receipt(
-        [],  # type: ignore[arg-type]
-        archive,
-    )
-    assert malformed_findings == ["comparison archive receipt must be an object"]
 
 
 def test_refuses_to_issue_receipt_for_invalid_archive() -> None:
