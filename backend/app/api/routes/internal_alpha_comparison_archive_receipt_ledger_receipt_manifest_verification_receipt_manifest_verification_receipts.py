@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import get_current_user
@@ -39,9 +39,15 @@ def create_internal_alpha_intelligence_comparison_archive_verification_receipt_m
 ) -> dict[str, Any]:
     """Issue one deterministic receipt for a valid verification-receipt manifest."""
     del current_user
-    return build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
-        payload.manifest
-    )
+    try:
+        return build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
+            payload.manifest
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="invalid verification receipt manifest",
+        ) from exc
 
 
 @router.post(

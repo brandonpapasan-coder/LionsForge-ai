@@ -1,3 +1,5 @@
+import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.api.routes import (
@@ -32,6 +34,29 @@ def test_create_route_forwards_manifest(monkeypatch) -> None:
 
     assert result == expected
     assert seen == [manifest]
+
+
+def test_create_route_returns_bounded_422_for_invalid_manifest(monkeypatch) -> None:
+    def fake_build(payload: dict[str, object]) -> dict[str, object]:
+        raise ValueError("privacy-safe internal findings must not leak")
+
+    monkeypatch.setattr(
+        routes,
+        "build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        fake_build,
+    )
+    payload = routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput.model_validate(
+        {"manifest": {}}
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        routes.create_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+            payload,
+            current_user=object(),  # type: ignore[arg-type]
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "invalid verification receipt manifest"
 
 
 def test_validate_route_forwards_receipt_and_manifest(monkeypatch) -> None:
@@ -70,24 +95,26 @@ def test_validate_route_forwards_receipt_and_manifest(monkeypatch) -> None:
     assert seen == [(receipt, manifest)]
 
 
-def test_request_models_reject_extra_fields() -> None:
-    try:
+def test_request_models_reject_extra_fields_and_non_objects() -> None:
+    with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput.model_validate(
             {"manifest": {}, "extra": True}
         )
-    except ValidationError:
-        pass
-    else:
-        raise AssertionError("extra receipt creation fields must be rejected")
 
-    try:
+    with pytest.raises(ValidationError):
         routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptValidationInput.model_validate(
             {"receipt": {}, "manifest": {}, "extra": True}
         )
-    except ValidationError:
-        pass
-    else:
-        raise AssertionError("extra receipt validation fields must be rejected")
+
+    with pytest.raises(ValidationError):
+        routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput.model_validate(
+            {"manifest": []}
+        )
+
+    with pytest.raises(ValidationError):
+        routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptValidationInput.model_validate(
+            {"receipt": [], "manifest": {}}
+        )
 
 
 def test_router_registers_exact_paths() -> None:
