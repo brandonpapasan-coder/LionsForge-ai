@@ -7,12 +7,13 @@ from app.internal_alpha.intelligence import (
 )
 
 
-def _entry(digest: str) -> dict:
+def _entry(digest: object) -> dict:
+    source_digest = digest[::-1] if isinstance(digest, str) else "a" * 64
     return {
         "receipt": {
             "manifest_verification_receipt_sha256": digest,
         },
-        "manifest": {"manifest_sha256": digest[::-1]},
+        "manifest": {"manifest_sha256": source_digest},
     }
 
 
@@ -64,7 +65,7 @@ def test_build_rejects_invalid_bounds_duplicates_and_invalid_entry() -> None:
 def test_build_rejects_noncanonical_entry_digest(digest: object) -> None:
     with pytest.raises(ValueError, match="entry digest invalid"):
         module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
-            [_entry(digest)]  # type: ignore[arg-type]
+            [_entry(digest)]
         )
 
 
