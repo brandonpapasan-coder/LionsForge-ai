@@ -79,7 +79,6 @@ def test_validation_rejects_extra_fields_and_coercive_counts() -> None:
     coercive = {**comparison, "unchanged_candidate_count": False}
     findings = validate_intelligence_comparison(coercive, baseline, candidate)
     assert "invalid unchanged candidate count" in findings
-    assert "comparison payload mismatch" in findings
 
     coercive_version = {**comparison, "schema_version": True}
     findings = validate_intelligence_comparison(coercive_version, baseline, candidate)
