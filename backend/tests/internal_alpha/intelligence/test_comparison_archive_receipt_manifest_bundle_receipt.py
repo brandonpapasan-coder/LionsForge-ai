@@ -103,6 +103,54 @@ def test_validate_bundle_receipt_detects_bundle_substitution(monkeypatch) -> Non
     assert "comparison archive receipt manifest bundle receipt digest mismatch" in findings
 
 
+def test_validate_bundle_receipt_rejects_coercive_schema_version_and_count(monkeypatch) -> None:
+    monkeypatch.setattr(
+        subject,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle",
+        lambda bundle: [],
+    )
+    bundle = _bundle()
+    receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt(bundle)
+    receipt["schema_version"] = True
+    receipt["entry_count"] = True
+
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt(
+        receipt,
+        bundle,
+    )
+
+    assert "comparison archive receipt manifest bundle receipt schema version mismatch" in findings
+    assert "comparison archive receipt manifest bundle receipt entry_count mismatch" in findings
+
+
+def test_validate_bundle_receipt_rejects_malformed_digests(monkeypatch) -> None:
+    monkeypatch.setattr(
+        subject,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle",
+        lambda bundle: [],
+    )
+    bundle = _bundle()
+    receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt(bundle)
+    receipt["bundle_sha256"] = "A" * 64
+    receipt["manifest_sha256"] = "not-a-digest"
+    receipt["receipt_sha256"] = "C" * 64
+    receipt["bundle_receipt_sha256"] = "B" * 64
+
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt(
+        receipt,
+        bundle,
+    )
+
+    assert "comparison archive receipt manifest bundle receipt bundle_sha256 invalid" in findings
+    assert "comparison archive receipt manifest bundle receipt manifest_sha256 invalid" in findings
+    assert "comparison archive receipt manifest bundle receipt receipt_sha256 invalid" in findings
+    assert "comparison archive receipt manifest bundle receipt digest invalid" in findings
+    assert "comparison archive receipt manifest bundle receipt bundle_sha256 mismatch" not in findings
+    assert "comparison archive receipt manifest bundle receipt manifest_sha256 mismatch" not in findings
+    assert "comparison archive receipt manifest bundle receipt receipt_sha256 mismatch" not in findings
+    assert "comparison archive receipt manifest bundle receipt digest mismatch" not in findings
+
+
 def test_validate_bundle_receipt_rejects_unexpected_keys(monkeypatch) -> None:
     monkeypatch.setattr(
         subject,
