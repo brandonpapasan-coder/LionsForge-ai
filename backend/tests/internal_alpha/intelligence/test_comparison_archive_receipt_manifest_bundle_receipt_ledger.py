@@ -136,3 +136,69 @@ def test_build_enforces_bounded_item_count(monkeypatch) -> None:
         ledger_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
             [_item("a") for _ in range(101)]
         )
+
+
+def test_validation_rejects_coercive_schema_and_counts(monkeypatch) -> None:
+    monkeypatch.setattr(
+        ledger_module,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt",
+        _accept_all,
+    )
+    ledger = ledger_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        [_item("a")]
+    )
+    ledger["schema_version"] = True
+    ledger["entry_count"] = True
+    ledger["entries"][0]["entry_count"] = True
+
+    findings = ledger_module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        ledger
+    )
+
+    assert "bundle receipt ledger schema version mismatch" in findings
+    assert "bundle receipt ledger entry count mismatch" in findings
+    assert "bundle receipt ledger entry entry_count invalid" in findings
+
+
+def test_validation_rejects_malformed_entry_digests(monkeypatch) -> None:
+    monkeypatch.setattr(
+        ledger_module,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt",
+        _accept_all,
+    )
+    ledger = ledger_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        [_item("a")]
+    )
+    entry = ledger["entries"][0]
+    entry["bundle_receipt_sha256"] = "A" * 64
+    entry["bundle_sha256"] = "not-a-digest"
+    entry["manifest_sha256"] = "B" * 64
+    entry["receipt_sha256"] = "c" * 63
+
+    findings = ledger_module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        ledger
+    )
+
+    assert "bundle receipt ledger entry bundle_receipt_sha256 invalid" in findings
+    assert "bundle receipt ledger entry bundle_sha256 invalid" in findings
+    assert "bundle receipt ledger entry manifest_sha256 invalid" in findings
+    assert "bundle receipt ledger entry receipt_sha256 invalid" in findings
+
+
+def test_validation_distinguishes_malformed_ledger_digest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        ledger_module,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt",
+        _accept_all,
+    )
+    ledger = ledger_module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        [_item("a")]
+    )
+    ledger["ledger_sha256"] = "A" * 64
+
+    findings = ledger_module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger(
+        ledger
+    )
+
+    assert "bundle receipt ledger digest invalid" in findings
+    assert "bundle receipt ledger digest mismatch" not in findings
