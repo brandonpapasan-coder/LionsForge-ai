@@ -8,15 +8,20 @@ from app.internal_alpha.intelligence import (
 
 
 def _item(seed: str, entry_count: int = 1) -> dict[str, object]:
+    digest_symbols = "0123456789abcdef"
+    seed_index = digest_symbols.index(seed)
+    bundle_symbol = digest_symbols[(seed_index + 1) % len(digest_symbols)]
+    manifest_symbol = digest_symbols[(seed_index + 2) % len(digest_symbols)]
+    receipt_symbol = digest_symbols[(seed_index + 3) % len(digest_symbols)]
     return {
         "receipt": {
             "bundle_receipt_sha256": seed * 64,
-            "bundle_sha256": chr(ord(seed) + 1) * 64,
-            "manifest_sha256": chr(ord(seed) + 2) * 64,
-            "receipt_sha256": chr(ord(seed) + 3) * 64,
+            "bundle_sha256": bundle_symbol * 64,
+            "manifest_sha256": manifest_symbol * 64,
+            "receipt_sha256": receipt_symbol * 64,
             "entry_count": entry_count,
         },
-        "bundle": {"bundle_sha256": chr(ord(seed) + 1) * 64},
+        "bundle": {"bundle_sha256": bundle_symbol * 64},
     }
 
 
