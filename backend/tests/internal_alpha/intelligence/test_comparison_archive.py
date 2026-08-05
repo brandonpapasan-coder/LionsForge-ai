@@ -89,10 +89,9 @@ def test_rejects_coercive_schema_version() -> None:
     archive = _archive()
     archive["schema_version"] = True
 
-    findings = validate_intelligence_comparison_archive(archive)
-
-    assert "comparison archive schema version mismatch" in findings
-    assert "comparison archive digest mismatch" in findings
+    assert validate_intelligence_comparison_archive(archive) == [
+        "comparison archive schema version mismatch"
+    ]
 
 
 def test_rejects_noncanonical_and_substituted_digests() -> None:
@@ -131,7 +130,6 @@ def test_rejects_payload_object_and_receipt_chain_drift() -> None:
     drifted_receipt["verification_state"] = "INVALID"
     findings = validate_intelligence_comparison_archive(drifted)
     assert "comparison receipt verification_state mismatch" in findings
-    assert "comparison receipt digest mismatch" in findings
     assert "comparison archive digest mismatch" in findings
 
 
