@@ -60,6 +60,14 @@ def test_build_rejects_invalid_bounds_duplicates_and_invalid_entry() -> None:
         )
 
 
+@pytest.mark.parametrize("digest", ["A" * 64, "g" * 64, "a" * 63, 7])
+def test_build_rejects_noncanonical_entry_digest(digest: object) -> None:
+    with pytest.raises(ValueError, match="entry digest invalid"):
+        module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+            [_entry(digest)]  # type: ignore[arg-type]
+        )
+
+
 def test_build_preserves_underlying_validation_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         module,
@@ -102,6 +110,21 @@ def test_validator_detects_digest_order_count_and_schema_drift() -> None:
     assert "verification receipt manifest digest mismatch" in findings
 
 
+def test_validator_rejects_coercive_schema_and_count_values() -> None:
+    manifest = module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+        [_entry("1" * 64)]
+    )
+    manifest["schema_version"] = True
+    manifest["entry_count"] = True
+
+    findings = module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+        manifest
+    )
+
+    assert "verification receipt manifest schema version mismatch" in findings
+    assert "verification receipt manifest entry count mismatch" in findings
+
+
 def test_validator_rejects_non_object_extra_keys_and_duplicate_receipts() -> None:
     assert module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
         []
@@ -123,6 +146,34 @@ def test_validator_rejects_non_object_extra_keys_and_duplicate_receipts() -> Non
     assert "verification receipt manifest keys invalid" in findings
     assert "verification receipt manifest contains duplicate receipts" in findings
     assert "verification receipt manifest digest mismatch" in findings
+
+
+def test_validator_rejects_noncanonical_entry_digest() -> None:
+    manifest = module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+        [_entry("d" * 64)]
+    )
+    manifest["entries"][0]["receipt"]["manifest_verification_receipt_sha256"] = "D" * 64
+
+    findings = module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+        manifest
+    )
+
+    assert any("entry digest invalid" in finding for finding in findings)
+    assert "verification receipt manifest digest mismatch" in findings
+
+
+def test_validator_distinguishes_malformed_manifest_digest() -> None:
+    manifest = module.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+        [_entry("e" * 64)]
+    )
+    manifest["verification_receipt_manifest_sha256"] = "E" * 64
+
+    findings = module.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest(
+        manifest
+    )
+
+    assert "verification receipt manifest digest invalid" in findings
+    assert "verification receipt manifest digest mismatch" not in findings
 
 
 def test_validator_preserves_indexed_underlying_findings(monkeypatch: pytest.MonkeyPatch) -> None:
