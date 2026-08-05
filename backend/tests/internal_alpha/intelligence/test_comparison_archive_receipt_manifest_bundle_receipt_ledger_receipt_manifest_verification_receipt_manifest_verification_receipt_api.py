@@ -112,9 +112,31 @@ def test_validate_route_bounds_finding_count_and_length(monkeypatch) -> None:
     )
 
     assert result["valid"] is False
-    assert len(result["findings"]) == 101
+    assert len(result["findings"]) == 100
     assert all(len(finding) <= 256 for finding in result["findings"][:-1])
     assert result["findings"][-1] == "additional validation findings omitted"
+    assert result["findings"][-2].startswith("finding-98-")
+
+
+def test_validate_route_preserves_exact_cap_without_omission_marker(monkeypatch) -> None:
+    findings = [f"finding-{index}" for index in range(100)]
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, manifest: findings,
+    )
+    payload = routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptValidationInput.model_validate(
+        {"receipt": {}, "manifest": {}}
+    )
+
+    result = routes.validate_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+        payload,
+        current_user=object(),  # type: ignore[arg-type]
+    )
+
+    assert result["valid"] is False
+    assert result["findings"] == findings
+    assert "additional validation findings omitted" not in result["findings"]
 
 
 def test_validate_route_preserves_empty_findings(monkeypatch) -> None:
