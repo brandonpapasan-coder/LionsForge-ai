@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_archive_receipt import (
@@ -25,6 +26,7 @@ _NOTICE = (
     "causality or authorize any release transition."
 )
 _MAX_ENTRIES = 100
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _canonical_bytes(payload: dict[str, Any]) -> bytes:
@@ -35,6 +37,10 @@ def _canonical_bytes(payload: dict[str, Any]) -> bytes:
         ensure_ascii=True,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and _SHA256_RE.fullmatch(value) is not None
 
 
 def _validated_entry(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -48,7 +54,7 @@ def _validated_entry(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if findings:
         raise ValueError("invalid comparison archive receipt entry: " + "; ".join(findings))
     archive_sha256 = archive.get("archive_sha256")
-    if not isinstance(archive_sha256, str):
+    if not _is_sha256(archive_sha256):
         raise ValueError("comparison archive receipt manifest archive digest invalid")
     return archive_sha256, {"archive": archive, "receipt": receipt}
 
@@ -95,7 +101,7 @@ def validate_intelligence_comparison_archive_receipt_manifest(
         findings.append("comparison archive receipt manifest keys invalid")
     if manifest.get("schema") != _MANIFEST_SCHEMA:
         findings.append("comparison archive receipt manifest schema mismatch")
-    if manifest.get("schema_version") != 1:
+    if type(manifest.get("schema_version")) is not int or manifest.get("schema_version") != 1:
         findings.append("comparison archive receipt manifest schema version mismatch")
     if manifest.get("interpretation_notice") != _NOTICE:
         findings.append("comparison archive receipt manifest interpretation_notice mismatch")
@@ -104,7 +110,7 @@ def validate_intelligence_comparison_archive_receipt_manifest(
     if not isinstance(entries, list) or not 1 <= len(entries) <= _MAX_ENTRIES:
         findings.append("comparison archive receipt manifest entries invalid")
         return findings
-    if manifest.get("entry_count") != len(entries):
+    if type(manifest.get("entry_count")) is not int or manifest.get("entry_count") != len(entries):
         findings.append("comparison archive receipt manifest entry_count mismatch")
 
     validated: list[tuple[str, dict[str, Any]]] = []
@@ -127,6 +133,8 @@ def validate_intelligence_comparison_archive_receipt_manifest(
     except (TypeError, ValueError):
         findings.append("comparison archive receipt manifest payload invalid")
         return findings
+    if not _is_sha256(manifest.get("manifest_sha256")):
+        findings.append("comparison archive receipt manifest digest invalid")
     if manifest.get("manifest_sha256") != expected_digest:
         findings.append("comparison archive receipt manifest digest mismatch")
     return findings
