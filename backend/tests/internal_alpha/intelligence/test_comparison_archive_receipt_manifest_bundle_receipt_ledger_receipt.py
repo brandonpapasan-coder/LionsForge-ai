@@ -19,6 +19,11 @@ def _ledger() -> dict[str, object]:
     }
 
 
+def _accept_ledger(ledger: dict[str, object]) -> list[str]:
+    del ledger
+    return []
+
+
 def test_build_receipt_binds_exact_ledger(monkeypatch) -> None:
     ledger = _ledger()
     seen: list[dict[str, object]] = []
@@ -62,7 +67,7 @@ def test_validate_receipt_accepts_exact_binding(monkeypatch) -> None:
     monkeypatch.setattr(
         subject,
         "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
-        lambda ledger: [],
+        _accept_ledger,
     )
     ledger = _ledger()
     receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
@@ -82,7 +87,7 @@ def test_validate_receipt_rejects_ledger_substitution(monkeypatch) -> None:
     monkeypatch.setattr(
         subject,
         "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
-        lambda ledger: [],
+        _accept_ledger,
     )
     ledger = _ledger()
     receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
@@ -104,7 +109,7 @@ def test_validate_receipt_rejects_receipt_drift(monkeypatch) -> None:
     monkeypatch.setattr(
         subject,
         "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
-        lambda ledger: [],
+        _accept_ledger,
     )
     ledger = _ledger()
     receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
@@ -133,3 +138,89 @@ def test_validate_receipt_preserves_ledger_findings(monkeypatch) -> None:
     )
 
     assert "bundle receipt ledger ordering invalid" in findings
+
+
+def test_validate_receipt_rejects_coercive_schema_and_count(monkeypatch) -> None:
+    monkeypatch.setattr(
+        subject,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
+        _accept_ledger,
+    )
+    ledger = _ledger()
+    receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        ledger
+    )
+    receipt["schema_version"] = True
+    receipt["entry_count"] = True
+
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        receipt,
+        ledger,
+    )
+
+    assert "comparison archive bundle receipt ledger receipt schema version mismatch" in findings
+    assert "comparison archive bundle receipt ledger receipt entry_count invalid" in findings
+
+
+def test_validate_receipt_rejects_malformed_ledger_binding(monkeypatch) -> None:
+    monkeypatch.setattr(
+        subject,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
+        _accept_ledger,
+    )
+    ledger = _ledger()
+    receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        ledger
+    )
+    receipt["ledger_sha256"] = "A" * 64
+
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        receipt,
+        ledger,
+    )
+
+    assert "comparison archive bundle receipt ledger receipt ledger_sha256 invalid" in findings
+    assert "comparison archive bundle receipt ledger receipt ledger_sha256 mismatch" not in findings
+
+
+def test_validate_receipt_distinguishes_malformed_receipt_digest(monkeypatch) -> None:
+    monkeypatch.setattr(
+        subject,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
+        _accept_ledger,
+    )
+    ledger = _ledger()
+    receipt = subject.build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        ledger
+    )
+    receipt["ledger_receipt_sha256"] = "not-a-digest"
+
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        receipt,
+        ledger,
+    )
+
+    assert "comparison archive bundle receipt ledger receipt digest invalid" in findings
+    assert "comparison archive bundle receipt ledger receipt digest mismatch" not in findings
+
+
+def test_validate_receipt_rejects_non_object_and_invalid_binding(monkeypatch) -> None:
+    monkeypatch.setattr(
+        subject,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger",
+        _accept_ledger,
+    )
+
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        [],
+        _ledger(),
+    )
+    assert "comparison archive bundle receipt ledger receipt must be an object" in findings
+
+    ledger = _ledger()
+    del ledger["ledger_sha256"]
+    findings = subject.validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt(
+        {},
+        ledger,
+    )
+    assert "comparison archive bundle receipt ledger receipt binding invalid" in findings
