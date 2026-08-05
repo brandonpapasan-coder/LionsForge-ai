@@ -41,6 +41,7 @@ def test_builds_deterministic_manifest_receipt() -> None:
     assert first["manifest_sha256"] == manifest["manifest_sha256"]
     assert first["entry_count"] == 2
     assert first["verification_state"] == "VERIFIED"
+    assert len(first["receipt_sha256"]) == 64
     assert (
         receipt_module.validate_intelligence_comparison_archive_receipt_manifest_receipt(
             first, manifest
@@ -84,7 +85,70 @@ def test_detects_manifest_digest_and_entry_count_substitution() -> None:
     assert "comparison archive receipt manifest receipt digest mismatch" in findings
 
 
-def test_detects_receipt_digest_and_field_drift() -> None:
+def test_rejects_coercive_schema_version_and_entry_count() -> None:
+    manifest = _manifest()
+    receipt = receipt_module.build_intelligence_comparison_archive_receipt_manifest_receipt(
+        manifest
+    )
+
+    drifted = deepcopy(receipt)
+    drifted["schema_version"] = True
+    drifted["entry_count"] = True
+
+    findings = (
+        receipt_module.validate_intelligence_comparison_archive_receipt_manifest_receipt(
+            drifted, manifest
+        )
+    )
+
+    assert "comparison archive receipt manifest receipt schema version mismatch" in findings
+    assert "comparison archive receipt manifest receipt entry_count invalid" in findings
+
+
+def test_rejects_noncanonical_manifest_and_receipt_digests() -> None:
+    manifest = _manifest()
+    receipt = receipt_module.build_intelligence_comparison_archive_receipt_manifest_receipt(
+        manifest
+    )
+
+    uppercase_binding = deepcopy(receipt)
+    uppercase_binding["manifest_sha256"] = "A" * 64
+    findings = (
+        receipt_module.validate_intelligence_comparison_archive_receipt_manifest_receipt(
+            uppercase_binding, manifest
+        )
+    )
+    assert "comparison archive receipt manifest receipt manifest_sha256 invalid" in findings
+
+    malformed_binding = deepcopy(receipt)
+    malformed_binding["manifest_sha256"] = 7
+    findings = (
+        receipt_module.validate_intelligence_comparison_archive_receipt_manifest_receipt(
+            malformed_binding, manifest
+        )
+    )
+    assert "comparison archive receipt manifest receipt manifest_sha256 invalid" in findings
+
+    uppercase_receipt = deepcopy(receipt)
+    uppercase_receipt["receipt_sha256"] = "A" * 64
+    findings = (
+        receipt_module.validate_intelligence_comparison_archive_receipt_manifest_receipt(
+            uppercase_receipt, manifest
+        )
+    )
+    assert "comparison archive receipt manifest receipt digest invalid" in findings
+
+    malformed_receipt = deepcopy(receipt)
+    malformed_receipt["receipt_sha256"] = 7
+    findings = (
+        receipt_module.validate_intelligence_comparison_archive_receipt_manifest_receipt(
+            malformed_receipt, manifest
+        )
+    )
+    assert "comparison archive receipt manifest receipt digest invalid" in findings
+
+
+def test_detects_valid_digest_substitution_and_field_drift() -> None:
     manifest = _manifest()
     receipt = receipt_module.build_intelligence_comparison_archive_receipt_manifest_receipt(
         manifest
