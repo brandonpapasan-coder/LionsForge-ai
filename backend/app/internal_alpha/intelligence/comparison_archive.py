@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .comparison_receipt import validate_intelligence_comparison_receipt
@@ -19,6 +20,7 @@ _ARCHIVE_KEYS = {
     "archive_sha256",
     "interpretation_notice",
 }
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _NOTICE = (
     "This archive preserves deterministic internal-alpha comparison evidence only and does not "
     "infer causality or authorize any release transition."
@@ -84,10 +86,18 @@ def validate_intelligence_comparison_archive(archive: dict[str, Any]) -> list[st
         findings.append("comparison archive keys invalid")
     if archive.get("schema") != _ARCHIVE_SCHEMA:
         findings.append("comparison archive schema mismatch")
-    if archive.get("schema_version") != 1:
+
+    schema_version = archive.get("schema_version")
+    if type(schema_version) is not int or schema_version != 1:
         findings.append("comparison archive schema version mismatch")
     if archive.get("interpretation_notice") != _NOTICE:
         findings.append("comparison archive interpretation_notice mismatch")
+
+    archive_digest = archive.get("archive_sha256")
+    if not isinstance(archive_digest, str) or not _SHA256_PATTERN.fullmatch(
+        archive_digest
+    ):
+        findings.append("comparison archive digest invalid")
 
     baseline = archive.get("baseline")
     candidate = archive.get("candidate")
@@ -112,6 +122,6 @@ def validate_intelligence_comparison_archive(archive: dict[str, Any]) -> list[st
         findings.append("comparison archive payload invalid")
         return findings
 
-    if archive.get("archive_sha256") != expected_digest:
+    if archive_digest != expected_digest:
         findings.append("comparison archive digest mismatch")
     return findings
