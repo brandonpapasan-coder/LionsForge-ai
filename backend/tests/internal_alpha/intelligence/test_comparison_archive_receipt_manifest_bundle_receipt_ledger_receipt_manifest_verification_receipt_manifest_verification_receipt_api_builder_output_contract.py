@@ -54,6 +54,11 @@ def test_create_route_accepts_exact_json_object(monkeypatch) -> None:
         "build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
         lambda manifest: expected,
     )
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, manifest: [],
+    )
     payload = routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput.model_validate(
         {"manifest": {}}
     )
