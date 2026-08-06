@@ -69,6 +69,13 @@ def _bounded_findings(findings: list[str]) -> list[str]:
     return bounded
 
 
+def _invalid_manifest_http_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=_INVALID_MANIFEST_DETAIL,
+    )
+
+
 @router.post(
     "/comparison/archive/receipt/manifest/bundle/receipt/ledger/receipt/manifest/verification-receipt/manifest/verification-receipt"
 )
@@ -83,15 +90,19 @@ def create_internal_alpha_intelligence_comparison_archive_verification_receipt_m
             payload.manifest
         )
     except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_INVALID_MANIFEST_DETAIL,
-        ) from exc
+        raise _invalid_manifest_http_exception() from exc
     if not _is_valid_json_object(receipt):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_INVALID_MANIFEST_DETAIL,
+        raise _invalid_manifest_http_exception()
+
+    try:
+        findings = validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
+            receipt,
+            payload.manifest,
         )
+    except (TypeError, ValueError) as exc:
+        raise _invalid_manifest_http_exception() from exc
+    if not _is_valid_findings(findings) or findings:
+        raise _invalid_manifest_http_exception()
     return receipt
 
 
