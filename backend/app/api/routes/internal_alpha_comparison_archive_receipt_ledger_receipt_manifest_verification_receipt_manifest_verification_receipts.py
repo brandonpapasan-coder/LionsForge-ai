@@ -37,9 +37,16 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
     manifest: dict[str, Any]
 
 
+def _is_control_free(value: str) -> bool:
+    return all(ord(character) >= 32 and ord(character) != 127 for character in value)
+
+
 def _is_valid_findings(findings: object) -> bool:
     return type(findings) is list and all(
-        type(finding) is str and bool(finding.strip()) for finding in findings
+        type(finding) is str
+        and bool(finding.strip())
+        and _is_control_free(finding)
+        for finding in findings
     )
 
 

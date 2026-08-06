@@ -51,6 +51,34 @@ def test_validate_route_replaces_whitespace_only_finding_with_generic_failure(
     assert result["findings"] == ["verification receipt manifest validation failed"]
 
 
+@pytest.mark.parametrize(
+    "finding",
+    [
+        "digest mismatch\nforged line",
+        "digest\tmismatch",
+        "digest\rmismatch",
+        "digest\x00mismatch",
+        "digest\x1fmismatch",
+        "digest\x7fmismatch",
+    ],
+)
+def test_validate_route_replaces_control_character_finding_with_generic_failure(
+    monkeypatch, finding: str
+) -> None:
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, manifest: [finding],
+    )
+
+    result = routes.validate_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+        _validation_payload(), current_user=object()  # type: ignore[arg-type]
+    )
+
+    assert result["valid"] is False
+    assert result["findings"] == ["verification receipt manifest validation failed"]
+
+
 def test_validate_route_preserves_nonempty_finding(monkeypatch) -> None:
     monkeypatch.setattr(
         routes,
@@ -67,6 +95,21 @@ def test_validate_route_preserves_nonempty_finding(monkeypatch) -> None:
 
 def test_validate_route_preserves_meaningful_finding_whitespace(monkeypatch) -> None:
     expected = "  digest mismatch  "
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, manifest: [expected],
+    )
+
+    result = routes.validate_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+        _validation_payload(), current_user=object()  # type: ignore[arg-type]
+    )
+
+    assert result["findings"] == [expected]
+
+
+def test_validate_route_preserves_visible_unicode_finding(monkeypatch) -> None:
+    expected = "résumé digest mismatch — section §2"
     monkeypatch.setattr(
         routes,
         "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
@@ -116,6 +159,40 @@ def test_create_route_rejects_whitespace_only_post_build_finding(
         routes,
         "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
         lambda candidate, manifest: [blank_finding],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        routes.create_internal_alpha_intelligence_comparison_archive_verification_receipt_manifest_verification_receipt(
+            _create_payload(), current_user=object()  # type: ignore[arg-type]
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "invalid verification receipt manifest"
+
+
+@pytest.mark.parametrize(
+    "finding",
+    [
+        "digest mismatch\nforged line",
+        "digest\tmismatch",
+        "digest\rmismatch",
+        "digest\x00mismatch",
+        "digest\x7fmismatch",
+    ],
+)
+def test_create_route_rejects_control_character_post_build_finding(
+    monkeypatch, finding: str
+) -> None:
+    receipt = {"schema": "receipt"}
+    monkeypatch.setattr(
+        routes,
+        "build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda manifest: receipt,
+    )
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda candidate, manifest: [finding],
     )
 
     with pytest.raises(HTTPException) as exc_info:
