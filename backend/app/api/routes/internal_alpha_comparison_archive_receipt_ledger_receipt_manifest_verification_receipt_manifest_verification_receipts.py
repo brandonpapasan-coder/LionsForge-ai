@@ -1,4 +1,5 @@
 import json
+import unicodedata
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -42,6 +43,7 @@ def _is_control_free(value: str) -> bool:
         ord(character) >= 32
         and ord(character) != 127
         and not 128 <= ord(character) <= 159
+        and unicodedata.category(character) != "Cf"
         for character in value
     )
 
