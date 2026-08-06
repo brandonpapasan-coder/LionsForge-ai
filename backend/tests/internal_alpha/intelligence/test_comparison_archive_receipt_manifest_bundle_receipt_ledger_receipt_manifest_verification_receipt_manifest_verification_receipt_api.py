@@ -23,6 +23,11 @@ def test_create_route_forwards_manifest(monkeypatch) -> None:
         "build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
         fake_build,
     )
+    monkeypatch.setattr(
+        routes,
+        "validate_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt",
+        lambda receipt, candidate_manifest: [],
+    )
     payload = routes.IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput.model_validate(
         {"manifest": manifest}
     )
