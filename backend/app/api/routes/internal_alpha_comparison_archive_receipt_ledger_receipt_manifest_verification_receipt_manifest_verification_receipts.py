@@ -39,7 +39,7 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
 
 def _is_valid_findings(findings: object) -> bool:
     return type(findings) is list and all(
-        type(finding) is str and bool(finding) for finding in findings
+        type(finding) is str and bool(finding.strip()) for finding in findings
     )
 
 
