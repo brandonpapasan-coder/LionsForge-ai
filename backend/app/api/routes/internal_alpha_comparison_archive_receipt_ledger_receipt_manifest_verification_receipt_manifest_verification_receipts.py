@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +17,7 @@ _MAX_FINDINGS = 100
 _MAX_FINDING_LENGTH = 256
 _TRUNCATED_FINDINGS_NOTICE = "additional validation findings omitted"
 _VALIDATION_FAILURE_FINDING = "verification receipt manifest validation failed"
+_INVALID_MANIFEST_DETAIL = "invalid verification receipt manifest"
 
 
 class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceiptInput(
@@ -37,6 +39,22 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
 
 def _is_valid_findings(findings: object) -> bool:
     return type(findings) is list and all(type(finding) is str for finding in findings)
+
+
+def _is_valid_json_object(value: object) -> bool:
+    if type(value) is not dict or any(type(key) is not str for key in value):
+        return False
+    try:
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _bounded_findings(findings: list[str]) -> list[str]:
@@ -61,14 +79,20 @@ def create_internal_alpha_intelligence_comparison_archive_verification_receipt_m
     """Issue one deterministic receipt for a valid verification-receipt manifest."""
     del current_user
     try:
-        return build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
+        receipt = build_intelligence_comparison_archive_receipt_manifest_bundle_receipt_ledger_receipt_manifest_verification_receipt_manifest_verification_receipt(
             payload.manifest
         )
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="invalid verification receipt manifest",
+            detail=_INVALID_MANIFEST_DETAIL,
         ) from exc
+    if not _is_valid_json_object(receipt):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_INVALID_MANIFEST_DETAIL,
+        )
+    return receipt
 
 
 @router.post(
