@@ -38,12 +38,18 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
     manifest: dict[str, Any]
 
 
+def _is_unicode_noncharacter(character: str) -> bool:
+    codepoint = ord(character)
+    return 0xFDD0 <= codepoint <= 0xFDEF or codepoint & 0xFFFF in {0xFFFE, 0xFFFF}
+
+
 def _is_control_free(value: str) -> bool:
     return all(
         ord(character) >= 32
         and ord(character) != 127
         and not 128 <= ord(character) <= 159
         and unicodedata.category(character) not in {"Cf", "Cs", "Zl", "Zp"}
+        and not _is_unicode_noncharacter(character)
         for character in value
     )
 
