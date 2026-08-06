@@ -38,7 +38,12 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
 
 
 def _is_control_free(value: str) -> bool:
-    return all(ord(character) >= 32 and ord(character) != 127 for character in value)
+    return all(
+        ord(character) >= 32
+        and ord(character) != 127
+        and not 128 <= ord(character) <= 159
+        for character in value
+    )
 
 
 def _is_valid_findings(findings: object) -> bool:
