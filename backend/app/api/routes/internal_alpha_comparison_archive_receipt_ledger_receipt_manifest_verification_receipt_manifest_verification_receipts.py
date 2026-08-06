@@ -35,6 +35,10 @@ class IntelligenceComparisonArchiveVerificationReceiptManifestVerificationReceip
     manifest: dict[str, Any]
 
 
+def _is_valid_findings(findings: object) -> bool:
+    return type(findings) is list and all(type(finding) is str for finding in findings)
+
+
 def _bounded_findings(findings: list[str]) -> list[str]:
     if len(findings) <= _MAX_FINDINGS:
         return [finding[:_MAX_FINDING_LENGTH] for finding in findings]
@@ -82,6 +86,8 @@ def validate_internal_alpha_intelligence_comparison_archive_verification_receipt
             payload.manifest,
         )
     except (TypeError, ValueError):
+        findings = [_VALIDATION_FAILURE_FINDING]
+    if not _is_valid_findings(findings):
         findings = [_VALIDATION_FAILURE_FINDING]
     return {
         "valid": not findings,
