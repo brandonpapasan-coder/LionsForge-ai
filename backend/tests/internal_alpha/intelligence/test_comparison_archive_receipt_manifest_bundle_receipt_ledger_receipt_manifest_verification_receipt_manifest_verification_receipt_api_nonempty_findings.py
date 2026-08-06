@@ -60,6 +60,10 @@ def test_validate_route_replaces_whitespace_only_finding_with_generic_failure(
         "digest\x00mismatch",
         "digest\x1fmismatch",
         "digest\x7fmismatch",
+        "digest\x80mismatch",
+        "digest\x85mismatch",
+        "digest\x9bmismatch",
+        "digest\x9fmismatch",
     ],
 )
 def test_validate_route_replaces_control_character_finding_with_generic_failure(
@@ -178,6 +182,10 @@ def test_create_route_rejects_whitespace_only_post_build_finding(
         "digest\rmismatch",
         "digest\x00mismatch",
         "digest\x7fmismatch",
+        "digest\x80mismatch",
+        "digest\x85mismatch",
+        "digest\x9bmismatch",
+        "digest\x9fmismatch",
     ],
 )
 def test_create_route_rejects_control_character_post_build_finding(
