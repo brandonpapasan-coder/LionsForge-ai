@@ -43,7 +43,7 @@ def _is_control_free(value: str) -> bool:
         ord(character) >= 32
         and ord(character) != 127
         and not 128 <= ord(character) <= 159
-        and unicodedata.category(character) != "Cf"
+        and unicodedata.category(character) not in {"Cf", "Zl", "Zp"}
         for character in value
     )
 
