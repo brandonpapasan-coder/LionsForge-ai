@@ -1,0 +1,61 @@
+name: Frontend Nanoid Remediation
+
+on:
+  push:
+    branches:
+      - fix/terraform-staging-backend-init
+    paths:
+      - .github/workflows/frontend-nanoid-remediation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate-lockfile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Pin patched nanoid and regenerate lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set overrides.nanoid=3.3.17
+          npm install --package-lock-only --no-audit --no-fund
+          npm ci --no-audit --no-fund
+
+      - name: Audit high severity dependencies
+        run: npm audit --audit-level=high
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Record resolved nanoid version
+        run: npm ls nanoid --all > nanoid-version.txt
+
+      - name: Upload patched dependency files
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-nanoid-patched-dependency-files
+          path: |
+            frontend/package.json
+            frontend/package-lock.json
+            frontend/nanoid-version.txt
+          if-no-files-found: error
+          retention-days: 7
