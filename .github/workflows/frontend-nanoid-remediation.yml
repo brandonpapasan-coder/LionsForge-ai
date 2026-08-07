@@ -9,10 +9,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   regenerate-lockfile:
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,6 +22,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: fix/terraform-staging-backend-init
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -48,6 +51,21 @@ jobs:
 
       - name: Record resolved nanoid version
         run: npm ls nanoid --all > nanoid-version.txt
+
+      - name: Commit patched dependency files
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package.json frontend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit"
+            exit 0
+          fi
+          git commit -m "fix: pin patched nanoid dependency"
+          git push origin HEAD:fix/terraform-staging-backend-init
 
       - name: Upload patched dependency files
         uses: actions/upload-artifact@v4
