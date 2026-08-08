@@ -27,13 +27,3 @@ output "database_username" {
   value     = var.database_username
   sensitive = true
 }
-
-output "database_password" {
-  value     = random_password.database.result
-  sensitive = true
-}
-
-output "database_url" {
-  value     = "postgresql+psycopg://${var.database_username}:${urlencode(random_password.database.result)}@${module.database.db_instance_address}:${module.database.db_instance_port}/${var.database_name}"
-  sensitive = true
-}
