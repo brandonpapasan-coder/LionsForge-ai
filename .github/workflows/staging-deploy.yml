@@ -71,6 +71,7 @@ jobs:
             --name lionsforge-staging \
             --region "${{ vars.AWS_REGION }}"
           kubectl cluster-info
+          kubectl get namespace lionsforge-staging
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -107,7 +108,6 @@ jobs:
           test -n "${STAGING_DATABASE_URL}"
           test -n "${STAGING_JWT_SECRET_KEY}"
           test -n "${STAGING_OPENAI_API_KEY}"
-          kubectl create namespace lionsforge-staging --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n lionsforge-staging create secret generic lionsforge-backend-secrets \
             --from-literal=DATABASE_URL="${STAGING_DATABASE_URL}" \
             --from-literal=JWT_SECRET_KEY="${STAGING_JWT_SECRET_KEY}" \
