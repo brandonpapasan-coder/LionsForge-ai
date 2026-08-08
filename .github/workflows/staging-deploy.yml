@@ -140,7 +140,6 @@ jobs:
 
       - name: Apply staging configuration
         env:
-          STAGING_DATABASE_URL: ${{ env.STAGING_DATABASE_URL }}
           STAGING_JWT_SECRET_KEY: ${{ secrets.STAGING_JWT_SECRET_KEY }}
           STAGING_OPENAI_API_KEY: ${{ secrets.STAGING_OPENAI_API_KEY }}
         run: |
