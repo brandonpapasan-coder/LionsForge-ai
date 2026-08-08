@@ -6,12 +6,6 @@ locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
-resource "random_password" "database" {
-  length           = 32
-  special          = true
-  override_special = "!#$%&*+-=?@^_"
-}
-
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.8"
@@ -100,10 +94,10 @@ module "database" {
   max_allocated_storage = 100
   storage_encrypted     = true
 
-  db_name  = var.database_name
-  username = var.database_username
-  password = random_password.database.result
-  port     = 5432
+  db_name                     = var.database_name
+  username                    = var.database_username
+  manage_master_user_password = true
+  port                        = 5432
 
   db_subnet_group_name   = module.vpc.database_subnet_group
   vpc_security_group_ids = [aws_security_group.database.id]
