@@ -59,6 +59,43 @@ jobs:
           role-to-assume: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Resolve RDS-managed staging database URL
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          DB_INFO="$(aws rds describe-db-instances \
+            --db-instance-identifier lionsforge-staging \
+            --region "${AWS_REGION}" \
+            --query 'DBInstances[0].{host:Endpoint.Address,port:Endpoint.Port,database:DBName,secretArn:MasterUserSecret.SecretArn}' \
+            --output json)"
+          SECRET_ARN="$(DB_INFO="${DB_INFO}" python3 -c 'import json,os; print(json.loads(os.environ["DB_INFO"])["secretArn"])')"
+          test -n "${SECRET_ARN}"
+          test "${SECRET_ARN}" != "None"
+          SECRET_JSON="$(aws secretsmanager get-secret-value \
+            --secret-id "${SECRET_ARN}" \
+            --region "${AWS_REGION}" \
+            --query SecretString \
+            --output text)"
+          DATABASE_URL="$(DB_INFO="${DB_INFO}" SECRET_JSON="${SECRET_JSON}" python3 - <<'PY'
+          import json
+          import os
+          from urllib.parse import quote
+
+          db = json.loads(os.environ["DB_INFO"])
+          secret = json.loads(os.environ["SECRET_JSON"])
+          username = quote(secret["username"], safe="")
+          password = quote(secret["password"], safe="")
+          host = db["host"]
+          port = db["port"]
+          database = db["database"]
+          print(f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}")
+          PY
+          )"
+          test -n "${DATABASE_URL}"
+          echo "::add-mask::${DATABASE_URL}"
+          printf 'STAGING_DATABASE_URL=%s\n' "${DATABASE_URL}" >> "${GITHUB_ENV}"
+
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -101,7 +138,7 @@ jobs:
 
       - name: Apply staging configuration
         env:
-          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_DATABASE_URL: ${{ env.STAGING_DATABASE_URL }}
           STAGING_JWT_SECRET_KEY: ${{ secrets.STAGING_JWT_SECRET_KEY }}
           STAGING_OPENAI_API_KEY: ${{ secrets.STAGING_OPENAI_API_KEY }}
         run: |
