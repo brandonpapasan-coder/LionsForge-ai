@@ -3,12 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
-export async function GET(_: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(_: NextRequest, context: { params: Promise<{ investigationId: string }> }) {
   const token = (await cookies()).get("lionsforge_session")?.value;
   if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   try {
-    const { id } = await context.params;
-    const response = await fetch(`${backendUrl}/api/v1/investigations/${id}/education-recommendations`, {
+    const { investigationId } = await context.params;
+    const response = await fetch(`${backendUrl}/api/v1/investigations/${investigationId}/education-recommendations`, {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
     });

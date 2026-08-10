@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
-async function proxy(method: "GET" | "POST", request: NextRequest | undefined, id: string) {
+async function proxy(method: "GET" | "POST", request: NextRequest | undefined, investigationId: string) {
   const token = (await cookies()).get("lionsforge_session")?.value;
   if (!token) return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   try {
-    const response = await fetch(`${backendUrl}/api/v1/investigations/${id}/claims`, {
+    const response = await fetch(`${backendUrl}/api/v1/investigations/${investigationId}/claims`, {
       method,
       headers: { authorization: `Bearer ${token}`, ...(method === "POST" ? { "content-type": "application/json" } : {}) },
       body: method === "POST" && request ? await request.text() : undefined,
@@ -19,10 +19,10 @@ async function proxy(method: "GET" | "POST", request: NextRequest | undefined, i
   }
 }
 
-export async function GET(_: NextRequest, context: { params: Promise<{ id: string }> }) {
-  return proxy("GET", undefined, (await context.params).id);
+export async function GET(_: NextRequest, context: { params: Promise<{ investigationId: string }> }) {
+  return proxy("GET", undefined, (await context.params).investigationId);
 }
 
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  return proxy("POST", request, (await context.params).id);
+export async function POST(request: NextRequest, context: { params: Promise<{ investigationId: string }> }) {
+  return proxy("POST", request, (await context.params).investigationId);
 }
