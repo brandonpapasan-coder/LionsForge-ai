@@ -7,8 +7,8 @@ on:
         description: Immutable main-branch commit SHA to deploy
         required: true
       rollback_sha:
-        description: Previously deployed immutable commit SHA for rollback reference
-        required: true
+        description: Previously deployed immutable commit SHA for rollback reference; leave blank for first ECS production deployment
+        required: false
 
 permissions:
   contents: read
@@ -36,15 +36,19 @@ jobs:
       - name: Validate immutable release inputs
         run: |
           set -euo pipefail
-          for value in "${RELEASE_SHA}" "${ROLLBACK_SHA}"; do
-            if ! printf '%s' "${value}" | grep -Eq '^[0-9a-f]{40}$'; then
-              echo "release_sha and rollback_sha must be 40-character lowercase commit SHAs" >&2
+          if ! printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "release_sha must be a 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+          if [ -n "${ROLLBACK_SHA}" ]; then
+            if ! printf '%s' "${ROLLBACK_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "rollback_sha must be a 40-character lowercase commit SHA when provided" >&2
               exit 1
             fi
-          done
-          if [ "${RELEASE_SHA}" = "${ROLLBACK_SHA}" ]; then
-            echo "rollback_sha must identify the previously deployed release" >&2
-            exit 1
+            if [ "${RELEASE_SHA}" = "${ROLLBACK_SHA}" ]; then
+              echo "rollback_sha must identify the previously deployed release" >&2
+              exit 1
+            fi
           fi
           for value in "${AWS_REGION}" "${ECR_REPOSITORY}" "${ECS_CLUSTER}" "${ECS_SERVICE}" "${ECS_CONTAINER_NAME}"; do
             test -n "${value}"
@@ -62,8 +66,12 @@ jobs:
           git fetch origin main --no-tags
           test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
           git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
-          git cat-file -e "${ROLLBACK_SHA}^{commit}"
-          git merge-base --is-ancestor "${ROLLBACK_SHA}" origin/main
+          if [ -n "${ROLLBACK_SHA}" ]; then
+            git cat-file -e "${ROLLBACK_SHA}^{commit}"
+            git merge-base --is-ancestor "${ROLLBACK_SHA}" origin/main
+          else
+            echo "Bootstrap deployment: no prior Git SHA rollback reference supplied."
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -157,7 +165,11 @@ jobs:
             echo "## OnyxMane AWS ECS backend deployment"
             echo
             echo "- Release SHA: \`${RELEASE_SHA}\`"
-            echo "- Rollback SHA: \`${ROLLBACK_SHA}\`"
+            if [ -n "${ROLLBACK_SHA}" ]; then
+              echo "- Rollback SHA: \`${ROLLBACK_SHA}\`"
+            else
+              echo "- Rollback SHA: bootstrap deployment; use previous ECS task definition"
+            fi
             echo "- AWS region: \`${AWS_REGION}\`"
             echo "- ECS cluster: \`${ECS_CLUSTER}\`"
             echo "- ECS service: \`${ECS_SERVICE}\`"
