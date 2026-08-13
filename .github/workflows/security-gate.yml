@@ -127,6 +127,7 @@ jobs:
           path: |
             python-audit.json
             npm-audit.json
+            frontend/package-lock.json
           retention-days: 30
 
   secret-scan:
