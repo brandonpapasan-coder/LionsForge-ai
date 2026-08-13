@@ -91,7 +91,33 @@ jobs:
         working-directory: frontend
         run: |
           npm install --no-audit --no-fund
+          set +e
           npm audit --audit-level=high --json > ../npm-audit.json
+          audit_status=$?
+          set -e
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("../npm-audit.json").read_text())
+          vulnerabilities = report.get("vulnerabilities", {})
+          for package, finding in vulnerabilities.items():
+              severity = finding.get("severity", "unknown")
+              if severity not in {"high", "critical"}:
+                  continue
+              via = finding.get("via", [])
+              details = []
+              for item in via:
+                  if isinstance(item, dict):
+                      title = item.get("title") or item.get("name") or "advisory"
+                      url = item.get("url") or ""
+                      details.append(f"{title} {url}".strip())
+                  else:
+                      details.append(str(item))
+              detail = "; ".join(details) or "high/critical dependency vulnerability"
+              print(f"::error title=npm audit: {package} ({severity})::{detail}")
+          PY
+          exit "$audit_status"
 
       - name: Upload dependency reports
         if: always()
@@ -101,6 +127,7 @@ jobs:
           path: |
             python-audit.json
             npm-audit.json
+            frontend/package-lock.json
           retention-days: 30
 
   secret-scan:
