@@ -20,49 +20,72 @@ Applying this stack creates billable AWS resources, including NAT Gateway, ECS/F
 ## Prerequisites
 
 - Terraform 1.8 or later
-- AWS CLI authenticated to the staging AWS account
-- IAM permission to manage VPC, ECS, ECR, ELBv2, IAM, CloudWatch Logs, EC2 security groups, and RDS
 - a secure remote Terraform state backend
-- initial backend and frontend container image URIs that can start successfully
-- an ACM certificate ARN when HTTPS is enabled
+- GitHub OIDC plan and apply roles for the protected staging environments
+- initial backend and frontend ECR image URIs that can start successfully
+- an ACM certificate ARN before acceptance testing
 - backend application secrets stored in AWS Secrets Manager or SSM Parameter Store
 
-Never put secret values in `.tfvars`, source control, workflow output, or issue comments. `backend_secrets` accepts only secret or parameter ARNs; ECS resolves the values at runtime.
+Never put secret values in `.tfvars`, source control, workflow output, issue comments, or Terraform plan text. `backend_secrets` accepts secret or parameter ARNs only; ECS resolves their values at runtime.
 
-## Bootstrap variables
+## Protected GitHub execution
 
-Create a local, untracked variable file such as `staging.auto.tfvars` with non-secret infrastructure values only:
+The recommended provisioning path is GitHub Actions, not an operator workstation.
 
-```hcl
-bootstrap_backend_image  = "ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/onyxmane-staging-backend:BOOTSTRAP_SHA"
-bootstrap_frontend_image = "ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/onyxmane-staging-frontend:BOOTSTRAP_SHA"
-acm_certificate_arn      = "arn:aws:acm:us-east-1:ACCOUNT:certificate/EXAMPLE"
+Configure the `staging` environment variables:
 
-backend_secrets = {
-  DATABASE_URL    = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:onyxmane/staging/database-url"
-  JWT_SECRET_KEY  = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:onyxmane/staging/jwt-secret"
-  OPENAI_API_KEY  = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:onyxmane/staging/openai-api-key"
-}
-```
+- `AWS_REGION`
+- `TF_STATE_BUCKET`
+- `AWS_TERRAFORM_PLAN_ROLE_ARN`
+- `STAGING_BOOTSTRAP_BACKEND_IMAGE`
+- `STAGING_BOOTSTRAP_FRONTEND_IMAGE`
+- `STAGING_ACM_CERTIFICATE_ARN`
 
-The example above contains placeholders only. Do not commit real account identifiers, secret values, or private endpoints.
+Configure the `staging` environment secret:
 
-## Provision
+- `STAGING_BACKEND_SECRET_ARNS_JSON`
+
+`STAGING_BACKEND_SECRET_ARNS_JSON` must be a JSON object containing at least `DATABASE_URL`, `JWT_SECRET_KEY`, and `OPENAI_API_KEY`, with each value set to an AWS Secrets Manager or SSM Parameter Store ARN. It must contain no secret values.
+
+The bootstrap backend and frontend image variables must use immutable ECR image tags that are exact 40-character commit SHAs. They may point to known-good images already present in the account for the first infrastructure creation. After ECS services exist, normal staging releases are performed by the dedicated ECS deployment workflows.
+
+Configure the protected `staging-apply` environment variable:
+
+- `AWS_TERRAFORM_APPLY_ROLE_ARN`
+
+Also expose `AWS_REGION` and `TF_STATE_BUCKET` to `staging-apply`. Require a manual reviewer for `staging-apply` so a reviewed plan cannot be applied without explicit approval.
+
+### Plan
+
+Run **Terraform Staging Plan**. The workflow validates all required execution inputs before authenticating to AWS, initializes the remote state backend, validates Terraform, produces `staging.tfplan`, renders a human-readable plan, and uploads both as the `staging-terraform-plan` artifact.
+
+Record the workflow run ID after reviewing the plan. Do not apply a plan that contains unexpected replacement, deletion, networking, IAM, database, or public-ingress changes.
+
+### Apply
+
+Run **Terraform Staging Apply** with:
+
+- `confirmation`: `APPLY-STAGING`
+- `plan_run_id`: the exact reviewed plan workflow run ID
+
+The apply workflow downloads that plan artifact, re-renders the binary plan, verifies it exactly matches the reviewed plan text, and only then runs `terraform apply`. This prevents an operator from silently generating a new plan at apply time.
+
+## Local validation only
+
+For development-time formatting and validation without applying resources:
 
 ```bash
 cd infra/terraform/aws/staging
-terraform init -backend-config=backend.hcl
 terraform fmt -check
+terraform init -backend=false
 terraform validate
-terraform plan -out staging.tfplan
-terraform apply staging.tfplan
 ```
 
-Use a dedicated AWS account or tightly isolated staging account where possible.
+Do not use local `terraform apply` for the shared staging environment except during a documented recovery procedure.
 
-## Required GitHub `staging` environment variables
+## Required GitHub `staging` deployment variables
 
-After apply, configure the workflow variables from Terraform outputs and AWS resource names:
+After Terraform apply, configure the ECS release workflows from Terraform outputs and AWS resource names:
 
 - `AWS_REGION`
 - `AWS_STAGING_DEPLOY_ROLE_ARN`
@@ -76,17 +99,17 @@ After apply, configure the workflow variables from Terraform outputs and AWS res
 - `STAGING_API_URL`
 - `STAGING_WEB_URL`
 
-The ECS deployment workflows use GitHub OIDC. The staging deploy role must trust the repository's protected `staging` environment and should have only the ECR/ECS permissions required to push images, read/register task definitions, update the two staging services, and inspect service state.
+The ECS deployment role must trust the repository's protected `staging` environment and should have only the ECR/ECS permissions required to push images, read/register task definitions, update the two staging services, and inspect service state.
 
 ## DNS and TLS
 
-Point the staging web and API hostnames to `terraform output -raw alb_dns_name`. Configure an ACM certificate in `acm_certificate_arn` before acceptance testing. When a certificate is configured, port 80 redirects to HTTPS and the HTTPS listener routes configured backend paths to the backend target group; all other traffic goes to the frontend target group.
+Point the staging web and API hostnames to `terraform output -raw alb_dns_name`. Configure an ACM certificate in `STAGING_ACM_CERTIFICATE_ARN` before acceptance testing. When a certificate is configured, port 80 redirects to HTTPS and the HTTPS listener routes configured backend paths to the backend target group; all other traffic goes to the frontend target group.
 
 Do not mark staging accepted until both target groups are healthy and the public endpoints pass HTTPS smoke tests.
 
 ## Service bootstrap and normal releases
 
-Terraform creates the ECS services with `bootstrap_backend_image` and `bootstrap_frontend_image`. After the services exist, normal releases should use the repository's staging ECS deployment workflows rather than Terraform image changes. Those workflows replace only the container image in the current task definition, wait for service stability, and preserve the existing runtime configuration and secret bindings.
+Terraform creates the ECS services with the immutable bootstrap backend and frontend images. After the services exist, normal releases should use the repository's staging ECS deployment workflows rather than Terraform image changes. Those workflows replace only the container image in the current task definition, wait for service stability, and preserve the existing runtime configuration and secret bindings.
 
 For every release, use one exact 40-character commit SHA contained in protected `main`. Record the ECR digest, resulting task-definition revision, running service state, target health, and smoke-test results in the staging acceptance evidence.
 
@@ -96,8 +119,4 @@ RDS deletion protection is enabled and a final snapshot is required. Terraform d
 
 ## Destroy
 
-Destroying staging is a controlled operation. First back up required data, disable deletion protection in a reviewed change, apply that change, and only then run:
-
-```bash
-terraform destroy
-```
+Destroying staging is a controlled operation. First back up required data, disable deletion protection in a reviewed change, apply that change, and only then run a separately reviewed destroy procedure. Do not repurpose the normal staging apply workflow for destruction.

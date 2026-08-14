@@ -15,9 +15,45 @@ jobs:
     defaults:
       run:
         working-directory: infra/terraform/aws/staging
+    env:
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_bootstrap_backend_image: ${{ vars.STAGING_BOOTSTRAP_BACKEND_IMAGE }}
+      TF_VAR_bootstrap_frontend_image: ${{ vars.STAGING_BOOTSTRAP_FRONTEND_IMAGE }}
+      TF_VAR_acm_certificate_arn: ${{ vars.STAGING_ACM_CERTIFICATE_ARN }}
+      TF_VAR_backend_secrets: ${{ secrets.STAGING_BACKEND_SECRET_ARNS_JSON }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate staging Terraform execution inputs
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          PLAN_ROLE_ARN: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          for value in "${TF_STATE_BUCKET}" "${PLAN_ROLE_ARN}" "${TF_VAR_aws_region}" "${TF_VAR_bootstrap_backend_image}" "${TF_VAR_bootstrap_frontend_image}"; do
+            test -n "${value}"
+          done
+          if ! printf '%s' "${TF_VAR_bootstrap_backend_image}" | grep -Eq '\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/.+:[0-9a-f]{40}$'; then
+            echo "STAGING_BOOTSTRAP_BACKEND_IMAGE must be an ECR image URI tagged with an immutable 40-character commit SHA" >&2
+            exit 1
+          fi
+          if ! printf '%s' "${TF_VAR_bootstrap_frontend_image}" | grep -Eq '\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/.+:[0-9a-f]{40}$'; then
+            echo "STAGING_BOOTSTRAP_FRONTEND_IMAGE must be an ECR image URI tagged with an immutable 40-character commit SHA" >&2
+            exit 1
+          fi
+          if [ -n "${TF_VAR_acm_certificate_arn}" ] && ! printf '%s' "${TF_VAR_acm_certificate_arn}" | grep -Eq '^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[A-Za-z0-9-]+$'; then
+            echo "STAGING_ACM_CERTIFICATE_ARN must be a valid ACM certificate ARN when provided" >&2
+            exit 1
+          fi
+          test -n "${TF_VAR_backend_secrets}"
+          printf '%s' "${TF_VAR_backend_secrets}" | jq -e '
+            type == "object" and
+            has("DATABASE_URL") and
+            has("JWT_SECRET_KEY") and
+            has("OPENAI_API_KEY") and
+            all(.[]; type == "string" and (startswith("arn:aws:secretsmanager:") or startswith("arn:aws:ssm:")))
+          ' >/dev/null
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
