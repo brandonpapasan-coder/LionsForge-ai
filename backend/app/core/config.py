@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5.5"
     openai_timeout_seconds: float = 30.0
     openai_max_retries: int = 2
+    openai_max_input_chars: int = 24000
+    openai_max_output_tokens: int = 4000
 
     promotions_enabled: bool = False
     beta_lifetime_discount_enabled: bool = False
