@@ -1,0 +1,174 @@
+name: Staging ECS Backend Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Immutable main-branch commit SHA to deploy
+        required: true
+      rollback_sha:
+        description: Previously deployed immutable commit SHA for rollback reference; leave blank for first ECS staging deployment
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: onyxmane-staging-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_BACKEND_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_STAGING_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_STAGING_BACKEND_SERVICE }}
+      ECS_CONTAINER_NAME: ${{ vars.ECS_BACKEND_CONTAINER_NAME }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      ROLLBACK_SHA: ${{ inputs.rollback_sha }}
+
+    steps:
+      - name: Validate immutable release inputs
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "release_sha must be a 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+          if [ -n "${ROLLBACK_SHA}" ]; then
+            if ! printf '%s' "${ROLLBACK_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "rollback_sha must be a 40-character lowercase commit SHA when provided" >&2
+              exit 1
+            fi
+            if [ "${RELEASE_SHA}" = "${ROLLBACK_SHA}" ]; then
+              echo "rollback_sha must identify the previously deployed release" >&2
+              exit 1
+            fi
+          fi
+          for value in "${AWS_REGION}" "${ECR_REPOSITORY}" "${ECS_CLUSTER}" "${ECS_SERVICE}" "${ECS_CONTAINER_NAME}"; do
+            test -n "${value}"
+          done
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release and rollback commits are on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+          if [ -n "${ROLLBACK_SHA}" ]; then
+            git cat-file -e "${ROLLBACK_SHA}^{commit}"
+            git merge-base --is-ancestor "${ROLLBACK_SHA}" origin/main
+          else
+            echo "Bootstrap staging deployment: no prior Git SHA rollback reference supplied."
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify target ECS service
+        run: |
+          set -euo pipefail
+          read -r STATUS DESIRED RUNNING <<<"$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].[status,desiredCount,runningCount]' \
+            --output text)"
+          test "${STATUS}" = "ACTIVE"
+          test "${DESIRED}" -ge 1
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push immutable backend image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          set -euo pipefail
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${RELEASE_SHA}"
+          docker build --pull -t "${IMAGE}" backend
+          docker push "${IMAGE}"
+          DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${RELEASE_SHA}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if ! printf '%s' "${DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "Could not resolve immutable ECR image digest" >&2
+            exit 1
+          fi
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          echo "IMAGE_DIGEST=${DIGEST}" >> "$GITHUB_ENV"
+
+      - name: Download current ECS task definition
+        run: |
+          set -euo pipefail
+          TASK_DEFINITION_ARN="$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+          test -n "${TASK_DEFINITION_ARN}"
+          aws ecs describe-task-definition \
+            --task-definition "${TASK_DEFINITION_ARN}" \
+            --query taskDefinition \
+            > task-definition.json
+          echo "PREVIOUS_TASK_DEFINITION_ARN=${TASK_DEFINITION_ARN}" >> "$GITHUB_ENV"
+
+      - name: Render task definition with release image
+        id: render-task
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          image: ${{ env.IMAGE }}
+
+      - name: Deploy task definition to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Verify stable staging service
+        run: |
+          set -euo pipefail
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}"
+          read -r STATUS DESIRED RUNNING PENDING <<<"$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].[status,desiredCount,runningCount,pendingCount]' \
+            --output text)"
+          test "${STATUS}" = "ACTIVE"
+          test "${RUNNING}" = "${DESIRED}"
+          test "${PENDING}" = "0"
+
+      - name: Record staging deployment summary
+        if: always()
+        run: |
+          {
+            echo "## OnyxMane AWS ECS staging backend deployment"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- AWS region: \`${AWS_REGION}\`"
+            echo "- ECS cluster: \`${ECS_CLUSTER}\`"
+            echo "- ECS service: \`${ECS_SERVICE}\`"
+            echo "- ECR repository: \`${ECR_REPOSITORY}\`"
+            echo "- Image digest: \`${IMAGE_DIGEST:-unavailable}\`"
+            echo "- Previous task definition: \`${PREVIOUS_TASK_DEFINITION_ARN:-unavailable}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -1,0 +1,157 @@
+name: Staging ECS Frontend Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Immutable main-branch commit SHA to deploy
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: onyxmane-staging-frontend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_FRONTEND_REPOSITORY }}
+      ECS_CLUSTER: ${{ vars.ECS_STAGING_CLUSTER }}
+      ECS_SERVICE: ${{ vars.ECS_STAGING_FRONTEND_SERVICE }}
+      ECS_CONTAINER_NAME: ${{ vars.ECS_FRONTEND_CONTAINER_NAME }}
+      STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+
+    steps:
+      - name: Validate immutable release inputs
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "release_sha must be a 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+          for value in "${AWS_REGION}" "${ECR_REPOSITORY}" "${ECS_CLUSTER}" "${ECS_SERVICE}" "${ECS_CONTAINER_NAME}"; do
+            test -n "${value}"
+          done
+          case "${STAGING_WEB_URL}" in
+            https://*) ;;
+            *) echo "STAGING_WEB_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release commit is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify target ECS service
+        run: |
+          set -euo pipefail
+          STATUS="$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}" --query 'services[0].status' --output text)"
+          test "${STATUS}" = "ACTIVE"
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push immutable frontend image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          set -euo pipefail
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${RELEASE_SHA}"
+          docker build --pull -t "${IMAGE}" frontend
+          docker push "${IMAGE}"
+          DIGEST="$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY}" \
+            --image-ids imageTag="${RELEASE_SHA}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)"
+          if ! printf '%s' "${DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "Could not resolve immutable ECR image digest" >&2
+            exit 1
+          fi
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          echo "IMAGE_DIGEST=${DIGEST}" >> "$GITHUB_ENV"
+
+      - name: Download current ECS task definition
+        run: |
+          set -euo pipefail
+          TASK_DEFINITION_ARN="$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+          test -n "${TASK_DEFINITION_ARN}"
+          aws ecs describe-task-definition --task-definition "${TASK_DEFINITION_ARN}" --query taskDefinition > task-definition.json
+          echo "PREVIOUS_TASK_DEFINITION_ARN=${TASK_DEFINITION_ARN}" >> "$GITHUB_ENV"
+
+      - name: Render task definition with release image
+        id: render-task
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          image: ${{ env.IMAGE }}
+
+      - name: Deploy task definition to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Verify stable staging frontend service
+        run: |
+          set -euo pipefail
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${ECS_SERVICE}"
+          read -r STATUS DESIRED RUNNING PENDING <<<"$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].[status,desiredCount,runningCount,pendingCount]' \
+            --output text)"
+          test "${STATUS}" = "ACTIVE"
+          test "${RUNNING}" = "${DESIRED}"
+          test "${PENDING}" = "0"
+
+      - name: Smoke test frontend
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "${STAGING_WEB_URL}/login" > login.html
+          grep -Eqi 'OnyxMane|LionsForge' login.html
+
+      - name: Record staging frontend deployment summary
+        if: always()
+        run: |
+          {
+            echo "## OnyxMane AWS ECS staging frontend deployment"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- AWS region: \`${AWS_REGION}\`"
+            echo "- ECS cluster: \`${ECS_CLUSTER}\`"
+            echo "- ECS service: \`${ECS_SERVICE}\`"
+            echo "- ECR repository: \`${ECR_REPOSITORY}\`"
+            echo "- Image digest: \`${IMAGE_DIGEST:-unavailable}\`"
+            echo "- Previous task definition: \`${PREVIOUS_TASK_DEFINITION_ARN:-unavailable}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
