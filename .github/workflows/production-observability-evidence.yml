@@ -1,0 +1,171 @@
+name: Production Observability Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character lowercase production release commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_PRODUCTION_CLUSTER }}
+      BACKEND_SERVICE: ${{ vars.ECS_PRODUCTION_BACKEND_SERVICE }}
+      FRONTEND_SERVICE: ${{ vars.ECS_PRODUCTION_FRONTEND_SERVICE }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      ALB_ARN: ${{ vars.PRODUCTION_ALB_ARN }}
+      BACKEND_TARGET_GROUP_ARN: ${{ vars.PRODUCTION_BACKEND_TARGET_GROUP_ARN }}
+      FRONTEND_TARGET_GROUP_ARN: ${{ vars.PRODUCTION_FRONTEND_TARGET_GROUP_ARN }}
+
+    steps:
+      - name: Validate release SHA and required production identifiers
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "release_sha must be an exact lowercase 40-character commit SHA" >&2; exit 1; }
+          for value in "${AWS_REGION}" "${ECS_CLUSTER}" "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}"; do
+            test -n "${value}"
+          done
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release commit is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Capture ECS service and scaling evidence
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" \
+            --query 'services[].{serviceName:serviceName,status:status,desiredCount:desiredCount,runningCount:runningCount,pendingCount:pendingCount,taskDefinition:taskDefinition,deploymentConfiguration:deploymentConfiguration,capacityProviderStrategy:capacityProviderStrategy,healthCheckGracePeriodSeconds:healthCheckGracePeriodSeconds}' \
+            > evidence/ecs-services.json
+
+          aws application-autoscaling describe-scalable-targets \
+            --service-namespace ecs \
+            --query 'ScalableTargets[?contains(ResourceId, `service/`)].{ResourceId:ResourceId,MinCapacity:MinCapacity,MaxCapacity:MaxCapacity,SuspendedState:SuspendedState}' \
+            > evidence/ecs-scalable-targets.json
+
+          aws application-autoscaling describe-scaling-policies \
+            --service-namespace ecs \
+            --query 'ScalingPolicies[].{PolicyName:PolicyName,PolicyType:PolicyType,ResourceId:ResourceId,TargetTrackingScalingPolicyConfiguration:TargetTrackingScalingPolicyConfiguration,StepScalingPolicyConfiguration:StepScalingPolicyConfiguration}' \
+            > evidence/ecs-scaling-policies.json
+
+      - name: Capture CloudWatch alarm evidence
+        run: |
+          set -euo pipefail
+          aws cloudwatch describe-alarms \
+            --query 'MetricAlarms[].{AlarmName:AlarmName,AlarmArn:AlarmArn,StateValue:StateValue,ActionsEnabled:ActionsEnabled,Namespace:Namespace,MetricName:MetricName,Dimensions:Dimensions,Statistic:Statistic,ExtendedStatistic:ExtendedStatistic,Period:Period,EvaluationPeriods:EvaluationPeriods,DatapointsToAlarm:DatapointsToAlarm,Threshold:Threshold,ComparisonOperator:ComparisonOperator,TreatMissingData:TreatMissingData,AlarmActions:AlarmActions,OKActions:OKActions,InsufficientDataActions:InsufficientDataActions}' \
+            > evidence/cloudwatch-alarms.json
+
+          aws logs describe-log-groups \
+            --query 'logGroups[?contains(logGroupName, `onyxmane`) || contains(logGroupName, `lionsforge`)].{logGroupName:logGroupName,retentionInDays:retentionInDays,storedBytes:storedBytes,kmsKeyId:kmsKeyId}' \
+            > evidence/log-groups.json
+
+      - name: Capture ALB and target-health evidence
+        if: env.ALB_ARN != ''
+        run: |
+          set -euo pipefail
+          aws elbv2 describe-load-balancers \
+            --load-balancer-arns "${ALB_ARN}" \
+            --query 'LoadBalancers[].{LoadBalancerName:LoadBalancerName,Scheme:Scheme,Type:Type,State:State,AvailabilityZones:AvailabilityZones,DNSName:DNSName}' \
+            > evidence/alb.json
+
+          if [ -n "${BACKEND_TARGET_GROUP_ARN}" ]; then
+            aws elbv2 describe-target-health \
+              --target-group-arn "${BACKEND_TARGET_GROUP_ARN}" \
+              --query 'TargetHealthDescriptions[].{Target:Target,TargetHealth:TargetHealth}' \
+              > evidence/backend-target-health.json
+          fi
+          if [ -n "${FRONTEND_TARGET_GROUP_ARN}" ]; then
+            aws elbv2 describe-target-health \
+              --target-group-arn "${FRONTEND_TARGET_GROUP_ARN}" \
+              --query 'TargetHealthDescriptions[].{Target:Target,TargetHealth:TargetHealth}' \
+              > evidence/frontend-target-health.json
+          fi
+
+      - name: Evaluate minimum observability readiness
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          services = json.loads(Path('evidence/ecs-services.json').read_text())
+          alarms = json.loads(Path('evidence/cloudwatch-alarms.json').read_text())
+          targets = json.loads(Path('evidence/ecs-scalable-targets.json').read_text())
+
+          failures = []
+          if len(services) != 2:
+              failures.append('expected backend and frontend ECS services')
+          for svc in services:
+              if svc.get('status') != 'ACTIVE':
+                  failures.append(f"service {svc.get('serviceName')} not ACTIVE")
+              if svc.get('pendingCount') != 0:
+                  failures.append(f"service {svc.get('serviceName')} has pending tasks")
+              if svc.get('runningCount') != svc.get('desiredCount'):
+                  failures.append(f"service {svc.get('serviceName')} running count differs from desired")
+          if not alarms:
+              failures.append('no CloudWatch metric alarms found')
+          if not targets:
+              failures.append('no ECS Application Auto Scaling targets found')
+
+          result = {'status': 'PASS' if not failures else 'FAIL', 'failures': failures}
+          Path('evidence/readiness.json').write_text(json.dumps(result, indent=2) + '\n')
+          if failures:
+              raise SystemExit('\n'.join(failures))
+          PY
+
+      - name: Write checksums
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -d evidence ]; then
+            find evidence -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > evidence/SHA256SUMS
+          fi
+
+      - name: Upload production observability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-observability-evidence-${{ inputs.release_sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Production observability evidence"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- ECS cluster: \`${ECS_CLUSTER}\`"
+            echo "- Backend service: \`${BACKEND_SERVICE}\`"
+            echo "- Frontend service: \`${FRONTEND_SERVICE}\`"
+            echo "- Evidence artifact retains only selected non-secret service, scaling, alarm, log-group, ALB, and target-health metadata."
+          } >> "${GITHUB_STEP_SUMMARY}"
