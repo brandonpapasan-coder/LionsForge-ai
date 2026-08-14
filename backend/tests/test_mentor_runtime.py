@@ -2,6 +2,33 @@ from app.services.mentor import MentorOrchestrator
 from tests.conftest import auth_headers
 
 
+class StubResearchProvider:
+    def generate(self, *, message, context, intent, persona):
+        return {
+            "answer": "The claim depends on outcomes, transfer, cost, and credential value; validate learning outcomes first.",
+            "evidence": [
+                {
+                    "label": "Education outcomes source",
+                    "detail": "Retrieved primary-source evidence indicates learning outcomes must be measured directly rather than inferred from delivery format.",
+                    "source_type": "primary_source",
+                }
+            ],
+            "reasoning": ["Compare measurable outcomes before making a superiority claim."],
+            "assumptions": ["The platform can produce durable skill transfer."],
+            "confidence": "medium",
+            "confidence_reason": "External evidence was retrieved, but product-specific comparative outcomes still require validation.",
+            "alternative_viewpoints": ["Traditional programs may retain advantages in credentials, networks, and supervised practice."],
+            "recommendations": [
+                {
+                    "title": "Run a controlled learning-outcomes pilot",
+                    "reason": "Direct outcome measurement tests the strongest product claim.",
+                    "action_type": "validation",
+                    "action_target": "learning-outcomes-pilot",
+                }
+            ],
+        }
+
+
 def test_intent_classifier_routes_specialists():
     orchestrator = MentorOrchestrator()
 
@@ -24,6 +51,20 @@ def test_compose_returns_explainable_contract():
     assert payload["assumptions"]
     assert payload["confidence"] == "moderate"
     assert any(item["action_type"] == "research_report" for item in payload["recommendations"])
+
+
+def test_generated_research_evidence_is_exposed_before_runtime_metadata():
+    payload = MentorOrchestrator(provider=StubResearchProvider()).compose(
+        "Research whether an AI education platform can outperform college using evidence",
+        {"goal": "Validate educational value"},
+    )
+
+    assert payload["intent"] == "research"
+    assert payload["evidence"][0]["source_type"] == "primary_source"
+    assert payload["evidence"][0]["label"] == "Education outcomes source"
+    assert payload["evidence"][-1]["source_type"] in {"mentor_runtime", "platform_context"}
+    assert payload["confidence"] == "medium"
+    assert payload["recommendations"][0]["action_type"] == "validation"
 
 
 def test_authenticated_chat_persists_and_reopens(client):
