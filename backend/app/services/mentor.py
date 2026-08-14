@@ -27,7 +27,7 @@ class MentorOrchestrator:
         for keywords, intent, persona in self._rules:
             if any(keyword in normalized for keyword in keywords):
                 return MentorPlan(intent=intent, persona=persona)
-        return MentorPlan(intent="general", persona="LionsForge Mentor")
+        return MentorPlan(intent="general", persona="OnyxMane Mentor")
 
     def compose(self, message: str, context: dict) -> dict:
         plan = self.classify(message)
@@ -37,9 +37,9 @@ class MentorOrchestrator:
             intent=plan.intent,
             persona=plan.persona,
         )
-        evidence = self._evidence(plan, context)
+        context_evidence = self._evidence(plan, context)
         if generated:
-            return self._normalize_generated(generated, plan, evidence)
+            return self._normalize_generated(generated, plan, context_evidence)
 
         answer = self._answer(message, plan)
         reasoning = [
@@ -48,22 +48,22 @@ class MentorOrchestrator:
             "The response separates general guidance from user-specific context and avoids presenting unsupported facts as verified evidence.",
         ]
         assumptions = [
-            "No external live-data source was requested or supplied in this interaction.",
+            "No external live-data source was available to the deterministic fallback in this interaction.",
             "The user is seeking educational and analytical guidance rather than individualized regulated advice.",
         ]
         alternatives = self._alternatives(plan)
         recommendations = self._recommendations(plan, context)
         confidence = "moderate" if context else "low"
         confidence_reason = (
-            "The response is grounded in supplied platform context, but no external primary sources were retrieved."
+            "The response is grounded in supplied platform context, but external retrieval did not produce a validated model response."
             if context
-            else "The response is based on general domain principles because no lesson, report, or project context was supplied."
+            else "The response is based on general domain principles because no validated external evidence or platform context was available."
         )
         return {
             "intent": plan.intent,
             "persona": plan.persona,
             "answer": answer,
-            "evidence": [item.model_dump() for item in evidence],
+            "evidence": [item.model_dump() for item in context_evidence],
             "reasoning": reasoning,
             "assumptions": assumptions,
             "confidence": confidence,
@@ -72,16 +72,19 @@ class MentorOrchestrator:
             "recommendations": [item.model_dump() for item in recommendations],
         }
 
-    def _normalize_generated(self, generated: dict, plan: MentorPlan, evidence: list[EvidenceItem]) -> dict:
+    def _normalize_generated(self, generated: dict, plan: MentorPlan, context_evidence: list[EvidenceItem]) -> dict:
         fallback_recommendations = [item.model_dump() for item in self._recommendations(plan, {})]
         recommendations = generated.get("recommendations")
         if not isinstance(recommendations, list):
             recommendations = fallback_recommendations
+
+        generated_evidence = self._generated_evidence(generated.get("evidence"))
+        evidence = generated_evidence + [item.model_dump() for item in context_evidence]
         return {
             "intent": plan.intent,
             "persona": plan.persona,
             "answer": str(generated.get("answer") or "No answer was generated."),
-            "evidence": [item.model_dump() for item in evidence],
+            "evidence": evidence,
             "reasoning": self._string_list(generated.get("reasoning")),
             "assumptions": self._string_list(generated.get("assumptions")),
             "confidence": str(generated.get("confidence") or "moderate"),
@@ -89,6 +92,20 @@ class MentorOrchestrator:
             "alternative_viewpoints": self._string_list(generated.get("alternative_viewpoints")),
             "recommendations": recommendations,
         }
+
+    @staticmethod
+    def _generated_evidence(value: object) -> list[dict]:
+        if not isinstance(value, list):
+            return []
+        evidence: list[dict] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            try:
+                evidence.append(EvidenceItem.model_validate(item).model_dump())
+            except ValueError:
+                continue
+        return evidence
 
     @staticmethod
     def _string_list(value: object) -> list[str]:
@@ -107,7 +124,7 @@ class MentorOrchestrator:
     def _evidence(self, plan: MentorPlan, context: dict) -> list[EvidenceItem]:
         items = [
             EvidenceItem(
-                label="Intent classification",
+                label="Runtime routing",
                 detail=f"Primary domain identified as {plan.intent}; routed to {plan.persona}.",
                 source_type="mentor_runtime",
             )
