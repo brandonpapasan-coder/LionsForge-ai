@@ -1,0 +1,129 @@
+name: Production RDS Backup Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character lowercase production release commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: onyxmane-production-rds-backup-evidence
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      RDS_DB_INSTANCE_IDENTIFIER: ${{ vars.RDS_PRODUCTION_DB_INSTANCE_IDENTIFIER }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+
+    steps:
+      - name: Validate immutable release and configuration inputs
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "release_sha must be an exact 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+          test -n "${AWS_REGION}"
+          test -n "${RDS_DB_INSTANCE_IDENTIFIER}"
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release commit is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Capture non-secret RDS backup configuration
+        run: |
+          set -euo pipefail
+          mkdir -p production-rds-backup-evidence
+          aws rds describe-db-instances \
+            --db-instance-identifier "${RDS_DB_INSTANCE_IDENTIFIER}" \
+            --query 'DBInstances[0].{DBInstanceIdentifier:DBInstanceIdentifier,DBInstanceStatus:DBInstanceStatus,Engine:Engine,EngineVersion:EngineVersion,BackupRetentionPeriod:BackupRetentionPeriod,PreferredBackupWindow:PreferredBackupWindow,LatestRestorableTime:LatestRestorableTime,MultiAZ:MultiAZ,StorageEncrypted:StorageEncrypted,DeletionProtection:DeletionProtection,PubliclyAccessible:PubliclyAccessible,AutoMinorVersionUpgrade:AutoMinorVersionUpgrade}' \
+            --output json > production-rds-backup-evidence/db-instance.json
+
+          STATUS="$(jq -r '.DBInstanceStatus' production-rds-backup-evidence/db-instance.json)"
+          RETENTION="$(jq -r '.BackupRetentionPeriod' production-rds-backup-evidence/db-instance.json)"
+          ENCRYPTED="$(jq -r '.StorageEncrypted' production-rds-backup-evidence/db-instance.json)"
+          test "${STATUS}" = "available"
+          test "${RETENTION}" -gt 0
+          test "${ENCRYPTED}" = "true"
+
+      - name: Capture latest automated backup metadata
+        run: |
+          set -euo pipefail
+          aws rds describe-db-snapshots \
+            --db-instance-identifier "${RDS_DB_INSTANCE_IDENTIFIER}" \
+            --snapshot-type automated \
+            --query 'reverse(sort_by(DBSnapshots,&SnapshotCreateTime))[:5].{DBSnapshotIdentifier:DBSnapshotIdentifier,SnapshotCreateTime:SnapshotCreateTime,Status:Status,Encrypted:Encrypted,Engine:Engine,EngineVersion:EngineVersion}' \
+            --output json > production-rds-backup-evidence/automated-snapshots.json
+
+          COUNT="$(jq 'length' production-rds-backup-evidence/automated-snapshots.json)"
+          test "${COUNT}" -gt 0
+          jq -e 'all(.[]; .Status == "available" and .Encrypted == true)' \
+            production-rds-backup-evidence/automated-snapshots.json >/dev/null
+
+      - name: Write evidence manifest and checksums
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg release_sha "${RELEASE_SHA}" \
+            --arg aws_region "${AWS_REGION}" \
+            --arg db_instance_identifier "${RDS_DB_INSTANCE_IDENTIFIER}" \
+            --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{schema_version:1,release_sha:$release_sha,aws_region:$aws_region,db_instance_identifier:$db_instance_identifier,captured_at:$captured_at,scope:"read-only backup configuration and automated snapshot metadata; no database data or credentials"}' \
+            > production-rds-backup-evidence/manifest.json
+          (cd production-rds-backup-evidence && sha256sum *.json > SHA256SUMS)
+
+      - name: Upload production RDS backup evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-rds-backup-evidence-${{ inputs.release_sha }}
+          path: production-rds-backup-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish backup evidence summary
+        if: always()
+        run: |
+          {
+            echo "## Production RDS backup evidence"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- AWS region: \`${AWS_REGION}\`"
+            echo "- DB instance identifier: \`${RDS_DB_INSTANCE_IDENTIFIER}\`"
+            if [[ -f production-rds-backup-evidence/db-instance.json ]]; then
+              echo "- DB status: \`$(jq -r '.DBInstanceStatus' production-rds-backup-evidence/db-instance.json)\`"
+              echo "- Backup retention days: \`$(jq -r '.BackupRetentionPeriod' production-rds-backup-evidence/db-instance.json)\`"
+              echo "- Storage encrypted: \`$(jq -r '.StorageEncrypted' production-rds-backup-evidence/db-instance.json)\`"
+              echo "- Latest restorable time: \`$(jq -r '.LatestRestorableTime' production-rds-backup-evidence/db-instance.json)\`"
+            fi
+            if [[ -f production-rds-backup-evidence/automated-snapshots.json ]]; then
+              echo "- Automated snapshots captured: \`$(jq 'length' production-rds-backup-evidence/automated-snapshots.json)\`"
+            fi
+            echo
+            echo "This workflow is read-only. It verifies backup configuration and snapshot metadata; it does not claim restore success."
+          } >> "${GITHUB_STEP_SUMMARY}"
