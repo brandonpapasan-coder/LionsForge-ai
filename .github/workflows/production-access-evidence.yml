@@ -1,0 +1,238 @@
+name: Production Access Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character lowercase main-branch release SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AUDIT_ROLE_ARN: ${{ vars.AWS_PRODUCTION_AUDIT_ROLE_ARN }}
+      DEPLOY_ROLE_ARN: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+
+    steps:
+      - name: Validate immutable inputs
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "release_sha must be an exact 40-character lowercase SHA" >&2
+            exit 1
+          }
+          for value in "${AWS_REGION}" "${AUDIT_ROLE_ARN}" "${DEPLOY_ROLE_ARN}"; do
+            test -n "${value}"
+          done
+          [[ "${AUDIT_ROLE_ARN}" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]] || exit 1
+          [[ "${DEPLOY_ROLE_ARN}" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]] || exit 1
+
+      - name: Checkout exact release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release is contained in main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Validate GitHub workflow permissions
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.github/workflows')
+          targets = sorted(root.glob('production-*.yml'))
+          if not targets:
+              raise SystemExit('no production workflows found')
+
+          findings = []
+          for path in targets:
+              text = path.read_text(encoding='utf-8')
+              # Reject broad GitHub token permission shortcuts in production workflows.
+              if re.search(r'^permissions:\s*(write-all|read-all)\s*$', text, re.M):
+                  findings.append(f'{path}: broad permissions shortcut present')
+              # Production AWS workflows must use OIDC rather than stored AWS access keys.
+              if 'configure-aws-credentials' in text and 'id-token: write' not in text:
+                  findings.append(f'{path}: AWS authentication lacks id-token: write')
+              if re.search(r'AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)', text):
+                  findings.append(f'{path}: static AWS credential reference present')
+
+          if findings:
+              print('\n'.join(findings))
+              raise SystemExit(1)
+          print(f'Validated GitHub permissions for {len(targets)} production workflows')
+          PY
+
+      - name: Configure AWS audit credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AUDIT_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Capture and validate production deploy role
+        run: |
+          set -euo pipefail
+          mkdir -p production-access-evidence
+          ROLE_NAME="${DEPLOY_ROLE_ARN##*/}"
+          echo "${ROLE_NAME}" > production-access-evidence/deploy-role-name.txt
+
+          aws iam get-role --role-name "${ROLE_NAME}" > production-access-evidence/role.json
+          aws iam list-attached-role-policies --role-name "${ROLE_NAME}" > production-access-evidence/attached-policies.json
+          aws iam list-role-policies --role-name "${ROLE_NAME}" > production-access-evidence/inline-policy-names.json
+
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          from urllib.parse import unquote
+
+          out = Path('production-access-evidence')
+          role = json.loads((out / 'role.json').read_text())['Role']
+          trust = role['AssumeRolePolicyDocument']
+          repo = os.environ['GITHUB_REPOSITORY']
+
+          trust_text = json.dumps(trust, sort_keys=True)
+          required_subject = f'repo:{repo}:environment:production'
+          if 'token.actions.githubusercontent.com' not in trust_text:
+              raise SystemExit('deploy role trust does not identify GitHub OIDC provider')
+          if required_subject not in trust_text:
+              raise SystemExit(f'deploy role trust is not restricted to {required_subject}')
+          if 'sts:AssumeRoleWithWebIdentity' not in trust_text:
+              raise SystemExit('deploy role trust lacks sts:AssumeRoleWithWebIdentity')
+
+          attached = json.loads((out / 'attached-policies.json').read_text())['AttachedPolicies']
+          policy_docs = []
+          prohibited_managed = {'AdministratorAccess', 'IAMFullAccess', 'PowerUserAccess'}
+          for item in attached:
+              if item['PolicyName'] in prohibited_managed:
+                  raise SystemExit(f"prohibited broad managed policy attached: {item['PolicyName']}")
+              meta = json.loads(subprocess.check_output([
+                  'aws','iam','get-policy','--policy-arn',item['PolicyArn'],'--output','json'
+              ]))['Policy']
+              version = json.loads(subprocess.check_output([
+                  'aws','iam','get-policy-version','--policy-arn',item['PolicyArn'],
+                  '--version-id',meta['DefaultVersionId'],'--output','json'
+              ]))['PolicyVersion']['Document']
+              policy_docs.append({'name': item['PolicyName'], 'arn': item['PolicyArn'], 'document': version})
+
+          inline_names = json.loads((out / 'inline-policy-names.json').read_text())['PolicyNames']
+          for name in inline_names:
+              doc = json.loads(subprocess.check_output([
+                  'aws','iam','get-role-policy','--role-name',role['RoleName'],
+                  '--policy-name',name,'--output','json'
+              ]))['PolicyDocument']
+              policy_docs.append({'name': name, 'arn': None, 'document': doc})
+
+          def statements(doc):
+              value = doc.get('Statement', [])
+              return value if isinstance(value, list) else [value]
+
+          prohibited_actions = []
+          wildcard_resources = []
+          for policy in policy_docs:
+              for stmt in statements(policy['document']):
+                  if stmt.get('Effect') != 'Allow':
+                      continue
+                  actions = stmt.get('Action', [])
+                  if isinstance(actions, str):
+                      actions = [actions]
+                  resources = stmt.get('Resource', [])
+                  if isinstance(resources, str):
+                      resources = [resources]
+                  for action in actions:
+                      low = action.lower()
+                      if action == '*' or low.startswith('iam:*') or low in {
+                          'iam:createuser','iam:createaccesskey','iam:attachuserpolicy',
+                          'iam:putuserpolicy','organizations:*','account:*'
+                      }:
+                          prohibited_actions.append({'policy': policy['name'], 'action': action})
+                  if '*' in resources:
+                      wildcard_resources.append(policy['name'])
+
+          if prohibited_actions:
+              raise SystemExit('prohibited broad IAM actions found: ' + json.dumps(prohibited_actions))
+
+          summary = {
+              'role_arn': role['Arn'],
+              'role_id': role['RoleId'],
+              'max_session_duration': role['MaxSessionDuration'],
+              'attached_policy_names': [p['PolicyName'] for p in attached],
+              'inline_policy_names': inline_names,
+              'trust_subject_required': required_subject,
+              'wildcard_resource_policy_names_for_manual_review': sorted(set(wildcard_resources)),
+          }
+          (out / 'access-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          PY
+
+      - name: Remove unnecessary IAM policy documents from artifact
+        run: |
+          set -euo pipefail
+          # Evidence retains role/trust metadata and policy names only. Full policy documents
+          # are inspected in-memory above and are not retained as release artifacts.
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('production-access-evidence/role.json')
+          data = json.loads(p.read_text())
+          role = data['Role']
+          safe = {
+              'Arn': role['Arn'],
+              'RoleId': role['RoleId'],
+              'RoleName': role['RoleName'],
+              'CreateDate': str(role['CreateDate']),
+              'MaxSessionDuration': role['MaxSessionDuration'],
+              'AssumeRolePolicyDocument': role['AssumeRolePolicyDocument'],
+          }
+          p.write_text(json.dumps({'Role': safe}, indent=2, default=str) + '\n')
+          PY
+
+      - name: Write evidence metadata and checksums
+        run: |
+          set -euo pipefail
+          cat > production-access-evidence/metadata.txt <<EOF
+          release_sha=${RELEASE_SHA}
+          repository=${GITHUB_REPOSITORY}
+          workflow_run_id=${GITHUB_RUN_ID}
+          aws_region=${AWS_REGION}
+          EOF
+          (cd production-access-evidence && sha256sum * > SHA256SUMS)
+
+      - name: Upload production access evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-access-evidence-${{ inputs.release_sha }}
+          path: production-access-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Production least-privilege access evidence"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- GitHub production workflow permission scan completed"
+            echo "- AWS deploy-role OIDC trust and policy breadth audit attempted"
+            echo "- No static AWS credential references are permitted in production workflows"
+            echo
+            echo "This workflow is read-only. It does not modify IAM roles, policies, environments, or production workloads."
+          } >> "${GITHUB_STEP_SUMMARY}"
