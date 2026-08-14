@@ -1,88 +1,94 @@
-# AWS Staging Infrastructure
+# AWS ECS Staging Infrastructure
 
-This Terraform stack provisions a persistent LionsForge AI staging foundation on AWS:
+This Terraform stack provisions the persistent OnyxMane staging foundation on AWS using the same ECS + ECR + ALB architecture validated in production.
 
-- VPC with public, private, and database subnets across two availability zones
-- Amazon EKS cluster with a managed node group
-- Private Amazon RDS for PostgreSQL 16
-- Database security rules limited to EKS worker nodes
-- Encrypted database storage, backups, deletion protection, and a final snapshot
+It creates:
+
+- a VPC with public, private, and database subnets across two availability zones
+- an ECS Fargate cluster with isolated backend and frontend services
+- immutable ECR repositories for backend and frontend images
+- an Application Load Balancer with backend and frontend target groups
+- optional HTTPS using an ACM certificate, with HTTP-to-HTTPS redirect when configured
+- CloudWatch log groups and ECS task execution/task roles
+- a private PostgreSQL 16 RDS instance reachable only from ECS tasks
+- encrypted database storage, seven-day backups, deletion protection, and a required final snapshot
 
 ## Cost warning
 
-Applying this stack creates billable AWS resources, including EKS, EC2, NAT Gateway, RDS, data transfer, and load balancers created later by Kubernetes ingress. Review estimated monthly cost before applying.
+Applying this stack creates billable AWS resources, including NAT Gateway, ECS/Fargate tasks, ALB, RDS, CloudWatch logs, and data transfer. Review estimated monthly cost before applying.
 
 ## Prerequisites
 
 - Terraform 1.8 or later
-- AWS CLI authenticated to the target account
-- IAM permission to manage VPC, EKS, EC2, IAM, RDS, and related resources
-- A secure remote Terraform state backend before team or production use
+- AWS CLI authenticated to the staging AWS account
+- IAM permission to manage VPC, ECS, ECR, ELBv2, IAM, CloudWatch Logs, EC2 security groups, and RDS
+- a secure remote Terraform state backend
+- initial backend and frontend container image URIs that can start successfully
+- an ACM certificate ARN when HTTPS is enabled
+- backend application secrets stored in AWS Secrets Manager or SSM Parameter Store
+
+Never put secret values in `.tfvars`, source control, workflow output, or issue comments. `backend_secrets` accepts only secret or parameter ARNs; ECS resolves the values at runtime.
+
+## Bootstrap variables
+
+Create a local, untracked variable file such as `staging.auto.tfvars` with non-secret infrastructure values only:
+
+```hcl
+bootstrap_backend_image  = "ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/onyxmane-staging-backend:BOOTSTRAP_SHA"
+bootstrap_frontend_image = "ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/onyxmane-staging-frontend:BOOTSTRAP_SHA"
+acm_certificate_arn      = "arn:aws:acm:us-east-1:ACCOUNT:certificate/EXAMPLE"
+
+backend_secrets = {
+  DATABASE_URL    = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:onyxmane/staging/database-url"
+  JWT_SECRET_KEY  = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:onyxmane/staging/jwt-secret"
+  OPENAI_API_KEY  = "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:onyxmane/staging/openai-api-key"
+}
+```
+
+The example above contains placeholders only. Do not commit real account identifiers, secret values, or private endpoints.
 
 ## Provision
 
 ```bash
 cd infra/terraform/aws/staging
-terraform init
+terraform init -backend-config=backend.hcl
+terraform fmt -check
+terraform validate
 terraform plan -out staging.tfplan
 terraform apply staging.tfplan
 ```
 
 Use a dedicated AWS account or tightly isolated staging account where possible.
 
-## Configure Kubernetes access
+## Required GitHub `staging` environment variables
 
-Run the command returned by:
+After apply, configure the workflow variables from Terraform outputs and AWS resource names:
 
-```bash
-terraform output -raw configure_kubectl_command
-```
-
-Then verify:
-
-```bash
-kubectl cluster-info
-kubectl get nodes
-```
-
-## Configure GitHub staging secrets
-
-Generate the kubeconfig and encode it:
-
-```bash
-aws eks update-kubeconfig \
-  --region "$(terraform output -raw aws_region)" \
-  --name "$(terraform output -raw eks_cluster_name)"
-
-base64 < "$HOME/.kube/config" | tr -d '\n'
-```
-
-Store the result as `KUBE_CONFIG_STAGING` in the GitHub `staging` environment.
-
-Retrieve the database connection string without printing it into shared logs:
-
-```bash
-terraform output -raw database_url
-```
-
-Store it as `STAGING_DATABASE_URL`.
-
-Also configure:
-
-- `STAGING_JWT_SECRET_KEY`
-- `STAGING_TEST_EMAIL`
-- `STAGING_TEST_SECRET`
+- `AWS_REGION`
+- `AWS_STAGING_DEPLOY_ROLE_ARN`
+- `ECR_BACKEND_REPOSITORY`
+- `ECR_FRONTEND_REPOSITORY`
+- `ECS_STAGING_CLUSTER`
+- `ECS_STAGING_BACKEND_SERVICE`
+- `ECS_STAGING_FRONTEND_SERVICE`
+- `ECS_BACKEND_CONTAINER_NAME`
+- `ECS_FRONTEND_CONTAINER_NAME`
 - `STAGING_API_URL`
 - `STAGING_WEB_URL`
 
-## Ingress, DNS, and TLS
+The ECS deployment workflows use GitHub OIDC. The staging deploy role must trust the repository's protected `staging` environment and should have only the ECR/ECS permissions required to push images, read/register task definitions, update the two staging services, and inspect service state.
 
-The Kubernetes manifests expect these hostnames:
+## DNS and TLS
 
-- `api.staging.lionsforge.ai`
-- `staging.lionsforge.ai`
+Point the staging web and API hostnames to `terraform output -raw alb_dns_name`. Configure an ACM certificate in `acm_certificate_arn` before acceptance testing. When a certificate is configured, port 80 redirects to HTTPS and the HTTPS listener routes configured backend paths to the backend target group; all other traffic goes to the frontend target group.
 
-Install an ingress controller and certificate manager after the cluster is available. Create DNS records pointing both hostnames to the ingress load balancer. Do not run acceptance testing until HTTPS is valid for both endpoints.
+Do not mark staging accepted until both target groups are healthy and the public endpoints pass HTTPS smoke tests.
+
+## Service bootstrap and normal releases
+
+Terraform creates the ECS services with `bootstrap_backend_image` and `bootstrap_frontend_image`. After the services exist, normal releases should use the repository's staging ECS deployment workflows rather than Terraform image changes. Those workflows replace only the container image in the current task definition, wait for service stability, and preserve the existing runtime configuration and secret bindings.
+
+For every release, use one exact 40-character commit SHA contained in protected `main`. Record the ECR digest, resulting task-definition revision, running service state, target health, and smoke-test results in the staging acceptance evidence.
 
 ## Database safety
 
@@ -90,7 +96,7 @@ RDS deletion protection is enabled and a final snapshot is required. Terraform d
 
 ## Destroy
 
-Destroying this environment is a controlled operation. First back up required data, then explicitly disable deletion protection in the stack, apply that change, and only then run:
+Destroying staging is a controlled operation. First back up required data, disable deletion protection in a reviewed change, apply that change, and only then run:
 
 ```bash
 terraform destroy
