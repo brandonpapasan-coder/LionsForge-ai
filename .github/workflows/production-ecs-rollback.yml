@@ -1,0 +1,176 @@
+name: Production ECS Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_task_definition:
+        description: Previously approved backend ECS task definition ARN
+        required: true
+        type: string
+      frontend_task_definition:
+        description: Previously approved frontend ECS task definition ARN
+        required: true
+        type: string
+      expected_release_sha:
+        description: Exact 40-character main-branch SHA currently being rolled back from
+        required: true
+        type: string
+      confirmation:
+        description: Type ROLLBACK-PRODUCTION to authorize the rollback
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: onyxmane-production-rollback
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_PRODUCTION_CLUSTER }}
+      BACKEND_SERVICE: ${{ vars.ECS_PRODUCTION_BACKEND_SERVICE }}
+      FRONTEND_SERVICE: ${{ vars.ECS_PRODUCTION_FRONTEND_SERVICE }}
+      EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}
+      BACKEND_TASK_DEFINITION: ${{ inputs.backend_task_definition }}
+      FRONTEND_TASK_DEFINITION: ${{ inputs.frontend_task_definition }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+
+    steps:
+      - name: Validate rollback authorization and inputs
+        run: |
+          set -euo pipefail
+          test "${CONFIRMATION}" = "ROLLBACK-PRODUCTION"
+          if ! printf '%s' "${EXPECTED_RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "expected_release_sha must be an exact 40-character lowercase commit SHA" >&2
+            exit 1
+          fi
+          for value in "${AWS_REGION}" "${ECS_CLUSTER}" "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" "${BACKEND_TASK_DEFINITION}" "${FRONTEND_TASK_DEFINITION}"; do
+            test -n "${value}"
+          done
+          case "${BACKEND_TASK_DEFINITION}" in arn:aws:ecs:*:task-definition/*:*) ;; *) echo "Invalid backend task definition ARN" >&2; exit 1 ;; esac
+          case "${FRONTEND_TASK_DEFINITION}" in arn:aws:ecs:*:task-definition/*:*) ;; *) echo "Invalid frontend task definition ARN" >&2; exit 1 ;; esac
+          case "${PRODUCTION_WEB_URL}" in https://*) ;; *) echo "PRODUCTION_WEB_URL must be HTTPS" >&2; exit 1 ;; esac
+
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Confirm current release SHA is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          git cat-file -e "${EXPECTED_RELEASE_SHA}^{commit}"
+          git merge-base --is-ancestor "${EXPECTED_RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate approved rollback task definitions
+        run: |
+          set -euo pipefail
+          for task_definition in "${BACKEND_TASK_DEFINITION}" "${FRONTEND_TASK_DEFINITION}"; do
+            STATUS="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query 'taskDefinition.status' --output text)"
+            test "${STATUS}" = "ACTIVE"
+          done
+
+      - name: Capture pre-rollback service state
+        run: |
+          set -euo pipefail
+          mkdir -p rollback-evidence
+          aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" \
+            --query 'services[].{service:serviceName,status:status,taskDefinition:taskDefinition,desired:desiredCount,running:runningCount,pending:pendingCount}' \
+            > rollback-evidence/pre-rollback-services.json
+
+      - name: Roll back backend service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${BACKEND_SERVICE}" \
+            --task-definition "${BACKEND_TASK_DEFINITION}" \
+            --force-new-deployment \
+            >/dev/null
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${BACKEND_SERVICE}"
+
+      - name: Roll back frontend service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${FRONTEND_SERVICE}" \
+            --task-definition "${FRONTEND_TASK_DEFINITION}" \
+            --force-new-deployment \
+            >/dev/null
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${FRONTEND_SERVICE}"
+
+      - name: Verify rolled-back service state
+        run: |
+          set -euo pipefail
+          read -r BACKEND_STATUS BACKEND_TASK BACKEND_DESIRED BACKEND_RUNNING BACKEND_PENDING <<<"$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${BACKEND_SERVICE}" --query 'services[0].[status,taskDefinition,desiredCount,runningCount,pendingCount]' --output text)"
+          read -r FRONTEND_STATUS FRONTEND_TASK FRONTEND_DESIRED FRONTEND_RUNNING FRONTEND_PENDING <<<"$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${FRONTEND_SERVICE}" --query 'services[0].[status,taskDefinition,desiredCount,runningCount,pendingCount]' --output text)"
+          test "${BACKEND_STATUS}" = "ACTIVE"
+          test "${FRONTEND_STATUS}" = "ACTIVE"
+          test "${BACKEND_TASK}" = "${BACKEND_TASK_DEFINITION}"
+          test "${FRONTEND_TASK}" = "${FRONTEND_TASK_DEFINITION}"
+          test "${BACKEND_RUNNING}" = "${BACKEND_DESIRED}"
+          test "${FRONTEND_RUNNING}" = "${FRONTEND_DESIRED}"
+          test "${BACKEND_PENDING}" = "0"
+          test "${FRONTEND_PENDING}" = "0"
+
+      - name: Smoke test public frontend
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "${PRODUCTION_WEB_URL}/login" > rollback-evidence/login.html
+          grep -Eqi 'OnyxMane|LionsForge' rollback-evidence/login.html
+
+      - name: Capture post-rollback evidence
+        if: always()
+        run: |
+          set +e
+          aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" \
+            --query 'services[].{service:serviceName,status:status,taskDefinition:taskDefinition,desired:desiredCount,running:runningCount,pending:pendingCount}' \
+            > rollback-evidence/post-rollback-services.json
+          printf '%s\n' "${EXPECTED_RELEASE_SHA}" > rollback-evidence/rolled-back-from-sha.txt
+          printf '%s\n' "${BACKEND_TASK_DEFINITION}" > rollback-evidence/backend-target-task-definition.txt
+          printf '%s\n' "${FRONTEND_TASK_DEFINITION}" > rollback-evidence/frontend-target-task-definition.txt
+          sha256sum rollback-evidence/* > rollback-evidence/SHA256SUMS.txt 2>/dev/null || true
+
+      - name: Upload rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-ecs-rollback-${{ github.run_id }}
+          path: rollback-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish rollback summary
+        if: always()
+        run: |
+          {
+            echo "## Production ECS rollback"
+            echo
+            echo "- Rolled back from release SHA: \`${EXPECTED_RELEASE_SHA}\`"
+            echo "- Backend target task definition: \`${BACKEND_TASK_DEFINITION}\`"
+            echo "- Frontend target task definition: \`${FRONTEND_TASK_DEFINITION}\`"
+            echo "- Evidence artifact: \`production-ecs-rollback-${GITHUB_RUN_ID}\`"
+            echo
+            echo "This workflow changes only the ECS service task-definition references and preserves runtime secret bindings contained in the approved prior task definitions."
+          } >> "${GITHUB_STEP_SUMMARY}"
