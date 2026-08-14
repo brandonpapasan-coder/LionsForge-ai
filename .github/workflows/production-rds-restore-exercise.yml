@@ -1,0 +1,239 @@
+name: Production RDS Restore Exercise
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character lowercase main-branch release SHA associated with this exercise
+        required: true
+        type: string
+      confirmation:
+        description: Type RESTORE-PRODUCTION to acknowledge that this creates temporary billable AWS resources
+        required: true
+        type: string
+      cleanup:
+        description: Delete the temporary restored DB instance after evidence capture
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: onyxmane-production-rds-restore
+  cancel-in-progress: false
+
+jobs:
+  restore-exercise:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+      SOURCE_DB_IDENTIFIER: ${{ vars.RDS_PRODUCTION_IDENTIFIER }}
+      RESTORE_INSTANCE_CLASS: ${{ vars.RDS_RESTORE_INSTANCE_CLASS }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      CLEANUP: ${{ inputs.cleanup }}
+
+    steps:
+      - name: Validate guarded inputs
+        run: |
+          set -euo pipefail
+          if [ "${CONFIRMATION}" != "RESTORE-PRODUCTION" ]; then
+            echo "confirmation must exactly equal RESTORE-PRODUCTION" >&2
+            exit 1
+          fi
+          if ! printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "release_sha must be an exact lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          for value in "${AWS_REGION}" "${AWS_ROLE_ARN}" "${SOURCE_DB_IDENTIFIER}"; do
+            test -n "${value}"
+          done
+
+      - name: Checkout exact release lineage
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release is contained in main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve source database and automated restore point
+        id: source
+        run: |
+          set -euo pipefail
+          mkdir -p restore-evidence
+
+          aws rds describe-db-instances \
+            --db-instance-identifier "${SOURCE_DB_IDENTIFIER}" \
+            --query 'DBInstances[0].{Identifier:DBInstanceIdentifier,Status:DBInstanceStatus,Engine:Engine,EngineVersion:EngineVersion,Class:DBInstanceClass,StorageEncrypted:StorageEncrypted,SubnetGroup:DBSubnetGroup.DBSubnetGroupName,PubliclyAccessible:PubliclyAccessible}' \
+            > restore-evidence/source-db.json
+
+          STATUS="$(aws rds describe-db-instances --db-instance-identifier "${SOURCE_DB_IDENTIFIER}" --query 'DBInstances[0].DBInstanceStatus' --output text)"
+          test "${STATUS}" = "available"
+
+          SNAPSHOT_ID="$(aws rds describe-db-snapshots \
+            --db-instance-identifier "${SOURCE_DB_IDENTIFIER}" \
+            --snapshot-type automated \
+            --query 'reverse(sort_by(DBSnapshots[?Status==`available`], &SnapshotCreateTime))[0].DBSnapshotIdentifier' \
+            --output text)"
+          if [ -z "${SNAPSHOT_ID}" ] || [ "${SNAPSHOT_ID}" = "None" ]; then
+            echo "No available automated RDS snapshot found for production database" >&2
+            exit 1
+          fi
+
+          SUBNET_GROUP="$(aws rds describe-db-instances --db-instance-identifier "${SOURCE_DB_IDENTIFIER}" --query 'DBInstances[0].DBSubnetGroup.DBSubnetGroupName' --output text)"
+          SOURCE_CLASS="$(aws rds describe-db-instances --db-instance-identifier "${SOURCE_DB_IDENTIFIER}" --query 'DBInstances[0].DBInstanceClass' --output text)"
+          RESTORE_CLASS="${RESTORE_INSTANCE_CLASS:-${SOURCE_CLASS}}"
+          RESTORE_ID="onyxmane-restore-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          RESTORE_ID="${RESTORE_ID:0:63}"
+
+          aws rds describe-db-snapshots \
+            --db-snapshot-identifier "${SNAPSHOT_ID}" \
+            --query 'DBSnapshots[0].{SnapshotIdentifier:DBSnapshotIdentifier,Status:Status,SnapshotCreateTime:SnapshotCreateTime,Engine:Engine,EngineVersion:EngineVersion,Encrypted:Encrypted,SourceDB:DBInstanceIdentifier}' \
+            > restore-evidence/source-snapshot.json
+
+          {
+            echo "snapshot_id=${SNAPSHOT_ID}"
+            echo "subnet_group=${SUBNET_GROUP}"
+            echo "restore_class=${RESTORE_CLASS}"
+            echo "restore_id=${RESTORE_ID}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Restore snapshot to isolated temporary DB instance
+        env:
+          SNAPSHOT_ID: ${{ steps.source.outputs.snapshot_id }}
+          SUBNET_GROUP: ${{ steps.source.outputs.subnet_group }}
+          RESTORE_CLASS: ${{ steps.source.outputs.restore_class }}
+          RESTORE_ID: ${{ steps.source.outputs.restore_id }}
+        run: |
+          set -euo pipefail
+          aws rds restore-db-instance-from-db-snapshot \
+            --db-instance-identifier "${RESTORE_ID}" \
+            --db-snapshot-identifier "${SNAPSHOT_ID}" \
+            --db-instance-class "${RESTORE_CLASS}" \
+            --db-subnet-group-name "${SUBNET_GROUP}" \
+            --no-publicly-accessible \
+            --no-multi-az \
+            --tags Key=Purpose,Value=production-restore-exercise Key=ReleaseSHA,Value="${RELEASE_SHA}" Key=GitHubRun,Value="${GITHUB_RUN_ID}" \
+            > restore-evidence/restore-request.json
+
+          aws rds wait db-instance-available --db-instance-identifier "${RESTORE_ID}"
+
+      - name: Validate restored instance metadata
+        env:
+          RESTORE_ID: ${{ steps.source.outputs.restore_id }}
+          SNAPSHOT_ID: ${{ steps.source.outputs.snapshot_id }}
+        run: |
+          set -euo pipefail
+          aws rds describe-db-instances \
+            --db-instance-identifier "${RESTORE_ID}" \
+            --query 'DBInstances[0].{Identifier:DBInstanceIdentifier,Status:DBInstanceStatus,Engine:Engine,EngineVersion:EngineVersion,Class:DBInstanceClass,StorageEncrypted:StorageEncrypted,SubnetGroup:DBSubnetGroup.DBSubnetGroupName,PubliclyAccessible:PubliclyAccessible,LatestRestorableTime:LatestRestorableTime}' \
+            > restore-evidence/restored-db.json
+
+          STATUS="$(aws rds describe-db-instances --db-instance-identifier "${RESTORE_ID}" --query 'DBInstances[0].DBInstanceStatus' --output text)"
+          PUBLIC="$(aws rds describe-db-instances --db-instance-identifier "${RESTORE_ID}" --query 'DBInstances[0].PubliclyAccessible' --output text)"
+          ENCRYPTED="$(aws rds describe-db-instances --db-instance-identifier "${RESTORE_ID}" --query 'DBInstances[0].StorageEncrypted' --output text)"
+          test "${STATUS}" = "available"
+          test "${PUBLIC}" = "False"
+          test "${ENCRYPTED}" = "True"
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source = json.loads(Path("restore-evidence/source-db.json").read_text())
+          restored = json.loads(Path("restore-evidence/restored-db.json").read_text())
+          snapshot = json.loads(Path("restore-evidence/source-snapshot.json").read_text())
+
+          assert restored["Status"] == "available"
+          assert restored["PubliclyAccessible"] is False
+          assert restored["StorageEncrypted"] is True
+          assert restored["Engine"] == source["Engine"] == snapshot["Engine"]
+          assert restored["SubnetGroup"] == source["SubnetGroup"]
+          assert snapshot["SourceDB"] == source["Identifier"]
+          PY
+
+          cat > restore-evidence/exercise-summary.json <<EOF
+          {
+            "release_sha": "${RELEASE_SHA}",
+            "source_db_identifier": "${SOURCE_DB_IDENTIFIER}",
+            "snapshot_identifier": "${SNAPSHOT_ID}",
+            "restored_db_identifier": "${RESTORE_ID}",
+            "restore_status": "available",
+            "publicly_accessible": false,
+            "storage_encrypted": true,
+            "github_run_id": "${GITHUB_RUN_ID}",
+            "github_run_attempt": "${GITHUB_RUN_ATTEMPT}"
+          }
+          EOF
+
+      - name: Create evidence checksums
+        if: always()
+        run: |
+          if [ -d restore-evidence ]; then
+            find restore-evidence -type f -print0 | sort -z | xargs -0 sha256sum > restore-evidence/SHA256SUMS || true
+          fi
+
+      - name: Upload restore evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-rds-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          path: restore-evidence/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Delete temporary restored DB instance
+        if: ${{ always() && inputs.cleanup }}
+        env:
+          RESTORE_ID: ${{ steps.source.outputs.restore_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RESTORE_ID:-}" ]; then
+            echo "No restore identifier was resolved; nothing to clean up."
+            exit 0
+          fi
+          if aws rds describe-db-instances --db-instance-identifier "${RESTORE_ID}" >/dev/null 2>&1; then
+            aws rds delete-db-instance \
+              --db-instance-identifier "${RESTORE_ID}" \
+              --skip-final-snapshot \
+              --delete-automated-backups \
+              >/dev/null
+            aws rds wait db-instance-deleted --db-instance-identifier "${RESTORE_ID}"
+          fi
+
+      - name: Publish exercise summary
+        if: always()
+        env:
+          RESTORE_ID: ${{ steps.source.outputs.restore_id }}
+          SNAPSHOT_ID: ${{ steps.source.outputs.snapshot_id }}
+        run: |
+          {
+            echo "## OnyxMane production RDS isolated restore exercise"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Source DB: \`${SOURCE_DB_IDENTIFIER}\`"
+            echo "- Source snapshot: \`${SNAPSHOT_ID:-unresolved}\`"
+            echo "- Temporary restored DB: \`${RESTORE_ID:-unresolved}\`"
+            echo "- Cleanup requested: \`${CLEANUP}\`"
+            echo
+            echo "This workflow creates a temporary billable RDS instance only after explicit RESTORE-PRODUCTION confirmation."
+            echo "It verifies successful isolated restoration and non-public encrypted metadata without printing database contents or credentials."
+          } >> "${GITHUB_STEP_SUMMARY}"
