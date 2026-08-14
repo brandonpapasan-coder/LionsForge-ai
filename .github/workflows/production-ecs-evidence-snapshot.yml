@@ -1,0 +1,95 @@
+name: Production ECS Evidence Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character lowercase main-branch release SHA expected to be running
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_PRODUCTION_CLUSTER }}
+      BACKEND_SERVICE: ${{ vars.ECS_PRODUCTION_BACKEND_SERVICE }}
+      FRONTEND_SERVICE: ${{ vars.ECS_PRODUCTION_FRONTEND_SERVICE }}
+      BACKEND_CONTAINER: ${{ vars.ECS_BACKEND_CONTAINER_NAME }}
+      FRONTEND_CONTAINER: ${{ vars.ECS_FRONTEND_CONTAINER_NAME }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'
+          for value in "${AWS_REGION}" "${ECS_CLUSTER}" "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" "${BACKEND_CONTAINER}" "${FRONTEND_CONTAINER}"; do
+            test -n "${value}"
+          done
+
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Capture non-secret ECS runtime evidence
+        run: |
+          set -euo pipefail
+          mkdir -p production-evidence
+          for pair in "backend:${BACKEND_SERVICE}:${BACKEND_CONTAINER}" "frontend:${FRONTEND_SERVICE}:${FRONTEND_CONTAINER}"; do
+            IFS=: read -r prefix service container <<<"${pair}"
+            aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${service}" \
+              --query 'services[0].{serviceName:serviceName,status:status,desiredCount:desiredCount,runningCount:runningCount,pendingCount:pendingCount,taskDefinition:taskDefinition,deployments:deployments[].{status:status,taskDefinition:taskDefinition,desiredCount:desiredCount,runningCount:runningCount,pendingCount:pendingCount}}' \
+              --output json > "production-evidence/${prefix}-service.json"
+            task_arns="$(aws ecs list-tasks --cluster "${ECS_CLUSTER}" --service-name "${service}" --desired-status RUNNING --query 'taskArns' --output text)"
+            test -n "${task_arns}"
+            aws ecs describe-tasks --cluster "${ECS_CLUSTER}" --tasks ${task_arns} \
+              --query "tasks[].{taskArn:taskArn,taskDefinitionArn:taskDefinitionArn,lastStatus:lastStatus,healthStatus:healthStatus,containers:containers[?name=='${container}'].{name:name,image:image,imageDigest:imageDigest,lastStatus:lastStatus,healthStatus:healthStatus}}" \
+              --output json > "production-evidence/${prefix}-tasks.json"
+            grep -q ":${RELEASE_SHA}" "production-evidence/${prefix}-tasks.json"
+            grep -Eq 'sha256:[0-9a-f]{64}' "production-evidence/${prefix}-tasks.json"
+          done
+          sha256sum production-evidence/*.json > production-evidence/SHA256SUMS
+
+      - name: Upload evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-ecs-evidence-${{ inputs.release_sha }}
+          path: production-evidence/
+          retention-days: 30
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Production ECS evidence snapshot"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- ECS cluster: \`${ECS_CLUSTER}\`"
+            echo "- Backend service: \`${BACKEND_SERVICE}\`"
+            echo "- Frontend service: \`${FRONTEND_SERVICE}\`"
+            echo
+            echo "The retained artifact contains only selected ECS service/task runtime fields, immutable image digests, task-definition ARNs, and checksums; it intentionally excludes task-definition environment and secret configuration."
+          } >> "${GITHUB_STEP_SUMMARY}"
