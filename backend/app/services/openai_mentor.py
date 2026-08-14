@@ -18,6 +18,14 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+class GeneratedEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1, max_length=300)
+    detail: str = Field(min_length=1, max_length=2500)
+    source_type: Literal["primary_source", "authoritative_source", "platform_context"]
+
+
 class GeneratedRecommendation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -31,6 +39,7 @@ class GeneratedMentorAnswer(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     answer: str = Field(min_length=1, max_length=12000)
+    evidence: list[GeneratedEvidence] = Field(default_factory=list, max_length=12)
     reasoning: list[str] = Field(default_factory=list, max_length=20)
     assumptions: list[str] = Field(default_factory=list, max_length=20)
     confidence: Literal["low", "medium", "high"]
@@ -75,32 +84,45 @@ class OpenAIMentorProvider:
             self.last_status = "disabled"
             return None
 
+        research_mode = intent in {"research", "economics"}
         system_prompt = (
-            "You are LionsForge AI, an evidence-first research and education mentor. "
-            "Follow the supplied JSON schema exactly. Never invent sources or claim live verification "
-            "unless evidence is supplied. Confidence must be low, medium, or high."
+            "You are OnyxMane Intelligence, an evidence-first research and education mentor. "
+            "Follow the supplied JSON schema exactly. Separate evidence from assumptions and internal routing metadata. "
+            "For research or economics questions, use web search to retrieve current external evidence before answering. "
+            "Prefer primary sources such as government publications, regulators, company filings, universities, and original research; "
+            "use authoritative secondary sources only when a primary source is unavailable or insufficient. "
+            "Every external evidence item must identify the source or publisher in its detail and must be supported by retrieved material. "
+            "Never invent a source, statistic, study, quotation, or verification claim. If retrieval is unavailable or insufficient, say so, "
+            "lower confidence, and state what evidence is still needed. Challenge the user's strongest assumptions rather than merely restating them. "
+            "Give concrete validation steps. Confidence must be low, medium, or high."
         )
         user_payload = {
             "message": message,
             "context": context,
             "intent": intent,
             "persona": persona,
+            "research_mode": research_mode,
         }
 
+        request: dict[str, Any] = {
+            "model": self.model,
+            "instructions": system_prompt,
+            "input": json.dumps(user_payload, default=str),
+            "store": False,
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "onyxmane_mentor_answer",
+                    "schema": GeneratedMentorAnswer.model_json_schema(),
+                    "strict": True,
+                }
+            },
+        }
+        if research_mode:
+            request["tools"] = [{"type": "web_search", "search_context_size": "high"}]
+
         try:
-            response = self.client.responses.create(
-                model=self.model,
-                instructions=system_prompt,
-                input=json.dumps(user_payload, default=str),
-                text={
-                    "format": {
-                        "type": "json_schema",
-                        "name": "lionsforge_mentor_answer",
-                        "schema": GeneratedMentorAnswer.model_json_schema(),
-                        "strict": True,
-                    }
-                },
-            )
+            response = self.client.responses.create(**request)
             parsed = GeneratedMentorAnswer.model_validate_json(response.output_text)
             self.last_status = "healthy"
             return parsed.model_dump()
@@ -118,7 +140,7 @@ class OpenAIMentorProvider:
             logger.error("OpenAI mentor authentication failed; verify provider credentials")
         except BadRequestError:
             self.last_status = "misconfigured"
-            logger.error("OpenAI mentor request was rejected; verify model and structured-output configuration")
+            logger.error("OpenAI mentor request was rejected; verify model, web search, and structured-output configuration")
         except (APIConnectionError, InternalServerError):
             self.last_status = "degraded"
             logger.warning("OpenAI mentor provider is temporarily unavailable")

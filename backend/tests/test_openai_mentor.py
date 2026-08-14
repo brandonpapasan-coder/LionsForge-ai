@@ -21,6 +21,7 @@ def provider_with_client(output_text: str) -> OpenAIMentorProvider:
 def valid_payload() -> dict:
     return {
         "answer": "Evidence supports a cautious next step.",
+        "evidence": [],
         "reasoning": ["The available evidence is incomplete."],
         "assumptions": ["The supplied context is current."],
         "confidence": "medium",
