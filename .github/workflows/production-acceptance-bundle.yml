@@ -1,0 +1,216 @@
+name: Production Acceptance Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact immutable main-branch release SHA being accepted
+        required: true
+      staging_reference:
+        description: Accepted staging evidence reference or issue/comment identifier
+        required: true
+      ecs_evidence_run_id:
+        description: Successful Production ECS Evidence Snapshot workflow run ID
+        required: true
+      rollback_run_id:
+        description: Successful Production ECS Rollback workflow run ID
+        required: true
+      rds_backup_run_id:
+        description: Successful Production RDS Backup Evidence workflow run ID
+        required: true
+      rds_restore_run_id:
+        description: Successful Production RDS Restore Exercise workflow run ID
+        required: true
+      observability_run_id:
+        description: Successful Production Observability Evidence workflow run ID
+        required: true
+      access_run_id:
+        description: Successful Production Access Evidence workflow run ID
+        required: true
+      confirmation:
+        description: Type ACCEPT-PRODUCTION to assemble the final evidence bundle
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: onyxmane-production-acceptance
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      STAGING_REFERENCE: ${{ inputs.staging_reference }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      ECS_EVIDENCE_RUN_ID: ${{ inputs.ecs_evidence_run_id }}
+      ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+      RDS_BACKUP_RUN_ID: ${{ inputs.rds_backup_run_id }}
+      RDS_RESTORE_RUN_ID: ${{ inputs.rds_restore_run_id }}
+      OBSERVABILITY_RUN_ID: ${{ inputs.observability_run_id }}
+      ACCESS_RUN_ID: ${{ inputs.access_run_id }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Validate acceptance inputs
+        run: |
+          set -euo pipefail
+          test "${CONFIRMATION}" = "ACCEPT-PRODUCTION"
+          printf '%s' "${RELEASE_SHA}" | grep -Eq '^[0-9a-f]{40}$'
+          test -n "${STAGING_REFERENCE}"
+          for run_id in \
+            "${ECS_EVIDENCE_RUN_ID}" \
+            "${ROLLBACK_RUN_ID}" \
+            "${RDS_BACKUP_RUN_ID}" \
+            "${RDS_RESTORE_RUN_ID}" \
+            "${OBSERVABILITY_RUN_ID}" \
+            "${ACCESS_RUN_ID}"; do
+            printf '%s' "${run_id}" | grep -Eq '^[0-9]+$'
+          done
+
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release is contained in protected main lineage
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Validate evidence workflow runs and download artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p acceptance/raw acceptance/extracted
+
+          validate_run() {
+            local run_id="$1"
+            local expected_name="$2"
+            local slug="$3"
+
+            local payload
+            payload="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+            local name conclusion event
+            name="$(jq -r '.name' <<<"${payload}")"
+            conclusion="$(jq -r '.conclusion' <<<"${payload}")"
+            event="$(jq -r '.event' <<<"${payload}")"
+
+            test "${name}" = "${expected_name}"
+            test "${conclusion}" = "success"
+            test "${event}" = "workflow_dispatch"
+
+            jq '{id, name, event, status, conclusion, head_branch, head_sha, run_number, created_at, updated_at, html_url}' \
+              <<<"${payload}" > "acceptance/raw/${slug}-run.json"
+
+            local artifacts
+            artifacts="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+            jq '{total_count, artifacts: [.artifacts[] | {id,name,expired,size_in_bytes,created_at,expires_at}]}' \
+              <<<"${artifacts}" > "acceptance/raw/${slug}-artifacts.json"
+
+            local active_count
+            active_count="$(jq '[.artifacts[] | select(.expired == false)] | length' <<<"${artifacts}")"
+            if [ "${active_count}" -lt 1 ]; then
+              echo "${expected_name} run ${run_id} has no unexpired evidence artifacts" >&2
+              exit 1
+            fi
+
+            mkdir -p "acceptance/extracted/${slug}"
+            while read -r artifact_id; do
+              test -n "${artifact_id}"
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+                > "acceptance/raw/${slug}-${artifact_id}.zip"
+              unzip -q "acceptance/raw/${slug}-${artifact_id}.zip" -d "acceptance/extracted/${slug}/${artifact_id}"
+            done < <(jq -r '.artifacts[] | select(.expired == false) | .id' <<<"${artifacts}")
+
+            if ! grep -R -F -q -- "${RELEASE_SHA}" "acceptance/extracted/${slug}"; then
+              echo "${expected_name} artifacts do not bind evidence to release SHA ${RELEASE_SHA}" >&2
+              exit 1
+            fi
+          }
+
+          validate_run "${ECS_EVIDENCE_RUN_ID}" "Production ECS Evidence Snapshot" "ecs"
+          validate_run "${ROLLBACK_RUN_ID}" "Production ECS Rollback" "rollback"
+          validate_run "${RDS_BACKUP_RUN_ID}" "Production RDS Backup Evidence" "rds-backup"
+          validate_run "${RDS_RESTORE_RUN_ID}" "Production RDS Restore Exercise" "rds-restore"
+          validate_run "${OBSERVABILITY_RUN_ID}" "Production Observability Evidence" "observability"
+          validate_run "${ACCESS_RUN_ID}" "Production Access Evidence" "access"
+
+      - name: Verify source evidence checksums when supplied
+        run: |
+          set -euo pipefail
+          while IFS= read -r checksum_file; do
+            directory="$(dirname "${checksum_file}")"
+            filename="$(basename "${checksum_file}")"
+            (
+              cd "${directory}"
+              sha256sum -c "${filename}"
+            )
+          done < <(find acceptance/extracted -type f \( -name 'SHA256SUMS' -o -name 'SHA256SUMS.txt' -o -name 'checksums.sha256' \) -print)
+
+      - name: Build production acceptance record
+        run: |
+          set -euo pipefail
+          generated_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          cat > acceptance/production-acceptance-record.md <<EOF
+          # OnyxMane Production Acceptance Record
+
+          - Decision: **EVIDENCE COMPLETE / READY FOR AUTHORIZED RELEASE DECISION**
+          - Release SHA: \`${RELEASE_SHA}\`
+          - Staging reference: \`${STAGING_REFERENCE}\`
+          - Generated at: \`${generated_at}\`
+          - Repository: \`${GITHUB_REPOSITORY}\`
+          - Acceptance workflow run: \`${GITHUB_RUN_ID}\`
+
+          ## Bound evidence runs
+
+          - ECS provenance: \`${ECS_EVIDENCE_RUN_ID}\`
+          - Rollback: \`${ROLLBACK_RUN_ID}\`
+          - RDS backup: \`${RDS_BACKUP_RUN_ID}\`
+          - RDS isolated restore: \`${RDS_RESTORE_RUN_ID}\`
+          - Observability and scaling: \`${OBSERVABILITY_RUN_ID}\`
+          - Least-privilege access: \`${ACCESS_RUN_ID}\`
+
+          ## Decision boundary
+
+          This record proves that the required evidence workflows completed successfully and that their retained artifacts bind to the exact release SHA above. It does not by itself authorize public registration, paid beta, general availability, or any financial-advice/trading functionality. Any product-launch authorization remains a separate explicit business decision.
+          EOF
+
+          find acceptance/raw acceptance/extracted -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > acceptance/source-evidence-SHA256SUMS
+          sha256sum acceptance/production-acceptance-record.md \
+            acceptance/source-evidence-SHA256SUMS \
+            > acceptance/acceptance-SHA256SUMS
+
+      - name: Upload production acceptance bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-acceptance-${{ inputs.release_sha }}
+          path: acceptance/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Record acceptance summary
+        run: |
+          {
+            echo "## OnyxMane production acceptance bundle"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- Staging reference: \`${STAGING_REFERENCE}\`"
+            echo "- ECS evidence run: \`${ECS_EVIDENCE_RUN_ID}\`"
+            echo "- Rollback run: \`${ROLLBACK_RUN_ID}\`"
+            echo "- RDS backup run: \`${RDS_BACKUP_RUN_ID}\`"
+            echo "- RDS restore run: \`${RDS_RESTORE_RUN_ID}\`"
+            echo "- Observability run: \`${OBSERVABILITY_RUN_ID}\`"
+            echo "- Access audit run: \`${ACCESS_RUN_ID}\`"
+            echo
+            echo "All supplied evidence runs completed successfully and retained artifacts were bound to the selected immutable release SHA."
+          } >> "$GITHUB_STEP_SUMMARY"
