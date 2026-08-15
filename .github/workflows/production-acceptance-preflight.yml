@@ -1,0 +1,153 @@
+name: Production Acceptance Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact 40-character lowercase main-branch release SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      DEPLOY_ROLE_ARN: ${{ vars.AWS_PRODUCTION_DEPLOY_ROLE_ARN }}
+      AUDIT_ROLE_ARN: ${{ vars.AWS_PRODUCTION_AUDIT_ROLE_ARN }}
+      ECS_CLUSTER: ${{ vars.ECS_PRODUCTION_CLUSTER }}
+      BACKEND_SERVICE: ${{ vars.ECS_PRODUCTION_BACKEND_SERVICE }}
+      FRONTEND_SERVICE: ${{ vars.ECS_PRODUCTION_FRONTEND_SERVICE }}
+      RDS_INSTANCE: ${{ vars.RDS_PRODUCTION_DB_INSTANCE_IDENTIFIER }}
+      ALERT_TOPIC_ARN: ${{ vars.PRODUCTION_ALERT_SNS_TOPIC_ARN }}
+      ALB_ARN: ${{ vars.PRODUCTION_ALB_ARN }}
+      BACKEND_TG_ARN: ${{ vars.PRODUCTION_BACKEND_TARGET_GROUP_ARN }}
+      FRONTEND_TG_ARN: ${{ vars.PRODUCTION_FRONTEND_TARGET_GROUP_ARN }}
+
+    steps:
+      - name: Validate immutable release and required protected inputs
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "release_sha must be an exact lowercase 40-character SHA" >&2; exit 1; }
+          for value in "${AWS_REGION}" "${DEPLOY_ROLE_ARN}" "${AUDIT_ROLE_ARN}" "${ECS_CLUSTER}" "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" "${RDS_INSTANCE}" "${ALERT_TOPIC_ARN}"; do
+            test -n "${value}"
+          done
+          [[ "${DEPLOY_ROLE_ARN}" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]] || exit 1
+          [[ "${AUDIT_ROLE_ARN}" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]] || exit 1
+          [[ "${ALERT_TOPIC_ARN}" =~ ^arn:aws:sns:[a-z0-9-]+:[0-9]{12}:.+ ]] || exit 1
+
+      - name: Checkout exact release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Confirm release is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "${RELEASE_SHA}"
+          git merge-base --is-ancestor "${RELEASE_SHA}" origin/main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate production resource references
+        run: |
+          set -euo pipefail
+          mkdir -p preflight-evidence
+
+          aws ecs describe-clusters --clusters "${ECS_CLUSTER}" \
+            --query 'clusters[0].{clusterName:clusterName,status:status,runningTasksCount:runningTasksCount,pendingTasksCount:pendingTasksCount,activeServicesCount:activeServicesCount}' \
+            > preflight-evidence/ecs-cluster.json
+          test "$(jq -r '.status' preflight-evidence/ecs-cluster.json)" = "ACTIVE"
+
+          aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${BACKEND_SERVICE}" "${FRONTEND_SERVICE}" \
+            --query 'services[].{serviceName:serviceName,status:status,desiredCount:desiredCount,runningCount:runningCount,pendingCount:pendingCount,taskDefinition:taskDefinition}' \
+            > preflight-evidence/ecs-services.json
+          test "$(jq 'length' preflight-evidence/ecs-services.json)" -eq 2
+          jq -e 'all(.[]; .status == "ACTIVE")' preflight-evidence/ecs-services.json >/dev/null
+
+          aws rds describe-db-instances --db-instance-identifier "${RDS_INSTANCE}" \
+            --query 'DBInstances[0].{DBInstanceIdentifier:DBInstanceIdentifier,DBInstanceStatus:DBInstanceStatus,StorageEncrypted:StorageEncrypted,BackupRetentionPeriod:BackupRetentionPeriod,PubliclyAccessible:PubliclyAccessible}' \
+            > preflight-evidence/rds.json
+          test "$(jq -r '.DBInstanceStatus' preflight-evidence/rds.json)" = "available"
+          test "$(jq -r '.StorageEncrypted' preflight-evidence/rds.json)" = "true"
+          test "$(jq -r '.BackupRetentionPeriod' preflight-evidence/rds.json)" -gt 0
+
+          aws sns get-topic-attributes --topic-arn "${ALERT_TOPIC_ARN}" \
+            --query '{TopicArn:Attributes.TopicArn,Owner:Attributes.Owner,SubscriptionsConfirmed:Attributes.SubscriptionsConfirmed,SubscriptionsPending:Attributes.SubscriptionsPending}' \
+            > preflight-evidence/sns-topic.json
+          test "$(jq -r '.TopicArn' preflight-evidence/sns-topic.json)" = "${ALERT_TOPIC_ARN}"
+
+          AUDIT_ROLE_NAME="${AUDIT_ROLE_ARN##*/}"
+          aws iam get-role --role-name "${AUDIT_ROLE_NAME}" \
+            --query 'Role.{Arn:Arn,RoleName:RoleName,MaxSessionDuration:MaxSessionDuration}' \
+            > preflight-evidence/audit-role.json
+          test "$(jq -r '.Arn' preflight-evidence/audit-role.json)" = "${AUDIT_ROLE_ARN}"
+
+      - name: Validate optional ALB references
+        if: env.ALB_ARN != ''
+        run: |
+          set -euo pipefail
+          aws elbv2 describe-load-balancers --load-balancer-arns "${ALB_ARN}" \
+            --query 'LoadBalancers[0].{LoadBalancerArn:LoadBalancerArn,State:State.Code,Scheme:Scheme,Type:Type}' \
+            > preflight-evidence/alb.json
+          test "$(jq -r '.State' preflight-evidence/alb.json)" = "active"
+          if [ -n "${BACKEND_TG_ARN}" ]; then
+            aws elbv2 describe-target-groups --target-group-arns "${BACKEND_TG_ARN}" \
+              --query 'TargetGroups[0].{TargetGroupArn:TargetGroupArn,Protocol:Protocol,Port:Port,TargetType:TargetType}' \
+              > preflight-evidence/backend-target-group.json
+          fi
+          if [ -n "${FRONTEND_TG_ARN}" ]; then
+            aws elbv2 describe-target-groups --target-group-arns "${FRONTEND_TG_ARN}" \
+              --query 'TargetGroups[0].{TargetGroupArn:TargetGroupArn,Protocol:Protocol,Port:Port,TargetType:TargetType}' \
+              > preflight-evidence/frontend-target-group.json
+          fi
+
+      - name: Write preflight manifest and checksums
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg release_sha "${RELEASE_SHA}" \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg aws_region "${AWS_REGION}" \
+            --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{schema_version:1,status:"PASS",release_sha:$release_sha,repository:$repository,aws_region:$aws_region,captured_at:$captured_at,scope:"read-only production acceptance prerequisite validation"}' \
+            > preflight-evidence/manifest.json
+          (cd preflight-evidence && sha256sum * > SHA256SUMS)
+
+      - name: Upload preflight evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-acceptance-preflight-${{ inputs.release_sha }}
+          path: preflight-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "## Production acceptance preflight"
+            echo
+            echo "- Release SHA: \`${RELEASE_SHA}\`"
+            echo "- ECS cluster: \`${ECS_CLUSTER}\`"
+            echo "- Backend service: \`${BACKEND_SERVICE}\`"
+            echo "- Frontend service: \`${FRONTEND_SERVICE}\`"
+            echo "- RDS instance: \`${RDS_INSTANCE}\`"
+            echo "- Alert topic configured: \`$([ -n "${ALERT_TOPIC_ARN}" ] && echo yes || echo no)\`"
+            echo "- Audit role configured: \`$([ -n "${AUDIT_ROLE_ARN}" ] && echo yes || echo no)\`"
+            echo
+            echo "This workflow is read-only and does not alter production infrastructure or workloads."
+          } >> "$GITHUB_STEP_SUMMARY"
