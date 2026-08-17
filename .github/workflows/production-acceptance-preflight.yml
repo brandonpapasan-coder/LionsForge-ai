@@ -59,7 +59,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.AUDIT_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Validate production resource references
